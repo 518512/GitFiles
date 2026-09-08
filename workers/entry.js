@@ -1,114 +1,130 @@
-/**
- * Worker 入口：静态站点 + 同源 OAuth token 代理。
- *
- * 路由：
- *   POST /api/github/oauth/token  → GitHub OAuth token 交换代理（下述逻辑）
- *   OPTIONS /api/github/oauth/token → CORS 预检
- *   其余                          → env.ASSETS.fetch（静态资源；404.html 兜底）
- *
- * token 代理语义与 serve.py / workers/github-oauth-token.js 保持一致：
- *   1. client_id === 'reachability-check' → 直接返回 JSON（前端可达性探测，不消耗凭据）
- *   2. 请求体已带 client_secret → 原样转发
- *   3. 其余注入 secret（env.GITHUB_CLIENT_SECRET，可选 env.GITHUB_CLIENT_ID 覆盖），
- *      缺失返回 misconfigured_proxy
- */
+import { apiError, assertSameOrigin, json } from './http.js';
+import { clearSessionCookie, sessionCookie } from './session.js';
+import { createRepository, handleRepoList, handleRepositoryApi } from './repos.js';
+import { githubRequest } from './github.js';
 
 const GITHUB_TOKEN_URL = 'https://github.com/login/oauth/access_token';
 const TOKEN_PATH = '/api/github/oauth/token';
 
-/** 允许调用的来源（部署域名 + 本地开发任意端口）。 */
-function isAllowedOrigin(origin) {
-  if (!origin) return false;
-  if (/^https:\/\/[^/]*\.workers\.dev$/.test(origin)) return true;
-  if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
-  return false;
-}
-
 function corsHeaders(request) {
-  const origin = request.headers.get('Origin') || '';
-  const headers = {
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type, Accept',
-    Vary: 'Origin',
-  };
-  if (isAllowedOrigin(origin)) {
-    headers['Access-Control-Allow-Origin'] = origin;
-  }
-  return headers;
+  const origin = request.headers.get('Origin');
+  return origin && origin === new URL(request.url).origin
+    ? { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Accept', Vary: 'Origin' }
+    : { Vary: 'Origin' };
 }
 
-function jsonResponse(body, status, request) {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'Content-Type': 'application/json', ...corsHeaders(request) },
-  });
+function responseWithCors(response, request) {
+  const headers = new Headers(response.headers);
+  Object.entries(corsHeaders(request)).forEach(([key, value]) => headers.set(key, value));
+  return new Response(response.body, { status: response.status, headers });
+}
+
+async function createSession(env, tokenPayload) {
+  if (!env.DB) throw new Error('D1 session storage is not configured');
+  if (!tokenPayload.access_token) throw new Error('GitHub did not return an access token');
+  const session = { access_token: tokenPayload.access_token };
+  const { payload: user } = await githubRequest(session, '/user');
+  const id = crypto.randomUUID();
+  const expiresAt = Date.now() + (Number(tokenPayload.expires_in || 60 * 60 * 24 * 7) * 1000);
+  await env.DB.prepare(
+    'INSERT INTO sessions (id, github_login, access_token, expires_at) VALUES (?, ?, ?, ?)'
+  ).bind(id, user.login, tokenPayload.access_token, expiresAt).run();
+
+  // The server derives repository authorization from the OAuth session and
+  // persists the resulting ACL. Browser-provided owner/repo values never grant access.
+  for (let page = 1; page <= 10; page += 1) {
+    const { payload: repos } = await githubRequest(
+      session,
+      `/user/repos?affiliation=owner,collaborator,organization_member&per_page=100&page=${page}`
+    );
+    const list = Array.isArray(repos) ? repos : [];
+    for (const repo of list) {
+      const owner = repo?.owner?.login;
+      if (!owner || !repo?.name) continue;
+      const canRead = repo.permissions?.pull !== false ? 1 : 0;
+      const canWrite = repo.permissions?.push || repo.permissions?.admin ? 1 : 0;
+      await env.DB.prepare(
+        'INSERT OR REPLACE INTO repository_access (session_id, owner, repo, can_read, can_write) VALUES (?, ?, ?, ?, ?)'
+      ).bind(id, owner, repo.name, canRead, canWrite).run();
+    }
+    if (list.length < 100) break;
+  }
+  return id;
 }
 
 async function handleTokenExchange(request, env) {
+  assertSameOrigin(request);
   let payload;
   try {
-    payload = JSON.parse(await request.text());
+    payload = await request.json();
   } catch {
-    return jsonResponse({ error: 'invalid_request', error_description: 'Body must be JSON' }, 400, request);
+    return json({ error: 'validation_error', message: 'Body must be valid JSON' }, 422);
+  }
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return json({ error: 'validation_error', message: 'Body must be a JSON object' }, 422);
+  }
+  if (payload.client_id === 'reachability-check') return json({ ok: true, proxy: 'worker' });
+  if (!env.GITHUB_CLIENT_SECRET) {
+    return json({ error: 'service_unavailable', message: 'GITHUB_CLIENT_SECRET is not configured' }, 503);
+  }
+  if (!env.DB) {
+    return json({ error: 'service_unavailable', message: 'D1 session storage is not configured' }, 503);
   }
 
-  if (payload.client_id === 'reachability-check') {
-    return jsonResponse({ ok: true, proxy: 'worker' }, 200, request);
+  const { client_secret: _untrustedSecret, ...safePayload } = payload;
+  const body = { ...safePayload, client_secret: env.GITHUB_CLIENT_SECRET };
+  if (env.GITHUB_CLIENT_ID) body.client_id = env.GITHUB_CLIENT_ID;
+  const upstream = await fetch(GITHUB_TOKEN_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', Accept: 'application/json', 'User-Agent': 'GitFiles-Worker' },
+    body: JSON.stringify(body),
+  });
+  const tokenPayload = await upstream.json().catch(() => ({}));
+  if (!upstream.ok || !tokenPayload.access_token) {
+    return json({ error: 'github_oauth_error', message: tokenPayload.error_description || tokenPayload.error || 'GitHub OAuth exchange failed' }, upstream.status || 502);
   }
-
-  let body = payload;
-  if (!payload.client_secret) {
-    const secret = env && env.GITHUB_CLIENT_SECRET;
-    if (!secret) {
-      return jsonResponse({
-        error: 'misconfigured_proxy',
-        error_description: 'Missing GitHub OAuth client secret. Add the GITHUB_CLIENT_SECRET secret to the Worker.',
-      }, 500, request);
-    }
-    body = { ...payload, client_secret: secret };
-    if (env.GITHUB_CLIENT_ID) {
-      body.client_id = env.GITHUB_CLIENT_ID;
-    }
-  }
-
   try {
-    const upstream = await fetch(GITHUB_TOKEN_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-        'User-Agent': 'GitFiles-TokenProxy',
-      },
-      body: JSON.stringify(body),
-    });
-    return new Response(await upstream.text(), {
-      status: upstream.status,
-      headers: { 'Content-Type': 'application/json', ...corsHeaders(request) },
-    });
-  } catch (err) {
-    return jsonResponse({ error: 'proxy_error', error_description: String(err) }, 502, request);
+    const sessionId = await createSession(env, tokenPayload);
+    return json({ ok: true }, 200, { 'Set-Cookie': sessionCookie(sessionId) });
+  } catch (error) {
+    return json({ error: 'service_unavailable', message: error.message }, 503);
   }
+}
+
+async function handleApi(request, env, url) {
+  if (url.pathname === TOKEN_PATH) {
+    if (request.method === 'OPTIONS') return new Response(null, { status: 204 });
+    if (request.method !== 'POST') return json({ error: 'method_not_allowed', message: 'Method not allowed' }, 405);
+    return handleTokenExchange(request, env);
+  }
+  if (url.pathname === '/api/logout') {
+    if (request.method !== 'POST') return json({ error: 'method_not_allowed', message: 'Method not allowed' }, 405);
+    assertSameOrigin(request);
+    return json({ ok: true }, 200, { 'Set-Cookie': clearSessionCookie() });
+  }
+  if (url.pathname === '/api/me') {
+    const { requireSession } = await import('./session.js');
+    const session = await requireSession(request, env);
+    return json({ login: session.github_login || null });
+  }
+  if (url.pathname === '/api/repos') {
+    if (request.method === 'GET') return handleRepoList(request, env);
+    if (request.method === 'POST') return createRepository(request, env);
+    return json({ error: 'method_not_allowed', message: 'Method not allowed' }, 405);
+  }
+  const repoResponse = await handleRepositoryApi(request, env, url);
+  if (repoResponse) return repoResponse;
+  return json({ error: 'not_found', message: 'API route was not found' }, 404);
 }
 
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-
-    if (url.pathname === TOKEN_PATH) {
-      if (request.method === 'OPTIONS') {
-        return new Response(null, { status: 204, headers: corsHeaders(request) });
-      }
-      if (request.method !== 'POST') {
-        return new Response('Method not allowed', { status: 405, headers: corsHeaders(request) });
-      }
-      return handleTokenExchange(request, env);
+    try {
+      if (url.pathname.startsWith('/api/')) return responseWithCors(await handleApi(request, env, url), request);
+      return env.ASSETS.fetch(request);
+    } catch (error) {
+      return responseWithCors(apiError(error), request);
     }
-
-    if (url.pathname.startsWith('/api/')) {
-      return jsonResponse({ error: 'not_found' }, 404, request);
-    }
-
-    // 其余路径交给静态资源（not_found_handling=404-page 时，未匹配路径回退 404.html）
-    return env.ASSETS.fetch(request);
   },
 };

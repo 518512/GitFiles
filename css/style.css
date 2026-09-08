@@ -1135,6 +1135,37 @@ body {
   opacity: 0.5;
 }
 
+/* Worker session and conflict status */
+.worker-session-state {
+  align-self: center;
+  padding: 2px 7px;
+  border: 1px solid var(--win-border);
+  border-radius: 3px;
+  color: var(--win-text-muted);
+  font-size: 0.7rem;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.worker-session-state[data-state="connected"] {
+  color: #1a6b3c;
+  border-color: #79b88b;
+  background: #edf8f0;
+}
+
+.worker-session-state[data-state="expired"],
+.worker-session-state[data-state="unavailable"] {
+  color: #9d2b1c;
+  border-color: #dba096;
+  background: #fff2f0;
+}
+
+.title-btn--conflicts {
+  color: #8a2a14;
+  background: #fff1e9;
+  border-left: 1px solid #e2a391;
+}
+
 /* Status bar */
 .status-bar {
   display: flex;
@@ -2456,6 +2487,18 @@ body.dialog-open {
   .tool-btn {
     width: 40px;
     height: 40px;
+  }
+
+  .worker-session-state {
+    display: none;
+  }
+
+  .title-btn--conflicts {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 40px;
+    min-height: 36px;
   }
 
   .address-bar {

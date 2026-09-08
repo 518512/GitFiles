@@ -63,9 +63,9 @@ def prepare_github_token_request(body_bytes, root):
     if payload.get('client_id') == 'reachability-check':
         return body_bytes, None
 
-    if payload.get('client_secret'):
-        return body_bytes, None
-
+    # OAuth secrets belong to the local proxy, never to the browser request.
+    # Drop a supplied value rather than forwarding it to GitHub.
+    payload.pop('client_secret', None)
     client_id_override, secret = read_github_oauth_credentials(root)
     if not secret:
         message = (

@@ -5,7 +5,6 @@ const GithubDisk = (() => {
   const STORAGE_KEY = 'storage_hub_github_disks';
   const LEGACY_STORAGE_KEY = 'mikus_drive_github_disks';
   const OAUTH_MESSAGE_SOURCE = 'storage-hub-github-oauth';
-  const API_BASE = 'https://api.github.com';
   // GitHub docs: repos above ~100 GB may be blocked.
   const MAX_REPO_SIZE_BYTES = 100 * 1024 * 1024 * 1024;
 
@@ -20,9 +19,19 @@ const GithubDisk = (() => {
   const deleteConfirmTimers = new Map();
   let listChangeListener = null;
   let saveStateListener = null;
+  let conflictListener = null;
+  let transferListener = null;
+
+  function setTransferListener(listener) {
+    transferListener = typeof listener === 'function' ? listener : null;
+  }
 
   function setSaveStateListener(listener) {
     saveStateListener = typeof listener === 'function' ? listener : null;
+  }
+
+  function setConflictListener(listener) {
+    conflictListener = typeof listener === 'function' ? listener : null;
   }
 
   function getFileSaveState(diskId, filePath) {
@@ -104,6 +113,16 @@ const GithubDisk = (() => {
    * or cancel. PROJECT_SPEC §5.
    */
   async function offerConflictResolution(diskId, err) {
+    const disk = getDisk(diskId);
+    conflictListener?.({
+      id: `${diskId}:${Date.now()}`,
+      diskId,
+      repository: disk ? `${disk.owner}/${disk.repo}` : diskId,
+      expectedHead: err.expectedHead || null,
+      remoteHead: err.remoteHead || null,
+      message: err.message || 'The remote branch changed.',
+      createdAt: Date.now(),
+    });
     if (typeof Dialog === 'undefined') return false;
     const lines = [
       'The branch was updated by another device while this operation was running.',
@@ -139,24 +158,42 @@ const GithubDisk = (() => {
   async function executeOperations(diskId, operations, message) {
     const disk = getDisk(diskId);
     if (!disk) throw new Error('GitHub storage not found');
-    const result = await GithubOperations.executeCommitPipeline({
-      owner: disk.owner,
-      repo: disk.repo,
-      branch: disk.branch || 'main',
-      token: disk.token,
-      message,
-      operations,
-    });
-    invalidateRepoTree(diskId);
-    return result;
+    // Read the current server head immediately before mutation. The Worker
+    // repeats this comparison before it writes the ref, providing CAS.
+    if (!disk.head) await getRepoTreeState(disk, { force: true });
+    try {
+      const result = await GithubApi.request(
+        `/api/repos/${encodeURIComponent(disk.owner)}/${encodeURIComponent(disk.repo)}/operations`,
+        {
+          method: 'POST',
+          body: {
+            branch: disk.branch || 'main',
+            expectedHead: disk.head,
+            message,
+            operations,
+          },
+        }
+      );
+      disk.head = result.head;
+      invalidateRepoTree(diskId);
+      return result;
+    } catch (err) {
+      if (err?.status === 409) {
+        const conflict = new Error(err.message);
+        conflict.name = 'ConflictError';
+        conflict.expectedHead = err.payload?.details?.expectedHead ?? disk.head;
+        conflict.remoteHead = err.payload?.details?.remoteHead ?? null;
+        throw conflict;
+      }
+      throw err;
+    }
   }
 
   function invalidateRepoTree(diskId) {
-    // TreeIndex caches are keyed by owner/repo/branch/head (GithubTree): a
-    // changed HEAD invalidates them by itself, so there is nothing stale to
-    // drop here. Kept as a hook for callers that want a hard refresh.
-    void diskId;
-    GithubTree.clear();
+    // Worker reads are authoritative. Keep this hook for UI refresh callers;
+    // no browser-side Git tree cache or credential exists to clear.
+    const disk = getDisk(diskId);
+    if (disk) disk.head = null;
   }
 
   function pendingFolderKey(diskId, parentId) {
@@ -1004,7 +1041,7 @@ const GithubDisk = (() => {
         localStorage.setItem(STORAGE_KEY, localStorage.getItem(LEGACY_STORAGE_KEY));
       }
       const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{"disks":[]}');
-      disks = (raw.disks || []).map((disk) => ({
+      disks = (raw.disks || []).map(({ token: _legacyToken, ...disk }) => ({
         ...disk,
         id: disk.id || `${ID_PREFIX}${disk.owner}/${disk.repo}`,
       }));
@@ -1014,7 +1051,10 @@ const GithubDisk = (() => {
   }
 
   function saveDisks() {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify({ disks }));
+    // Repository metadata may persist for navigation, but GitHub credentials are
+    // session-only until the Worker-backed HttpOnly session API is available.
+    const persistentDisks = disks.map(({ token: _token, ...disk }) => disk);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ disks: persistentDisks }));
   }
 
   function init() {
@@ -1276,8 +1316,8 @@ const GithubDisk = (() => {
     }
 
     const tokenJson = await tokenRes.json().catch(() => ({}));
-    if (!tokenRes.ok || !tokenJson.access_token) {
-      const detail = tokenJson.error_description || tokenJson.error || `HTTP ${tokenRes.status}`;
+    if (!tokenRes.ok || !tokenJson.ok) {
+      const detail = tokenJson.message || tokenJson.error_description || tokenJson.error || `HTTP ${tokenRes.status}`;
       if (/incorrect_client_credentials/i.test(`${tokenJson.error || ''} ${detail}`)) {
         throw new Error(
           `${detail}\n\n` +
@@ -1292,7 +1332,9 @@ const GithubDisk = (() => {
       }
       throw new Error(detail || 'Failed to obtain GitHub access token');
     }
-    return tokenJson.access_token;
+    // The Worker stores the OAuth token in its HttpOnly session. Never expose
+    // it to the browser, even transiently.
+    return true;
   }
 
   function waitForOauthCode(popup, state) {
@@ -1436,46 +1478,6 @@ const GithubDisk = (() => {
     return exchangeCodeForToken(code, codeVerifier, redirectUri, clientId);
   }
 
-  function getPatSignInMessageHtml() {
-    const classicUrl = 'https://github.com/settings/tokens/new?scopes=repo&description=Storage%20Hub';
-    const tokensUrl = 'https://github.com/settings/tokens';
-
-    return (
-      '<p class="app-dialog-lead">Use a <strong>classic</strong> token (<code>ghp_…</code>) so the app can create a private <code>Drive-1</code> repository for you.</p>' +
-
-      '<section class="app-dialog-section">' +
-      '<h3 class="app-dialog-section-title">Classic token</h3>' +
-      '<p class="app-dialog-section-link">' +
-      '<a href="' + classicUrl + '" target="_blank" rel="noopener noreferrer">Generate classic token on GitHub</a>' +
-      '</p>' +
-      '<p class="app-dialog-section-label">Required permission</p>' +
-      '<ul class="app-dialog-perms">' +
-      '<li><code>repo</code> — full control of private repositories</li>' +
-      '</ul>' +
-      '<p class="app-dialog-section-label">How to enable</p>' +
-      '<ol class="app-dialog-steps">' +
-      '<li>Open the link above (or <a href="' + tokensUrl + '" target="_blank" rel="noopener noreferrer">GitHub → Settings → Developer settings → Personal access tokens</a>).</li>' +
-      '<li>Click <strong>Generate new token</strong> → <strong>Generate new token (classic)</strong>.</li>' +
-      '<li>Enter a note (e.g. <em>GitFiles</em>) and choose an expiration.</li>' +
-      '<li>Under scopes, check <strong>repo</strong> (full control of private repositories).</li>' +
-      '<li>Do <strong>not</strong> use a fine-grained token (<code>github_pat_…</code>) — only classic (<code>ghp_…</code>) can auto-create repos.</li>' +
-      '<li><code>public_repo</code> alone is not enough; private <code>Drive-1</code> repos need the full <code>repo</code> scope.</li>' +
-      '<li>Click <strong>Generate token</strong>, copy the token (<code>ghp_…</code>) — GitHub shows it only once.</li>' +
-      '<li>Paste the token in the field below and click <strong>Connect</strong>.</li>' +
-      '</ol>' +
-      '</section>'
-    );
-  }
-
-  function isFineGrainedPatToken(token) {
-    return /^github_pat_/i.test(String(token || '').trim());
-  }
-
-  function isPatRepoCreateError(err) {
-    const msg = (err?.message || String(err)).toLowerCase();
-    return /resource not accessible by personal access token|must use a classic personal access token|fine-grained personal access token/i.test(msg);
-  }
-
   function parseRepoInput(input, defaultOwner) {
     const trimmed = String(input || '').trim();
     if (!trimmed) throw new Error('Repository name cannot be empty');
@@ -1494,187 +1496,46 @@ const GithubDisk = (() => {
     throw new Error('Enter repository as owner/repo, a repo name, or a github.com/owner/repo URL');
   }
 
-  function getExistingRepoMessageHtml(reason = '') {
-    const reasonBlock = reason
-      ? '<p class="app-dialog-section-note">' + reason + '</p>'
-      : '<p class="app-dialog-section-note">Fine-grained tokens cannot create repositories via the GitHub API.</p>';
-
-    return (
-      reasonBlock +
-      '<p class="app-dialog-lead">Connect an existing private repository.</p>' +
-      '<ol class="app-dialog-steps">' +
-      '<li>Open <a href="https://github.com/new" target="_blank" rel="noopener noreferrer">github.com/new</a> and create an empty private repository (or pick one you already have).</li>' +
-      '<li>Make sure your token has <strong>Contents: Read and write</strong> on that repository.</li>' +
-      '<li>Enter the repository name below (<code>owner/repo</code> or just <code>repo-name</code>).</li>' +
-      '</ol>'
-    );
-  }
-
-  async function connectExistingRepository(token, profile, reason = '') {
-    if (typeof Dialog === 'undefined') {
-      throw new Error('Connect an existing GitHub repository (dialog not loaded)');
-    }
-
+  async function connectExistingRepository() {
+    if (typeof Dialog === 'undefined') throw new Error('Repository selection requires the application dialog UI');
+    const { repositories = [] } = await GithubApi.request('/api/repos');
+    const mounted = new Set(disks.map((disk) => disk.id));
+    const choices = repositories.filter((repo) => repo.can_write && !mounted.has(`${ID_PREFIX}${repo.owner}/${repo.repo}`));
+    if (!choices.length) throw new Error('No writable repositories are available in this Worker session');
     const result = await Dialog.form({
-      title: 'Connect existing GitHub repository',
-      messageHtml: getExistingRepoMessageHtml(reason),
-      fields: [
-        {
-          id: 'repo',
-          label: 'Repository',
-          placeholder: 'owner/repo or Drive-1',
-          hint: 'Use a private repo you can write to',
-        },
-      ],
+      title: 'Connect GitHub repository',
+      message: 'Choose a writable repository authorized by the Worker session.',
+      fields: [{
+        id: 'repo', label: 'Repository', type: 'select',
+        options: choices.map((repo) => ({ value: `${repo.owner}/${repo.repo}`, label: `${repo.owner}/${repo.repo}` })),
+      }],
       submitLabel: 'Connect',
     });
     if (!result) throw new Error('GitHub sign-in cancelled');
-
-    const { owner, repo } = parseRepoInput(result.repo, profile.login);
-    const diskId = `${ID_PREFIX}${owner}/${repo}`;
-    if (getDisk(diskId)) {
-      throw new Error(`GitHub storage "${repo}" is already connected`);
-    }
-
-    let repoData;
-    try {
-      repoData = await apiRequest(
-        `/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
-        token
-      );
-    } catch (err) {
-      const detail = err?.message || String(err);
-      throw new Error(
-        `Could not access ${owner}/${repo}.\n\n` +
-        'Check the repository name and that your token has Contents: Read and write on that repo.\n\n' +
-        detail
-      );
-    }
-
-    if (!repoData?.permissions?.push && !repoData?.permissions?.admin) {
-      throw new Error(
-        `Token does not have write access to ${owner}/${repo}.\n\n` +
-        'Grant Contents: Read and write on that repository in your token settings.'
-      );
-    }
-
-    return repoData;
+    const { owner, repo } = parseRepoInput(result.repo, '');
+    const repository = await GithubApi.request(`/api/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`);
+    return repository.repository;
   }
 
-  async function resolveRepositoryForDisk(token, profile) {
-    if (isFineGrainedPatToken(token)) {
-      return connectExistingRepository(
-        token,
-        profile,
-        'Fine-grained tokens cannot auto-create Drive repositories.'
-      );
-    }
 
-    try {
-      return await createDriveRepository(token);
-    } catch (err) {
-      if (isPatRepoCreateError(err) || isRepoCreatePermissionError(err)) {
-        return connectExistingRepository(
-          token,
-          profile,
-          'This token cannot create new repositories. Use a classic token with the repo scope, or connect an existing repository.'
-        );
-      }
-      if (/repository creation failed|could not create a drive repository/i.test(err?.message || '')) {
-        return connectExistingRepository(
-          token,
-          profile,
-          'Automatic repository creation failed. You can connect an existing private repo instead.'
-        );
-      }
-      throw err;
-    }
-  }
-
-  async function signInWithPersonalAccessToken() {
-    ensureConfigured();
-    if (typeof Dialog === 'undefined') {
-      throw new Error('GitHub personal access token sign-in is unavailable (dialog not loaded)');
-    }
-
-    const result = await Dialog.form({
-      title: 'Connect GitHub storage',
-      messageHtml: getPatSignInMessageHtml(),
-      fields: [
-        {
-          id: 'token',
-          label: 'Personal access token',
-          type: 'password',
-          placeholder: 'ghp_…',
-        },
-      ],
-      submitLabel: 'Connect',
-    });
-    if (!result) throw new Error('GitHub sign-in cancelled');
-
-    const token = String(result.token || '').trim();
-    if (!token) throw new Error('Token cannot be empty');
-
-    try {
-      await getAuthenticatedUser(token);
-    } catch (err) {
-      const detail = err?.message || String(err);
-      throw new Error(`Invalid GitHub token: ${detail}`);
-    }
-    return token;
-  }
-
-  let cachedUserToken = null;
+  let hasWorkerSession = false;
 
   async function acquireAccessToken() {
-    // 会话内复用已验证的 token：登录 → 创建/连接仓库等连续调用只弹一次授权。
-    if (cachedUserToken) {
+    // OAuth exchange creates an HttpOnly Worker session. The browser never
+    // receives or stores a GitHub credential.
+    if (hasWorkerSession) {
       try {
-        await getAuthenticatedUser(cachedUserToken);
-        return cachedUserToken;
+        await GithubApi.request('/api/me');
+        return true;
       } catch {
-        cachedUserToken = null; // 失效即重新走授权
+        hasWorkerSession = false;
       }
     }
-
-    let token;
-    if (prefersPatSignIn()) {
-      token = await signInWithPersonalAccessToken();
-    } else {
-      try {
-        await ensureTokenExchangeReachable();
-        token = await oauthSignIn();
-      } catch (err) {
-        const message = err?.message || String(err);
-        if (!/token proxy|not reachable|GITHUB_TOKEN_EXCHANGE|static hosting/i.test(message)) {
-          throw err;
-        }
-        if (typeof Dialog === 'undefined') throw err;
-
-        const choice = await Dialog.choose({
-          title: 'GitHub sign-in',
-          message: `${message}\n\nConnect with a personal access token instead (no proxy needed).`,
-          buttons: [
-            { id: 'pat', label: 'Use personal access token', primary: true },
-            { id: 'cancel', label: 'Cancel' },
-          ],
-        });
-        if (choice !== 'pat') throw err;
-        token = await signInWithPersonalAccessToken();
-      }
-    }
-    cachedUserToken = token;
-    return token;
-  }
-
-  function formatGitHubApiError(payload, status) {
-    const parts = [];
-    if (payload?.message) parts.push(payload.message);
-    const details = (payload?.errors || [])
-      .map((entry) => entry.message || entry.code)
-      .filter(Boolean);
-    if (details.length) parts.push(details.join('; '));
-    return parts.join(' — ') || `GitHub API error (${status})`;
+    await ensureTokenExchangeReachable();
+    await oauthSignIn();
+    await GithubApi.request('/api/me');
+    hasWorkerSession = true;
+    return true;
   }
 
   function isEmptyGitTreeError(err) {
@@ -1682,11 +1543,6 @@ const GithubDisk = (() => {
     return /repository is empty/.test(msg)
       || /git repository is empty/.test(msg)
       || /no commit found/.test(msg);
-  }
-
-  function isRepoNameTakenError(err) {
-    const msg = (err?.message || String(err)).toLowerCase();
-    return /name already exists|already exists on this account/.test(msg);
   }
 
   function isDuplicateNameError(err) {
@@ -1708,80 +1564,7 @@ const GithubDisk = (() => {
     return candidate;
   }
 
-  function isRepoCreatePermissionError(err) {
-    const msg = (err?.message || String(err)).toLowerCase();
-    return isPatRepoCreateError(err)
-      || /insufficient scope|must have push access|admin access to this repository|repository creation failed.*forbidden/i.test(msg);
-  }
-
-  async function apiRequest(path, token, options = {}) {
-    let res;
-    try {
-      res = await fetch(`${API_BASE}${path}`, {
-        method: options.method || 'GET',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: options.accept || 'application/vnd.github+json',
-          'X-GitHub-Api-Version': '2022-11-28',
-          ...(options.headers || {}),
-        },
-        body: options.body,
-        redirect: options.raw ? 'follow' : 'manual',
-      });
-    } catch (err) {
-      const message = err?.message || String(err);
-      throw new Error(/failed to fetch|networkerror|load failed/i.test(message)
-        ? `GitHub API request failed (${message}). Check your network connection.`
-        : message);
-    }
-    if (!res.ok) {
-      const err = await readJsonResponse(res).catch(() => ({}));
-      const apiError = new Error(formatGitHubApiError(err, res.status));
-      if (res.status === 401 || res.status === 403) apiError.tokenExpired = true;
-      throw apiError;
-    }
-    if (options.raw) return res;
-    if (res.status === 204) return null;
-    if (res.status === 301 || res.status === 302 || res.status === 303 || res.status === 307 || res.status === 308) {
-      throw new Error('GitHub redirected this request unexpectedly. Try downloading the file instead.');
-    }
-    return readJsonResponse(res);
-  }
-
-  async function getAuthenticatedUser(token) {
-    return apiRequest('/user', token);
-  }
-
-  async function createDriveRepository(token) {
-    const existingNames = new Set(disks.map((d) => d.repo));
-    let n = 1;
-    while (existingNames.has(`Drive-${n}`)) n += 1;
-
-    for (let i = 0; i < 50; i += 1) {
-      const name = `Drive-${n + i}`;
-      try {
-        return await apiRequest('/user/repos', token, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            name,
-            private: true,
-            auto_init: true,
-            description: `Storage repository created by ${typeof SITE !== 'undefined' ? SITE.name : 'GitFiles'}`,
-          }),
-        });
-      } catch (err) {
-        if (isRepoNameTakenError(err)) continue;
-        throw err;
-      }
-    }
-    throw new Error(
-      'Could not create a Drive repository automatically after 50 attempts.\n\n' +
-      'Create an empty private repo at github.com/new (e.g. Drive-1), then connect it manually.'
-    );
-  }
-
-  function upsertDiskFromRepo(profile, repo, token) {
+  function upsertDiskFromRepo(profile, repo) {
     const id = `${ID_PREFIX}${repo.owner.login}/${repo.name}`;
     const existing = getDisk(id);
     const disk = {
@@ -1790,7 +1573,6 @@ const GithubDisk = (() => {
       owner: repo.owner.login,
       repo: repo.name,
       branch: repo.default_branch || 'main',
-      token,
       accountLogin: profile.login,
       accountName: profile.name || profile.login,
       accountAvatar: resolveAssetUrl(profile.avatar_url || ''),
@@ -1807,58 +1589,48 @@ const GithubDisk = (() => {
     return getDisk(id);
   }
 
-  async function createDisk() {
-    // 已有未失效的 token 时直接复用，避免每次添加仓库都弹出 GitHub 授权
-    const reusable = disks.map((d) => d.token).find(Boolean);
-    let token;
-    let profile;
-    if (reusable) {
-      try {
-        profile = await getAuthenticatedUser(reusable);
-        token = reusable;
-      } catch {
-        token = null;
-      }
-    }
-    if (!token || !profile) {
-      token = await acquireAccessToken();
-      profile = await getAuthenticatedUser(token);
-    }
-    const repo = await resolveRepositoryForDisk(token, profile);
-    return upsertDiskFromRepo(profile, repo, token);
+  async function createNewRepository() {
+    await acquireAccessToken();
+    const name = await Dialog.prompt('Repository name', '', {
+      title: 'Create private repository',
+      submitLabel: 'Create',
+    });
+    if (!name?.trim()) throw new Error('Repository creation cancelled');
+    const { repository } = await GithubApi.request('/api/repos', {
+      method: 'POST',
+      body: { name: name.trim(), private: true },
+    });
+    const profile = await GithubApi.request('/api/me');
+    return upsertDiskFromRepo(profile, repository);
   }
 
-  // T2: 统一入口 —— 连接已有仓库 ∥ 创建新 Drive-N 仓库（用户可自由选择）
+  // Mounts are derived from the Worker session ACL. Creating a repository is
+  // always an explicit, separately confirmed action.
   async function ensureGithubStorage() {
-    if (typeof Dialog === 'undefined') return createDisk();
+    await acquireAccessToken();
     const choice = await Dialog.choose({
-      title: 'GitHub storage',
-      message: 'Connect an existing repository, or create a new private Drive repository?',
+      title: 'Add GitHub repository',
+      message: 'Mount a repository already authorized for this session, or create a new private repository.',
       buttons: [
-        { id: 'connect', label: 'Connect existing repository', primary: true },
-        { id: 'create', label: 'Create new repository (Drive-N)' },
+        { id: 'connect', label: 'Mount existing repository', primary: true },
+        { id: 'create', label: 'Create private repository' },
         { id: 'cancel', label: 'Cancel' },
       ],
     });
-    if (choice === 'cancel') throw new Error('GitHub sign-in cancelled');
-    const token = await acquireAccessToken();
-    const profile = await getAuthenticatedUser(token);
-    const repoData = choice === 'connect'
-      ? await connectExistingRepository(token, profile, '')
-      : await resolveRepositoryForDisk(token, profile); // create 失败自动降级 Connect
-    return upsertDiskFromRepo(profile, repoData, token);
+    if (choice === 'cancel' || !choice) throw new Error('GitHub repository selection cancelled');
+    if (choice === 'create') return createNewRepository();
+    const profile = await GithubApi.request('/api/me');
+    const repoData = await connectExistingRepository();
+    return upsertDiskFromRepo(profile, repoData);
   }
 
-  // T3: token 过期/被撤销的统一重授权入口（T1 缓存有效时静默复用）
   async function reauthorizeDisk(diskId) {
     const disk = getDisk(diskId);
     if (!disk) throw new Error('GitHub storage not found');
-    const token = await acquireAccessToken();
-    const profile = await getAuthenticatedUser(token);
-    disk.token = token;
+    await acquireAccessToken();
+    const profile = await GithubApi.request('/api/me');
     disk.accountLogin = profile.login;
-    disk.accountName = profile.name || profile.login;
-    disk.accountAvatar = resolveAssetUrl(profile.avatar_url || '');
+    disk.accountName = profile.login;
     saveDisks();
     return disk;
   }
@@ -1910,6 +1682,24 @@ const GithubDisk = (() => {
     const operations = items.map((item) => ({ type: 'delete', path: normalizePath(item.id) }));
     if (!operations.length) return null;
     return executeOperations(diskId, operations, message);
+  }
+
+  function notifyTransferRecovery({ sourceDiskId, destDiskId, items, stage, message, error }) {
+    const source = getDisk(sourceDiskId);
+    const destination = getDisk(destDiskId);
+    transferListener?.({
+      id: `transfer:${sourceDiskId}:${destDiskId}:${Date.now()}`,
+      kind: 'transfer',
+      sourceDiskId,
+      destDiskId,
+      sourceRepository: source ? `${source.owner}/${source.repo}` : sourceDiskId,
+      destinationRepository: destination ? `${destination.owner}/${destination.repo}` : destDiskId,
+      stage,
+      paths: (items || []).map((item) => normalizePath(item.id)).filter(Boolean),
+      message,
+      error: error?.message || null,
+      createdAt: Date.now(),
+    });
   }
 
   async function removeDisk(diskId) {
@@ -2010,7 +1800,12 @@ const GithubDisk = (() => {
   }
 
   async function getRepoTreeState(disk, { force = false } = {}) {
-    return GithubTree.getTreeAt(disk.owner, disk.repo, disk.branch || 'main', disk.token, { force });
+    void force;
+    const data = await GithubApi.request(
+      `/api/repos/${encodeURIComponent(disk.owner)}/${encodeURIComponent(disk.repo)}/tree?branch=${encodeURIComponent(disk.branch || 'main')}`
+    );
+    disk.head = data.head;
+    return { head: data.head, treeSha: data.treeSha, tree: data.tree || [] };
   }
 
   /**
@@ -2117,54 +1912,22 @@ const GithubDisk = (() => {
   }
 
   async function getFileContentMeta(disk, path) {
-    const apiPath = `/repos/${encodeURIComponent(disk.owner)}/${encodeURIComponent(disk.repo)}/contents/${encodeRepoPath(path)}?ref=${encodeURIComponent(disk.branch)}`;
-    const res = await fetch(`${API_BASE}${apiPath}`, {
-      headers: {
-        Authorization: `Bearer ${disk.token}`,
-        Accept: 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
-      redirect: 'manual',
-    });
-
-    if (res.status === 301 || res.status === 302 || res.status === 303 || res.status === 307 || res.status === 308) {
-      const downloadUrl = res.headers.get('location');
-      const tree = await getRepoTree(disk, { force: true });
-      const entry = tree.find((e) => e.type === 'blob' && e.path === path);
-      if (!entry?.sha) {
-        throw new Error(`Could not resolve GitHub revision for "${path}"`);
-      }
-      return {
-        type: 'file',
-        name: path.split('/').pop() || path,
-        path,
-        sha: entry.sha,
-        size: entry?.size ?? null,
-        encoding: null,
-        content: null,
-        download_url: downloadUrl,
-      };
+    const tree = await getRepoTree(disk, { force: true });
+    const entry = tree.find((item) => item.type === 'blob' && item.path === path);
+    if (!entry) {
+      const isDirectory = tree.some((item) => item.path.startsWith(`${path}/`));
+      if (isDirectory) return { type: 'dir', path, name: path.split('/').pop() || path };
+      const error = new Error(`File not found: ${path}`);
+      error.status = 404;
+      throw error;
     }
-
-    if (!res.ok) {
-      const err = await readJsonResponse(res).catch(() => ({}));
-      throw new Error(err.message || `GitHub API error (${res.status})`);
-    }
-
-    return readJsonResponse(res);
-  }
-
-  async function fetchGithubDownloadBlob(disk, downloadUrl, mimeType) {
-    const res = await fetch(downloadUrl, {
-      headers: {
-        Authorization: `Bearer ${disk.token}`,
-        Accept: 'application/octet-stream',
-      },
-    });
-    if (!res.ok) {
-      throw new Error(`GitHub download failed (${res.status})`);
-    }
-    return new Blob([await res.arrayBuffer()], { type: mimeType });
+    return {
+      type: 'file',
+      name: path.split('/').pop() || path,
+      path,
+      sha: entry.sha,
+      size: entry.size ?? null,
+    };
   }
 
   function assertUploadSize(bytes) {
@@ -2284,7 +2047,7 @@ const GithubDisk = (() => {
     const newPath = parent ? `${parent}/${name}` : name;
     const disk = await requireDisk(diskId);
     const tree = await getRepoTree(disk);
-    const isFolder = GithubOperations.isFolderPath(tree, oldPath);
+    const isFolder = GithubPaths.isFolderPath(tree, oldPath);
     return runPendingMove(
       diskId,
       oldPath,
@@ -2307,15 +2070,15 @@ const GithubDisk = (() => {
     if (!normalized) return false;
     const disk = await requireDisk(diskId);
     const tree = await getRepoTree(disk);
-    return GithubOperations.isFolderPath(tree, normalized);
+    return GithubPaths.isFolderPath(tree, normalized);
   }
 
   async function makeUniqueCopyName(diskId, parentId, name, takenPaths = null) {
     const disk = await requireDisk(diskId);
     const tree = await getRepoTree(disk);
-    const targetPath = GithubOperations.joinPath(normalizePath(parentId), name);
-    const uniquePath = GithubOperations.makeUniquePath(tree, targetPath, takenPaths);
-    return GithubOperations.getBaseName(uniquePath);
+    const targetPath = GithubPaths.joinPath(normalizePath(parentId), name);
+    const uniquePath = GithubPaths.makeUniquePath(tree, targetPath, takenPaths);
+    return GithubPaths.getBaseName(uniquePath);
   }
 
   /**
@@ -2331,8 +2094,8 @@ const GithubDisk = (() => {
 
     try {
       const tree = await getRepoTree(disk);
-      isFolder = GithubOperations.isFolderPath(tree, targetPath);
-      const descendants = GithubOperations.collectDescendants(tree, targetPath)
+      isFolder = GithubPaths.isFolderPath(tree, targetPath);
+      const descendants = GithubPaths.collectDescendants(tree, targetPath)
         .filter((entry) => entry.type === 'blob' && entry.path !== targetPath);
       if (!isFolder && descendants.length === 0) {
         const self = tree.find((entry) => entry.type === 'blob' && entry.path === targetPath);
@@ -2353,7 +2116,7 @@ const GithubDisk = (() => {
       try {
         await executeOperations(diskId, [{ type: 'delete', path: targetPath }], `Delete ${targetPath}`);
       } catch (err) {
-        if (err instanceof GithubOperations.ValidationError && /not found/i.test(err.message)
+        if (err?.status === 422 && /not found/i.test(err.message)
           && (await isDeletedOnServer(disk, targetPath, isFolder))) {
           return; // idempotent delete
         }
@@ -2387,17 +2150,17 @@ const GithubDisk = (() => {
     const sourceName = sourcePath.split('/').pop();
 
     const tree = await getRepoTree(disk);
-    if (!GithubOperations.isFolderInTree(tree, sourcePath)
-      && !GithubOperations.isPathVisible(tree, sourcePath, false)) {
+    if (!GithubPaths.isFolderInTree(tree, sourcePath)
+      && !GithubPaths.isPathVisible(tree, sourcePath, false)) {
       throw new Error(`Path not found on GitHub: ${sourcePath}`);
     }
-    const isFolder = GithubOperations.isFolderPath(tree, sourcePath);
+    const isFolder = GithubPaths.isFolderPath(tree, sourcePath);
 
     const targetPath = destParent ? `${destParent}/${sourceName}` : sourceName;
-    const destPath = GithubOperations.makeUniquePath(tree, targetPath);
-    const destName = GithubOperations.getBaseName(destPath);
+    const destPath = GithubPaths.makeUniquePath(tree, targetPath);
+    const destName = GithubPaths.getBaseName(destPath);
     const size = isFolder
-      ? GithubOperations.collectDescendants(tree, sourcePath)
+      ? GithubPaths.collectDescendants(tree, sourcePath)
         .filter((entry) => entry.type === 'blob')
         .reduce((sum, entry) => sum + (entry.size || 0), 0)
       : getTreeEntrySize(tree, sourcePath);
@@ -2438,7 +2201,7 @@ const GithubDisk = (() => {
     const targetPath = explicitTargetPath || (toParent ? `${toParent}/${sourceName}` : sourceName);
 
     const tree = await getRepoTree(disk);
-    const isFolder = GithubOperations.isFolderPath(tree, sourcePath);
+    const isFolder = GithubPaths.isFolderPath(tree, sourcePath);
 
     return runPendingMove(
       diskId,
@@ -2465,7 +2228,7 @@ const GithubDisk = (() => {
    * Batch API: run a group of operations as ONE commit.
    * Used by the UI for multi-select move/copy/delete (PROJECT_SPEC §2 Batch).
    *
-   * @param {Array} operations - raw Git operations, see js/github/operations.js
+   * @param {Array} operations - raw Git operations, sent to Worker /operations
    */
   async function executeBatch(diskId, operations, message = 'Batch file operations') {
     const result = await executeOperations(diskId, operations, message);
@@ -2480,8 +2243,8 @@ const GithubDisk = (() => {
     return items.map((item) => {
       const sourcePath = normalizePath(item.id);
       const sourceName = sourcePath.split('/').pop();
-      const targetPath = GithubOperations.joinPath(normalizePath(parentId), sourceName);
-      const destPath = GithubOperations.makeUniquePath(tree, targetPath, taken);
+      const targetPath = GithubPaths.joinPath(normalizePath(parentId), sourceName);
+      const destPath = GithubPaths.makeUniquePath(tree, targetPath, taken);
       return { type: 'copy', from: sourcePath, to: destPath };
     });
   }
@@ -2503,27 +2266,13 @@ const GithubDisk = (() => {
     if (!disk) throw new Error('GitHub storage not found');
     const path = normalizePath(fileId);
     const fileName = path.split('/').pop() || '';
-    const mimeType = inferMimeType(fileName);
-    const meta = await getFileContentMeta(disk, path);
-
-    if (meta.type && meta.type !== 'file') {
-      throw new Error('Item is not a file');
-    }
-
-    if (meta.encoding === 'base64' && typeof meta.content === 'string') {
-      return new Blob([b64DecodeBytes(meta.content)], { type: mimeType });
-    }
-
-    if (meta.download_url) {
-      return fetchGithubDownloadBlob(disk, meta.download_url, mimeType);
-    }
-
-    const rawRes = await apiRequest(
-      `/repos/${encodeURIComponent(disk.owner)}/${encodeURIComponent(disk.repo)}/contents/${encodeRepoPath(path)}?ref=${encodeURIComponent(disk.branch)}`,
-      disk.token,
-      { accept: 'application/vnd.github.raw', raw: true }
+    const response = await GithubApi.request(
+      `/api/repos/${encodeURIComponent(disk.owner)}/${encodeURIComponent(disk.repo)}/file?branch=${encodeURIComponent(disk.branch || 'main')}&path=${encodeURIComponent(path)}`,
+      { raw: true }
     );
-    return new Blob([await rawRes.arrayBuffer()], { type: mimeType });
+    return new Blob([await response.arrayBuffer()], {
+      type: response.headers.get('content-type') || inferMimeType(fileName),
+    });
   }
 
   async function getFolderPath(_diskId, folderId) {
@@ -2566,9 +2315,8 @@ const GithubDisk = (() => {
   async function getStorageQuota(diskId) {
     const disk = getDisk(diskId);
     if (!disk) throw new Error('GitHub storage not found');
-    const repo = await apiRequest(
-      `/repos/${encodeURIComponent(disk.owner)}/${encodeURIComponent(disk.repo)}`,
-      disk.token
+    const { repository: repo } = await GithubApi.request(
+      `/api/repos/${encodeURIComponent(disk.owner)}/${encodeURIComponent(disk.repo)}`
     );
     const usage = (repo.size || 0) * 1024;
     const limit = MAX_REPO_SIZE_BYTES;
@@ -2670,7 +2418,6 @@ const GithubDisk = (() => {
     getTokenExchangeUrl,
     getTokenExchangeHelp,
     prefersPatSignIn,
-    signInWithPersonalAccessToken,
     acquireAccessToken,
     isGithubId,
     isBrowserViewableFile,
@@ -2680,11 +2427,11 @@ const GithubDisk = (() => {
     invalidateRepoTree,
     setListChangeListener,
     setSaveStateListener,
+    setTransferListener,
     getFileSaveState,
     getDisks,
     getDisk,
     getDiskByName,
-    createDisk,
     removeDisk,
     listFiles,
     listTrash,
@@ -2719,6 +2466,7 @@ const GithubDisk = (() => {
     collectGithubItems,
     createBatchFromCollected,
     deleteBatch,
+    notifyTransferRecovery,
     formatSize,
     formatDate,
   };

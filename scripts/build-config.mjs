@@ -35,8 +35,12 @@ const FILES = [
 ];
 const DIRS = ['css', 'js', 'assets'];
 
-/** 示例模板不进入部署产物；config.local.js 由下方显式处理（存在则发布，否则生成占位）。 */
-const EXCLUDED = [/config\.local\.example\.js$/];
+/**
+ * Test-only legacy Git engine remains in source for regression coverage but
+ * must never be published to Worker static assets: production browser code
+ * uses same-origin Worker APIs plus github-paths.js only.
+ */
+const EXCLUDED = [/config\.local\.example\.js$/, /[\\/]js[\\/]github(?:[\\/]|$)/];
 
 // 1) 重建 public/
 fs.rmSync(outDir, { recursive: true, force: true });

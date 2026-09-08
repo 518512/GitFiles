@@ -138,6 +138,16 @@ await test('update missing file -> ValidationError', async () => {
   );
 });
 
+await test('path traversal and empty segments -> ValidationError', async () => {
+  for (const path of ['../private.md', 'docs/../private.md', 'docs//private.md', 'docs/./private.md', 'docs/\0private.md']) {
+    await assertRejects(
+      () => runPlanner(FIXTURE, [{ type: 'create', path, content: 'x' }], { n: 0 }),
+      'ValidationError',
+      `unsafe path ${JSON.stringify(path)}`
+    );
+  }
+});
+
 await test('delete file -> removed', async () => {
   const counter = { n: 0 };
   const result = await runPlanner(FIXTURE, [{ type: 'delete', path: 'a.md' }], counter);
@@ -378,10 +388,13 @@ await test('makeUniquePath uses "(copy)" then "(copy N)" naming', () => {
 
 console.log('Mutation pipeline / CAS');
 
-function stubPipeline({ head = 'head-A', treeSha = 'tree-A', tree = FIXTURE, conflictOnUpdate = false } = {}) {
+function stubPipeline({ head = 'head-A', treeSha = 'tree-A', tree = FIXTURE, conflictOnUpdate = false, conflictOnCreate = false } = {}) {
   const calls = {
     blobs: 0,
     createCommitOnHead: 0,
+    createTree: 0,
+    createCommit: 0,
+    createRef: 0,
     updateRef: 0,
     refArgs: null,
     createBlobArgs: [],
@@ -397,6 +410,21 @@ function stubPipeline({ head = 'head-A', treeSha = 'tree-A', tree = FIXTURE, con
     calls.createCommitOnHead += 1;
     calls.commitArgs = p;
     return { commitSha: 'head-B', treeSha: 'tree-B' };
+  };
+  globalThis.GithubCommit.createTree = async () => {
+    calls.createTree += 1;
+    return { sha: 'tree-B' };
+  };
+  globalThis.GithubCommit.createCommit = async () => {
+    calls.createCommit += 1;
+    return { sha: 'head-B' };
+  };
+  globalThis.GithubReference.createRefCas = async (p) => {
+    calls.createRef += 1;
+    calls.createRefArgs = p;
+    if (conflictOnCreate) {
+      throw new ConflictError(p.expectedHead, 'head-X', 'Reference already exists');
+    }
   };
   globalThis.GithubReference.updateRefCas = async (p) => {
     calls.updateRef += 1;
@@ -477,6 +505,36 @@ await test('expectedHead mismatch (client observed stale HEAD) -> ConflictError 
   }
   assert(caught && caught.name === 'ConflictError', 'expected ConflictError');
   assertEqual(calls.createCommitOnHead, 0, 'no commit attempted');
+});
+
+await test('empty repository creates its ref once without a second PATCH', async () => {
+  const calls = stubPipeline({ head: null, treeSha: null, tree: [] });
+  const result = await executeCommitPipeline({
+    owner: 'o', repo: 'r', branch: 'main', token: 't',
+    message: 'Initial commit',
+    operations: [{ type: 'create', path: 'one.md', content: '1' }],
+  });
+  assertEqual(result.head, 'head-B');
+  assertEqual(calls.createTree, 1, 'one initial tree');
+  assertEqual(calls.createCommit, 1, 'one initial commit');
+  assertEqual(calls.createRef, 1, 'one initial ref creation');
+  assertEqual(calls.updateRef, 0, 'no PATCH after ref creation');
+  assertEqual(calls.createRefArgs.expectedHead, null, 'initial ref has no expected head');
+});
+
+await test('concurrent initial ref creation -> ConflictError', async () => {
+  const calls = stubPipeline({ head: null, treeSha: null, tree: [], conflictOnCreate: true });
+  const err = await assertRejects(
+    () => executeCommitPipeline({
+      owner: 'o', repo: 'r', branch: 'main', token: 't',
+      message: 'Initial commit',
+      operations: [{ type: 'create', path: 'one.md', content: '1' }],
+    }),
+    'ConflictError'
+  );
+  assertEqual(err.remoteHead, 'head-X');
+  assertEqual(calls.createRef, 1, 'initial ref creation attempted once');
+  assertEqual(calls.updateRef, 0, 'no ref patch after creation conflict');
 });
 
 // ---------------------------------------------------------------------------

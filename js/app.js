@@ -21,6 +21,8 @@ const App = (() => {
     treeVisibleCount: {},
     userQuotas: {},
     processingItemIds: new Set(),
+    githubSession: 'checking',
+    conflicts: [],
   };
 
   let urlPushPending = false;
@@ -76,6 +78,108 @@ const App = (() => {
 
   function showStatus(msg) {
     $('#status-selected').textContent = msg || '';
+  }
+
+  function renderGithubSessionState() {
+    const el = $('#worker-session-state');
+    if (!el) return;
+    const labels = {
+      checking: 'GitHub session: checking',
+      connected: 'GitHub session: active',
+      expired: 'GitHub session: sign in required',
+      unavailable: 'GitHub API: unavailable',
+    };
+    el.textContent = labels[state.githubSession] || labels.checking;
+    el.dataset.state = state.githubSession;
+  }
+
+  async function refreshGithubSessionState() {
+    state.githubSession = 'checking';
+    renderGithubSessionState();
+    try {
+      await GithubApi.request('/api/me');
+      state.githubSession = 'connected';
+    } catch (err) {
+      state.githubSession = err?.status === 401 ? 'expired' : 'unavailable';
+    }
+    renderGithubSessionState();
+  }
+
+  function addConflictRecord(record) {
+    const conflict = {
+      id: record.id || `conflict:${Date.now()}:${Math.random().toString(36).slice(2)}`,
+      createdAt: record.createdAt || Date.now(),
+      ...record,
+    };
+    state.conflicts.push(conflict);
+    $('#btn-conflict-center')?.classList.remove('hidden');
+    showStatus(record.kind === 'transfer'
+      ? 'Repository transfer needs recovery. Review Conflict Center.'
+      : 'Remote update detected. Review Conflict Center.');
+    return conflict;
+  }
+
+  async function openConflictCenter() {
+    const conflicts = state.conflicts.slice().reverse();
+    if (!conflicts.length) {
+      await Dialog.alert('No unresolved repository conflicts.', { title: 'Conflict Center' });
+      return;
+    }
+    const selected = await Dialog.form({
+      title: `Conflict Center (${conflicts.length})`,
+      message: 'Select a repository conflict to inspect. No remote changes are overwritten automatically.',
+      fields: [{
+        id: 'conflict', label: 'Unresolved conflict', type: 'select',
+        options: conflicts.map((item) => ({
+          value: item.id,
+          label: item.kind === 'transfer'
+            ? `${item.sourceRepository} → ${item.destinationRepository}`
+            : `${item.repository} | ${String(item.remoteHead || 'unknown').slice(0, 12)}`,
+        })),
+      }],
+      submitLabel: 'Inspect',
+    });
+    if (!selected) return;
+    const current = state.conflicts.find((item) => item.id === selected.conflict);
+    if (!current) return;
+    const choice = await Dialog.choose({
+      title: 'Conflict details',
+      message: current.kind === 'transfer'
+        ? `${current.sourceRepository} → ${current.destinationRepository}\n\nStage: ${current.stage}\nPaths: ${(current.paths || []).join(', ') || 'unknown'}\n\n${current.message}`
+        : `${current.repository}\n\nYour base: ${current.expectedHead || 'unknown'}\nRemote HEAD: ${current.remoteHead || 'unknown'}\n\n${current.message}`,
+      buttons: [
+        { id: 'reload', label: 'Reload remote state', primary: true },
+        { id: 'dismiss', label: 'Dismiss record' },
+        { id: 'keep', label: 'Keep open' },
+      ],
+    });
+    if (choice === 'reload') {
+      if (current.kind === 'transfer') {
+        try {
+          await GithubDisk.deleteBatch(
+            current.sourceDiskId,
+            (current.paths || []).map((path) => ({ id: path })),
+            `Complete moved item deletion (${(current.paths || []).length})`
+          );
+          GithubDisk.invalidateRepoTree(current.sourceDiskId);
+          GithubDisk.invalidateRepoTree(current.destDiskId);
+        } catch (error) {
+          current.error = error.message;
+          current.message = 'Source deletion is still pending. Review the source repository state before retrying.';
+          showStatus(current.message);
+          return;
+        }
+      } else {
+        GithubDisk.invalidateRepoTree(current.diskId);
+        if (state.currentUserId === current.diskId) await refreshGithubFolderView({ reloadTree: true });
+      }
+    }
+    if (choice === 'reload' || choice === 'dismiss') {
+      state.conflicts = state.conflicts.filter((item) => item.id !== current.id);
+      const button = $('#btn-conflict-center');
+      button?.classList.toggle('hidden', state.conflicts.length === 0);
+      if (choice === 'reload') await refreshCurrentDrive({ reloadTree: true });
+    }
   }
 
   function isCurrentLocalDrive() {
@@ -2466,9 +2570,17 @@ const App = (() => {
       ContextMenu.showAddDiskMenu(rect.left, rect.bottom + 4);
     });
 
-    $('#btn-sign-out').addEventListener('click', () => {
+    $('#btn-sign-out').addEventListener('click', async () => {
+      try {
+        await GithubApi.request('/api/logout', { method: 'POST', body: {} });
+      } catch {
+        // Local drive sign-out still proceeds if the Worker session is unavailable.
+      }
+      state.githubSession = 'expired';
+      renderGithubSessionState();
       ejectAllDrives();
     });
+    $('#btn-conflict-center')?.addEventListener('click', () => openConflictCenter());
 
     $('#btn-back').addEventListener('click', navigateBack);
     $('#btn-forward').addEventListener('click', navigateForward);
@@ -2707,6 +2819,9 @@ const App = (() => {
         refreshGithubFolderView({ reloadTree: true, silent: true });
       }
     });
+    GithubDisk.setConflictListener((conflict) => addConflictRecord(conflict));
+    GithubDisk.setTransferListener?.((transfer) => addConflictRecord(transfer));
+    refreshGithubSessionState();
 
     ContextMenu.init({
       openFile,

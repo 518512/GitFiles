@@ -18,6 +18,35 @@
   }
 
   /**
+   * Create a branch reference for an empty repository. A concurrent creator
+   * receives the same conflict semantics as a non-fast-forward ref update.
+   */
+  async function createRefCas(p) {
+    try {
+      await request(
+        `/repos/${encodeURIComponent(p.owner)}/${encodeURIComponent(p.repo)}/git/refs`,
+        {
+          token: p.token,
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ref: `refs/heads/${p.branch}`, sha: p.newHead }),
+        }
+      );
+    } catch (err) {
+      if (err instanceof GithubApiError && (err.status === 409 || err.status === 422)) {
+        let remoteHead = null;
+        try {
+          remoteHead = await getHead(p.owner, p.repo, p.branch, p.token);
+        } catch {
+          // keep remoteHead null; the rejected create is the source of truth
+        }
+        throw new ConflictError(p.expectedHead, remoteHead, err.message);
+      }
+      throw err;
+    }
+  }
+
+  /**
    * Update a branch reference (CAS).
    *
    * The update is performed WITHOUT force, so GitHub rejects the write when
@@ -72,6 +101,7 @@
   global.GithubReference = {
     ConflictError,
     getHead,
+    createRefCas,
     updateRefCas,
   };
 })(typeof window !== 'undefined' ? window : globalThis);
