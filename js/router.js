@@ -1,5 +1,5 @@
 const Router = (() => {
-  const ROOT_LABEL = typeof SITE !== 'undefined' ? SITE.name : 'Storage Hub';
+  const ROOT_LABEL = typeof SITE !== 'undefined' ? SITE.name : 'GitFiles';
   let suppressRoute = false;
   let onNavigate = null;
 

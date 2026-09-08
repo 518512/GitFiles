@@ -1,6 +1,6 @@
 const App = (() => {
   const ROOT_ID = 'home';
-  const ROOT_NAME = typeof SITE !== 'undefined' ? SITE.name : 'Storage Hub';
+  const ROOT_NAME = typeof SITE !== 'undefined' ? SITE.name : 'GitFiles';
   const TREE_PAGE_SIZE = 10;
 
   const state = {

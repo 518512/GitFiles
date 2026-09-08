@@ -172,7 +172,7 @@ const ContextMenu = (() => {
     const localCount = LocalDisk.getDisks().length;
     const githubCount = GithubDisk.getDisks().length;
     return [
-      { action: 'open', label: `Open ${typeof SITE !== 'undefined' ? SITE.name : 'Storage Hub'}`, icon: '🏠' },
+      { action: 'open', label: `Open ${typeof SITE !== 'undefined' ? SITE.name : 'GitFiles'}`, icon: '🏠' },
       { sep: true },
       { header: 'Add storage' },
       ...buildAddDiskMenuItems(),
@@ -384,7 +384,7 @@ const ContextMenu = (() => {
   function getMenuTitle(ctx = context) {
     if (!ctx) return 'Actions';
     if (ctx.type === 'add-disk') return 'Add storage';
-    if (ctx.type === 'root') return typeof SITE !== 'undefined' ? SITE.name : 'Storage Hub';
+    if (ctx.type === 'root') return typeof SITE !== 'undefined' ? SITE.name : 'GitFiles';
     if (ctx.type === 'empty') return 'Folder actions';
     if ((ctx.type === 'local-disk' || ctx.file?.isLocalDisk) && (ctx.disk || getContextLocalDisk(ctx))) {
       return (ctx.disk || getContextLocalDisk(ctx)).name;
@@ -546,7 +546,7 @@ const ContextMenu = (() => {
     const active = Auth.getActiveUser();
     const localProfile = LocalUser.getProfile();
     const rows = [
-      { section: typeof SITE !== 'undefined' ? SITE.name : 'Storage Hub' },
+      { section: typeof SITE !== 'undefined' ? SITE.name : 'GitFiles' },
       ['Location', 'Root'],
       ['Mounted drives', String(users.length + localDisks.length + githubDisks.length)],
       ['Google drives', String(users.length)],
@@ -612,7 +612,7 @@ const ContextMenu = (() => {
   }
 
   async function showRootProperties() {
-    propsEl.querySelector('.props-title').textContent = typeof SITE !== 'undefined' ? SITE.name : 'Storage Hub';
+    propsEl.querySelector('.props-title').textContent = typeof SITE !== 'undefined' ? SITE.name : 'GitFiles';
     propsEl.querySelector('.props-body').innerHTML = '<div class="props-loading">Loading metrics…</div>';
     propsEl.classList.remove('hidden');
 

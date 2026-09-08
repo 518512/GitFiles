@@ -292,7 +292,7 @@ const Notepad = (() => {
     const legacyUserId = params.get('user');
     if (legacyUserId && !fileParam.includes('/')) {
       if (!Auth.getUsers().find((u) => u.id === legacyUserId)) {
-        app.showError(`User not signed in. Open ${typeof SITE !== 'undefined' ? SITE.name : 'Storage Hub'} and sign in first.`);
+        app.showError(`User not signed in. Open ${typeof SITE !== 'undefined' ? SITE.name : 'GitFiles'} and sign in first.`);
         return;
       }
       try {
@@ -367,7 +367,7 @@ const Notepad = (() => {
 
     const user = Auth.getUsers().find((u) => Auth.formatDisplayEmail(u.email) === segments[0]);
     if (!user) {
-      app.showError(`Drive not found. Open ${typeof SITE !== 'undefined' ? SITE.name : 'Storage Hub'} and sign in or add local/GitHub storage first.`);
+      app.showError(`Drive not found. Open ${typeof SITE !== 'undefined' ? SITE.name : 'GitFiles'} and sign in or add local/GitHub storage first.`);
       return;
     }
 
@@ -466,7 +466,7 @@ const Notepad = (() => {
 
     if (!options.length) {
       await Dialog.alert(
-        'No storage is available. Open Storage Hub and sign in or create local storage.',
+        'No storage is available. Open GitFiles and sign in or create local storage.',
         { title: 'Save elsewhere' }
       );
       return null;
@@ -1366,7 +1366,7 @@ const Notepad = (() => {
       case 'about':
         await Dialog.alert(
           'A simple text editor for .txt and .json files on Google Drive, local storage, and GitHub repos.',
-          { title: `${typeof SITE !== 'undefined' ? SITE.name : 'Storage Hub'} Notepad` }
+          { title: `${typeof SITE !== 'undefined' ? SITE.name : 'GitFiles'} Notepad` }
         );
         break;
     }

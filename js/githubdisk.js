@@ -1456,7 +1456,7 @@ const GithubDisk = (() => {
       '<ol class="app-dialog-steps">' +
       '<li>Open the link above (or <a href="' + tokensUrl + '" target="_blank" rel="noopener noreferrer">GitHub → Settings → Developer settings → Personal access tokens</a>).</li>' +
       '<li>Click <strong>Generate new token</strong> → <strong>Generate new token (classic)</strong>.</li>' +
-      '<li>Enter a note (e.g. <em>Storage Hub</em>) and choose an expiration.</li>' +
+      '<li>Enter a note (e.g. <em>GitFiles</em>) and choose an expiration.</li>' +
       '<li>Under scopes, check <strong>repo</strong> (full control of private repositories).</li>' +
       '<li>Do <strong>not</strong> use a fine-grained token (<code>github_pat_…</code>) — only classic (<code>ghp_…</code>) can auto-create repos.</li>' +
       '<li><code>public_repo</code> alone is not enough; private <code>Drive-1</code> repos need the full <code>repo</code> scope.</li>' +
@@ -1750,7 +1750,7 @@ const GithubDisk = (() => {
             name,
             private: true,
             auto_init: true,
-            description: `Storage repository created by ${typeof SITE !== 'undefined' ? SITE.name : 'Storage Hub'}`,
+            description: `Storage repository created by ${typeof SITE !== 'undefined' ? SITE.name : 'GitFiles'}`,
           }),
         });
       } catch (err) {

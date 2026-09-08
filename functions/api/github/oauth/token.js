@@ -77,7 +77,7 @@ export async function onRequestPost(context) {
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
-        'User-Agent': 'StorageHub-TokenProxy',
+        'User-Agent': 'GitFiles-TokenProxy',
       },
       body: JSON.stringify(body),
     });

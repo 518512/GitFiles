@@ -141,7 +141,7 @@ class SPAHandler(http.server.SimpleHTTPRequestHandler):
             headers={
                 'Content-Type': 'application/json',
                 'Accept': 'application/json',
-                'User-Agent': 'StorageHub-DevServer',
+                'User-Agent': 'GitFiles-DevServer',
             },
             method='POST',
         )
