@@ -99,23 +99,38 @@ A **PAT mode** is available as a fallback when the OAuth proxy is unreachable: c
 
 > **Order of operations**: the GitHub OAuth App is not a prerequisite for deployment — deploy first to get your `*.workers.dev` domain, then register the OAuth App, configure the secret, and redeploy. GitHub does not validate the `Homepage URL` field at all (fill in the repo URL for now); the `callback URL` can be edited later without recreating the app.
 
-### Option 1: One-click deploy (recommended)
+### Option 1: Fork → Connect Git → auto-follow upstream (recommended)
 
-Click the **Deploy to Cloudflare** button above (fork users: replace the repo URL in the link with your own fork) and follow the wizard:
+The right long-term workflow for fork users — your copy keeps its GitHub fork
+relationship, so updates from this repo are one click away and deploy automatically:
 
-1. Authorize GitHub and confirm — Cloudflare copies the repository to your account and creates a **Workers** project from the root `wrangler.jsonc` (static site + built-in same-origin token proxy; the config is already in standard Workers format)
-2. After deploying you get `https://gitfiles.<your-subdomain>.workers.dev`
-3. Configure secrets and variables (Dashboard → Workers & Pages → gitfiles → Settings → Variables and Secrets):
-   - `GITHUB_CLIENT_SECRET` = your GitHub OAuth App client secret (**Secret type**, used by the token proxy)
-   - `CONFIG_GITHUB_CLIENT_ID` = your GitHub OAuth App Client ID (optional, frontend config injection)
-   - `CONFIG_GOOGLE_CLIENT_ID` = your Google OAuth Client ID (optional)
-4. In **Settings → Build → Build command** enter `node scripts/build-config.mjs` (injects the `CONFIG_*` variables into the frontend; leaving it empty still works, you just fall back to the `js/config.js` defaults) → **Retry deployment**
+```text
+GitHub Fork (your copy, keeps the upstream link)
+        ↓
+Cloudflare Workers connects your fork (Workers Builds)
+        ↓
+This repo publishes → you click "Sync fork" on GitHub → auto build & deploy
+```
 
-Zero frontend code changes: the same-origin `/api/github/oauth/token` is provided by the built-in Worker.
+1. **Fork** this repo on GitHub (top-right) — your fork gets a **Sync fork** button
+2. Cloudflare Dashboard → **Workers & Pages → Create → Workers → Import a repository** → pick your fork
+3. Build settings:
+   - **Build command**: `node scripts/build-config.mjs` (**required**: generates the `public/` asset directory and injects `CONFIG_*` variables; leaving it empty means missing assets and a failed deploy)
+   - Everything else default (deployment reads the root `wrangler.jsonc`)
+4. **Settings → Variables and Secrets** (both Production and Preview):
+   - `CONFIG_GITHUB_CLIENT_ID` / `CONFIG_GOOGLE_CLIENT_ID` (**Text type** — Secrets are invisible to builds; wrong type silently breaks config injection)
+   - `GITHUB_CLIENT_SECRET` (**Secret type**, used by the token proxy)
+5. Ongoing updates: when this repo publishes, open your fork → **Sync fork → Update branch** → Cloudflare deploys automatically
 
-### Option 2: Connect your Git repository
+### Option 2: Deploy to Cloudflare button (quick trial)
 
-The manual version of Option 1: Dashboard → **Workers & Pages → Create → Workers → Connect to Git**, pick your fork, and fill the build settings as in Option 1 steps 3-4. Useful if your repo already exists and you want to skip the button wizard.
+The button has Cloudflare **copy** the repo into your account — fast, but that copy
+is not a GitHub fork (no upstream link, no Sync fork button), so following this
+repo's updates afterwards is manual. For long-term use, prefer Option 1.
+
+Button URL format: `https://deploy.workers.cloudflare.com/?url=<your-repo-url>`; if
+the build command ends up empty after using the button, fill it manually under
+Settings → Build with `node scripts/build-config.mjs`.
 
 ### Option 3: wrangler CLI direct deploy
 

@@ -99,23 +99,37 @@ python3 serve.py          # 内置 OAuth token 代理 + SPA 回退
 
 > **操作顺序提示**：GitHub OAuth App 不是部署的前置条件 —— 先部署拿到 `*.workers.dev` 域名，再注册 OAuth App、配置 secret，最后重新部署即可。`Homepage URL` 字段 GitHub 不做任何校验（可先填仓库地址）；`callback URL` 支持事后修改，无需重建应用。
 
-### 方式一：一键部署（推荐）
+### 方式一：Fork → 连接 Git → 自动跟随上游更新（推荐）
 
-点击上方 **Deploy to Cloudflare** 按钮（fork 用户把链接中的仓库地址换成自己 fork 的地址），按向导完成：
+对 fork 用户最合理的长期工作流 —— 你的副本保留 GitHub fork 关系，本仓库的
+更新可以一键同步并自动部署：
 
-1. 授权 GitHub 并确认 —— Cloudflare 会把仓库复制到你账号下，并按仓库根的 `wrangler.jsonc` 创建 **Workers** 项目（静态站点 + 内置同源 token 代理，`wrangler.jsonc` 已是 Workers 标准配置）
-2. 部署完成后拿到域名 `https://gitfiles.<你的子域>.workers.dev`
-3. 配置 secrets 与环境变量（Dashboard → Workers & Pages → gitfiles → Settings → Variables and Secrets）：
-   - `GITHUB_CLIENT_SECRET` = 你的 GitHub OAuth App client secret（**Secret 类型**，token 代理用）
-   - `CONFIG_GITHUB_CLIENT_ID` = 你的 GitHub OAuth App Client ID（可选，前端配置注入）
-   - `CONFIG_GOOGLE_CLIENT_ID` = 你的 Google OAuth Client ID（可选）
-4. 在 **Settings → Build → Build command** 填 `node scripts/build-config.mjs`（把上面的 `CONFIG_*` 变量注入前端；留空也能用，只是走 `js/config.js` 默认值）→ **Retry deployment**
+```text
+GitHub Fork（你的副本，保留上游关系）
+        ↓
+Cloudflare Workers 连接你的 fork（Workers Builds）
+        ↓
+本仓库发布更新 → 你在 GitHub 点「Sync fork」→ 自动构建部署
+```
 
-前端零代码修改：同源 `/api/github/oauth/token` 由 Worker 内置提供。
+1. 在 GitHub 上 **Fork** 本仓库（右上角 Fork）—— fork 页面会出现 **Sync fork** 按钮
+2. Cloudflare Dashboard → **Workers & Pages → Create → Workers → Import a repository** → 选择你的 fork
+3. 构建设置：
+   - **Build command**：`node scripts/build-config.mjs`（**必填**：生成 `public/` 静态资源目录并注入 `CONFIG_*` 环境变量；留空会导致 assets 缺失、部署失败）
+   - 其余保持默认（部署读取仓库根 `wrangler.jsonc`）
+4. **Settings → Variables and Secrets**（Production 与 Preview 都要）：
+   - `CONFIG_GITHUB_CLIENT_ID` / `CONFIG_GOOGLE_CLIENT_ID`（**Text 类型** —— Secret 对构建不可见，选错则配置注入失效）
+   - `GITHUB_CLIENT_SECRET`（**Secret 类型**，token 代理用）
+5. 日常更新：本仓库发布新版后，进入你的 fork → **Sync fork → Update branch** → Cloudflare 自动构建部署
 
-### 方式二：连接 Git 仓库自动部署
+### 方式二：Deploy to Cloudflare 按钮（快速试用）
 
-与方式一相同目标的「手动版」：Dashboard → **Workers & Pages → Create → Workers → Connect to Git** 选择你 fork 的仓库，构建设置按方式一第 3-4 步填写。适合已经先建好仓库、想跳过按钮向导的用户。
+按钮会由 Cloudflare 把仓库**复制**到你账号下部署 —— 快，但那个副本不是 GitHub
+fork（没有上游关系、没有 Sync fork 按钮），后续跟随本仓库更新需手动处理。
+长期使用请用方式一。
+
+按钮链接格式：`https://deploy.workers.cloudflare.com/?url=<你的仓库地址>`；若部署后
+构建命令为空，请到项目 Settings → Build 手动补填 `node scripts/build-config.mjs`。
 
 ### 方式三：wrangler CLI 直接部署
 
