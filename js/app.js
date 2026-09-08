@@ -2819,7 +2819,7 @@ const App = (() => {
         refreshGithubFolderView({ reloadTree: true, silent: true });
       }
     });
-    GithubDisk.setConflictListener((conflict) => addConflictRecord(conflict));
+    GithubDisk.setConflictListener?.((conflict) => addConflictRecord(conflict));
     GithubDisk.setTransferListener?.((transfer) => addConflictRecord(transfer));
     refreshGithubSessionState();
 
