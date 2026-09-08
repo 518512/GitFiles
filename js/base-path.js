@@ -227,7 +227,9 @@ const BasePath = (() => {
 
     const base = get();
     const bare = pathname.replace(/\/+$/, '') || '/';
-    const needsEntry = bare === '/' || (base && bare === base);
+    // 根路径由托管直接 serve index.html；跳 /index.html 会与 Workers Static
+    // Assets 的 auto-trailing-slash 307 规范化（/index.html → /）形成死循环。
+    const needsEntry = !!(base && bare === base);
     if (!needsEntry) return;
 
     const entry = getEntryPath('index.html');
@@ -245,7 +247,9 @@ const BasePath = (() => {
 
     const root = detectEarlyRoot();
     const bare = pathname.replace(/\/+$/, '') || '/';
-    if (bare !== '/' && !(root && bare === root)) return false;
+    // 仅带部署前缀（如 GitHub Pages /GitFiles）时才规范化入口；根路径（Workers
+    // 等托管 / 直接返回 index.html）跳 /index.html 会与 307 规范化死循环。
+    if (!(root && bare === root)) return false;
 
     const entry = root ? `${root}/index.html` : '/index.html';
     const target = `${entry}${location.search}${location.hash}`;
