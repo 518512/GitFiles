@@ -28,9 +28,7 @@
   "build": {
     "command": "node scripts/build-config.mjs"
   },
-  // Create a D1 database, then replace the placeholder and uncomment this
-  // binding. The runtime binding name must remain DB.
-  // "d1_databases": [
-  //   { "binding": "DB", "database_name": "gitfiles", "database_id": "<D1_DATABASE_ID>" }
-  // ]
+  // Each deployment must bind its own D1 database in the Cloudflare
+  // Dashboard (Settings -> Bindings) using variable name DB. Do not commit
+  // an account-specific database_id to this public repository.
 }

@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import worker from '../workers/entry.js';
 import { executeOperations } from '../workers/operations.js';
+import { githubRequest } from '../workers/github.js';
 
 function request(path, options = {}) {
   return new Request(`https://gitfiles.example${path}`, options);
@@ -31,6 +32,22 @@ async function responseJson(path, env, options) {
   const response = await worker.fetch(request(path, options), env);
   return { response, body: await response.json() };
 }
+
+test('GitHub requests include the required User-Agent header', async () => {
+  const originalFetch = globalThis.fetch;
+  let headers;
+  globalThis.fetch = async (_url, options) => {
+    headers = options.headers;
+    return new Response(JSON.stringify({ login: 'octo' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  try {
+    await githubRequest({ access_token: 'secret' }, '/user');
+    assert.equal(headers['User-Agent'], 'GitFiles-Worker');
+    assert.equal(headers.Authorization, 'Bearer secret');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test('me fails closed when D1 is not configured', async () => {
   const { response, body } = await responseJson('/api/me', {});

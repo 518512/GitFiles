@@ -17,6 +17,7 @@ export async function githubRequest(session, path, options = {}) {
         Authorization: `Bearer ${session.access_token}`,
         Accept: options.accept || 'application/vnd.github+json',
         'X-GitHub-Api-Version': API_VERSION,
+        'User-Agent': 'GitFiles-Worker',
         ...(options.headers || {}),
       },
       body: options.body,
@@ -57,6 +58,7 @@ export async function githubRaw(session, path, options = {}) {
         Authorization: `Bearer ${session.access_token}`,
         Accept: options.accept || 'application/vnd.github.raw',
         'X-GitHub-Api-Version': API_VERSION,
+        'User-Agent': 'GitFiles-Worker',
       },
     });
   } catch {
