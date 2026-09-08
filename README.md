@@ -99,24 +99,51 @@ python3 serve.py          # 内置 OAuth token 代理 + SPA 回退
 
 > **操作顺序提示**：GitHub OAuth App 不是部署的前置条件 —— 先部署拿到 `*.pages.dev` 域名，再注册 OAuth App、配置 secret，最后重新部署即可。`Homepage URL` 字段 GitHub 不做任何校验（可先填仓库地址）；`callback URL` 支持事后修改，无需重建应用。
 
-### 方式一：一键部署到 Cloudflare Pages（推荐）
+### 方式一：连接 Git 仓库自动部署（推荐）
 
-点击上方 **Deploy to Cloudflare** 按钮，按向导完成即可。仓库已内置：
+这是 Cloudflare 官方主路径，对 fork 用户最可靠（不依赖一键按钮）：
 
-- `wrangler.jsonc` —— Pages 配置（纯静态、无构建、`404.html` 兜底）
-- `functions/api/github/oauth/token.js` —— OAuth token 交换 Pages Function（`/api/github/oauth/token`）
+1. **Cloudflare Dashboard → Workers & Pages → Create application → Pages → Connect to Git**
+2. 授权并选择你 fork 的 `GitFiles` 仓库 → **Begin setup**
+3. 构建设置：
+   - **Project name**：即域名 `https://<项目名>.pages.dev`（默认读 `wrangler.jsonc` 的 `name` = `gitfiles`）
+   - **Framework preset**：`None`
+   - **Build command**：填 `node scripts/build-config.mjs`（作用：把 `CONFIG_*` 环境变量注入前端配置；**留空也能正常部署**，只是环境变量配置方式不生效）
+   - **Build output directory**：`/`
+4. **Settings → Variables and Secrets**（Production 与 Preview 都要）：
+   - `CONFIG_GITHUB_CLIENT_ID` = 你的 GitHub OAuth App Client ID（可选，GitHub 登录用）
+   - `CONFIG_GOOGLE_CLIENT_ID` = 你的 Google OAuth Client ID（可选，Google Drive 登录用）
+   - `GITHUB_CLIENT_SECRET` = 你的 GitHub OAuth App client secret（**Secret 类型**，token 代理用）
+5. 部署后每次 push 到 `main` 自动构建发布；修改环境变量后需 **Retry deployment** 或重新 push
 
-> 部署向导中的「项目名」**默认取自 `wrangler.jsonc` 的 `name`（当前为 `gitfiles`）**，即最终域名 `https://gitfiles.pages.dev`；向导中可改名（仅小写字母/数字/连字符）。**项目名一旦变更，记得同步更新 GitHub OAuth App 的 callback URL。**
+> 若你之前用一键按钮部署时遇到 `WorkerResource.getWorkerResult: response missing default_environment.script` 之类的报错，或看到构建命令为空 —— 属于按钮流程的已知问题；请改用上面的 Git 连接方式，并把 Build command 手动填为 `node scripts/build-config.mjs`。
 
-部署后在 Pages 项目设置中添加 secret，即可启用网页版 GitHub 登录：
+仓库已内置部署所需文件：
+
+- `wrangler.jsonc` —— Pages 配置（纯静态；`wrangler pages deploy` CLI 部署时自动执行构建命令）
+- `functions/api/github/oauth/token.js` —— OAuth token 交换 Pages Function（`/api/github/oauth/token`，同源自动生效）
+- `404.html` —— SPA 回退（Pages 约定自动启用）
+
+部署完成后即可启用网页版 GitHub 登录（前端零代码修改）：
 
 ```bash
 npx wrangler pages secret put GITHUB_CLIENT_SECRET   # GitHub OAuth App 的 client secret
 ```
 
-前端无需改代码：同源 Pages Function 自动生效（也可在 `js/config.js` 中用 `GITHUB_TOKEN_EXCHANGE_URL` 指向任意代理）。
+### 方式二：wrangler CLI 直接部署
 
-### 方式二：GitHub Pages
+```bash
+# 构建命令（生成配置覆盖）已声明在 wrangler.jsonc，deploy 时自动执行
+npx wrangler pages deploy .
+```
+
+适合不想走 Git 集成、或想从本地直接发布的场景。
+
+### 方式三：Deploy to Cloudflare 按钮（备选）
+
+README 顶部的按钮会读取 `wrangler.jsonc` 引导部署，但其流程对纯静态 Pages 项目偶尔报错（见上）。若使用按钮后构建命令为空，请到项目 Settings → Build 手动补填 `node scripts/build-config.mjs`。
+
+### 方式四：GitHub Pages
 
 推送 `main` 分支后，仓库内置的 [`.github/workflows/pages.yml`](.github/workflows/pages.yml) 会自动发布。SPA 所需文件已就绪：`404.html`（回退）、`.nojekyll`、`sw.js`、`js/base-path.js`（自动识别 `/仓库名` 前缀）。
 

@@ -99,30 +99,49 @@ A **PAT mode** is available as a fallback when the OAuth proxy is unreachable: c
 
 > **Order of operations**: the GitHub OAuth App is not a prerequisite for deployment — deploy first to get your `*.pages.dev` domain, then register the OAuth App, configure the secret, and redeploy. GitHub does not validate the `Homepage URL` field at all (fill in the repo URL for now); the `callback URL` can be edited later without recreating the app.
 
-### Option 1: One-click deploy to Cloudflare Pages (recommended)
+### Option 1: Connect your Git repository (recommended)
 
-Click the **Deploy to Cloudflare** button above and follow the wizard. The repo ships with:
+This is Cloudflare's official primary path and the most reliable one for fork users (no reliance on the one-click button):
 
-- `wrangler.jsonc` — Pages config (pure static, no build step, `404.html` fallback)
-- `functions/api/github/oauth/token.js` — OAuth token-exchange Pages Function (`/api/github/oauth/token`)
+1. **Cloudflare Dashboard → Workers & Pages → Create application → Pages → Connect to Git**
+2. Authorize and pick your forked `GitFiles` repository → **Begin setup**
+3. Build settings:
+   - **Project name**: becomes the domain `https://<project-name>.pages.dev` (defaults from `wrangler.jsonc` `name` = `gitfiles`)
+   - **Framework preset**: `None`
+   - **Build command**: `node scripts/build-config.mjs` (injects `CONFIG_*` environment variables into the frontend config; **deployment also works if left empty** — you just lose the env-var config channel)
+   - **Build output directory**: `/`
+4. **Settings → Variables and Secrets** (set for both Production and Preview):
+   - `CONFIG_GITHUB_CLIENT_ID` = your GitHub OAuth App Client ID (optional, for GitHub sign-in)
+   - `CONFIG_GOOGLE_CLIENT_ID` = your Google OAuth Client ID (optional, for Google Drive sign-in)
+   - `GITHUB_CLIENT_SECRET` = your GitHub OAuth App client secret (**Secret type**, used by the token proxy)
+5. Every push to `main` builds automatically; after changing variables, **Retry deployment** or push again
 
-> The "project name" in the deployment wizard **defaults to the `name` in `wrangler.jsonc` (currently `gitfiles`)**, i.e. the final domain `https://gitfiles.pages.dev`; you may change it in the wizard (lowercase letters/digits/hyphens only). **If you change the project name, remember to update the GitHub OAuth App callback URL accordingly.**
+> If the one-click button failed for you with `WorkerResource.getWorkerResult: response missing default_environment.script`, or the build command came out empty — those are known button-flow issues. Use the Git connection above and set the Build command manually to `node scripts/build-config.mjs`.
 
-After deploying, add a secret in the Pages project settings to enable web GitHub sign-in:
+Deployment files already included in the repo:
+
+- `wrangler.jsonc` — Pages config (pure static; `wrangler pages deploy` CLI runs the build command automatically)
+- `functions/api/github/oauth/token.js` — OAuth token-exchange Pages Function (`/api/github/oauth/token`, same-origin)
+- `404.html` — SPA fallback (enabled by Pages convention)
+
+After deploying, enable web GitHub sign-in (zero frontend code changes):
 
 ```bash
 npx wrangler pages secret put GITHUB_CLIENT_SECRET   # your GitHub OAuth App client secret
 ```
 
-No frontend changes are needed: the same-origin Pages Function takes effect automatically (alternatively point `GITHUB_TOKEN_EXCHANGE_URL` in `js/config.js` at any proxy).
+### Option 2: wrangler CLI direct deploy
 
-### Option 2: GitHub Pages
+```bash
+# The build command (config override generation) is declared in wrangler.jsonc and runs automatically
+npx wrangler pages deploy .
+```
 
-Push to `main` and the built-in [`.github/workflows/pages.yml`](.github/workflows/pages.yml) deploys automatically. SPA files are ready: `404.html` (fallback), `.nojekyll`, `sw.js`, and `js/base-path.js` (auto-detects the `/repo-name` prefix).
+Best when you don't want Git integration or prefer publishing from your machine.
 
-> GitHub Pages is static hosting without a server-side proxy. Deploy a token proxy (next section) or sign in with a PAT.
+### Option 3: Deploy to Cloudflare button (fallback)
 
-### OAuth token proxy (three options)
+The button at the top of this README reads `wrangler.jsonc` and guides deployment, but the flow sometimes errors on pure-static Pages projects (see above). If the build command ends up empty after using the button, fill it manually in the project's Settings → Build with `node scripts/build-config.mjs`.
 
 GitHub's token endpoint blocks browser requests (CORS); exchanging the authorization code requires a server-side proxy:
 
@@ -239,6 +258,22 @@ Covers the core PROJECT_SPEC §24 requirements:
 ## 🙏 Acknowledgements
 
 Built on [Storage Hub](https://github.com/fi3ik-mme/storage-hub) by [Mykhailo Mikus](https://github.com/fi3ik-mme). The app is not affiliated with Google LLC or GitHub.
+
+### Option 4: GitHub Pages
+
+Push to `main` and the built-in [`.github/workflows/pages.yml`](.github/workflows/pages.yml) deploys automatically. SPA files are ready: `404.html` (fallback), `.nojekyll`, `sw.js`, and `js/base-path.js` (auto-detects the `/repo-name` prefix).
+
+> GitHub Pages is static hosting without a server-side proxy. Deploy a token proxy (next section) or sign in with a PAT.
+
+### OAuth token proxy (three options)
+
+GitHub's token endpoint blocks browser requests (CORS); exchanging the authorization code requires a server-side proxy:
+
+| Option | Use case | Setup |
+|--------|----------|-------|
+| **Pages Function** (bundled) | Cloudflare Pages | Works out of the box; just set `GITHUB_CLIENT_SECRET` |
+| **Standalone Worker** (`workers/github-oauth-token.js`) | GitHub Pages and other static hosts | Create a Worker manually and point `GITHUB_TOKEN_EXCHANGE_URL` at it |
+| **serve.py built-in proxy** | Local development | Zero config; put the secret in a `.github_secret` file (never commit it) |
 
 ### OAuth application description (for registration forms)
 

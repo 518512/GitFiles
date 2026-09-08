@@ -1,29 +1,29 @@
-// Cloudflare Pages 一键部署配置（Deploy to Cloudflare 按钮 / wrangler CLI 共用）。
+// Cloudflare Pages 配置（Git 连接 / wrangler CLI 部署共用）。
 //
-// 本项目为纯静态前端（无构建步骤），Pages 直接发布仓库根目录；
-// functions/ 目录会被自动识别为 Pages Functions（/api/* 路由）。
+// 本项目为纯静态前端，Pages 直接发布仓库根目录；
+// functions/ 目录会被自动识别为 Pages Functions（/api/* 路由）；
+// SPA 回退由约定生效：根目录的 404.html 会被用作未匹配路径的兜底页。
 //
-// 部署后请配置 GitHub OAuth App 的 client secret（启用 GitHub 网页登录时必需）：
-//   方式一：Dashboard → Pages → 项目 → Settings → Environment variables
+// 构建命令说明（生成 js/config.runtime.js，见 scripts/build-config.mjs）：
+//   · wrangler CLI 部署（npx wrangler pages deploy .）→ 自动执行此处的 build.command
+//   · Dashboard「Git 连接」部署 → 不读取本文件的 build 字段，请在
+//     项目 Settings → Build → Build command 中填写：node scripts/build-config.mjs
+//     （留空也能部署成功，只是 CONFIG_* 环境变量不会注入前端配置）
+//
+// 部署后配置 GitHub OAuth App 的 client secret（启用 GitHub 网页登录时必需）：
+//   方式一：Dashboard → Pages → 项目 → Settings → Variables and Secrets
 //           添加 secret：GITHUB_CLIENT_SECRET
 //   方式二：命令行  npx wrangler pages secret put GITHUB_CLIENT_SECRET
 // 可选 secret：GITHUB_CLIENT_ID（覆盖请求体中的 client_id，与 .github_secret 用法一致）。
 //
-// Pages 项目名即默认域名：https://<name>.pages.dev（仅小写字母、数字、连字符）。
-// 一键部署向导会预填此处的 name，可改为其他未被占用的名称；
+// Pages 项目名会决定默认域名：https://<name>.pages.dev（仅小写字母、数字、连字符）。
 // 项目名/域名变更后，记得同步更新 GitHub OAuth App 的 Authorization callback URL。
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "gitfiles",
   "compatibility_date": "2026-09-01",
   "pages_build_output_dir": ".",
-  // 构建时从环境变量生成 js/config.runtime.js（零代码修改完成部署配置）：
-  //   Pages 项目 → Settings → Variables and Secrets 添加
-  //   CONFIG_GOOGLE_CLIENT_ID / CONFIG_GITHUB_CLIENT_ID（可选）/ CONFIG_BASE_PATH（可选）
   "build": {
     "command": "node scripts/build-config.mjs"
-  },
-  "assets": {
-    "not_found_handling": "404-page"
   }
 }
