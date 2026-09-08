@@ -35,8 +35,8 @@ const FILES = [
 ];
 const DIRS = ['css', 'js', 'assets'];
 
-/** 本地开发配置（gitignored）与示例模板不进入部署产物。 */
-const EXCLUDED = [/config\.local\.js$/, /config\.local\.example\.js$/];
+/** 示例模板不进入部署产物；config.local.js 由下方显式处理（存在则发布，否则生成占位）。 */
+const EXCLUDED = [/config\.local\.example\.js$/];
 
 // 1) 重建 public/
 fs.rmSync(outDir, { recursive: true, force: true });
@@ -49,6 +49,17 @@ for (const dir of DIRS) {
     recursive: true,
     filter: (src) => !EXCLUDED.some((re) => re.test(src)),
   });
+}
+
+// js/config.local.js：本地开发时随仓库发布；部署产物中不存在时生成占位注释，
+// 避免 SPA 回退（single-page-application）把 index.html 当 JS 返回导致控制台
+// 报 "Unexpected token '<'"。
+const localConfigOut = path.join(outDir, 'js', 'config.local.js');
+if (!fs.existsSync(localConfigOut)) {
+  fs.writeFileSync(
+    localConfigOut,
+    '// js/config.local.js is not present in this deployment (see js/config.local.example.js).\n'
+  );
 }
 
 // 2) 生成配置覆盖（构建环境变量 → 前端 CONFIG）

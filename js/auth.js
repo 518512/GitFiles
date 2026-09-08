@@ -63,6 +63,13 @@ const Auth = (() => {
         return;
       }
 
+      // Google Client ID 未配置（CONFIG_* 构建变量缺失）时跳过 GSI 初始化：
+      // 空字符串会让 Google 压缩库抛出内部错误，并中断 App.init 的后续步骤。
+      if (!CONFIG.CLIENT_ID || /^YOUR_/.test(CONFIG.CLIENT_ID)) {
+        callback({ initialized: false, reason: 'google-not-configured' });
+        return;
+      }
+
       tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: CONFIG.CLIENT_ID,
         scope: CONFIG.SCOPES,
@@ -179,6 +186,10 @@ const Auth = (() => {
   }
 
   function signIn() {
+    if (!tokenClient) {
+      onAuthCallback?.({ error: 'Google sign-in is not configured. Set the CONFIG_GOOGLE_CLIENT_ID build variable (see README "Configuring Client IDs").' });
+      return;
+    }
     consentRetryCount = 0;
     requestToken({ prompt: 'consent' });
   }
