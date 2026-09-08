@@ -2910,5 +2910,13 @@ const App = (() => {
 })();
 
 document.addEventListener('DOMContentLoaded', () => {
-  App.init().catch((err) => console.error(err));
+  App.init().catch((err) => {
+    console.error(err);
+    const message = err?.message || String(err);
+    const errorEl = document.querySelector('#login-error');
+    if (errorEl) {
+      errorEl.textContent = `Application initialization failed: ${message}`;
+      errorEl.classList.remove('hidden');
+    }
+  });
 });

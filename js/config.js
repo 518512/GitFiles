@@ -5,16 +5,16 @@
 //   1. 直接改本文件          —— 可用，但会与上游更新冲突，不推荐
 //   2. js/config.local.js    —— 本地开发用（已在 .gitignore，不会提交）
 //                               模板见 js/config.local.example.js
-//   3. 部署平台构建环境变量   —— Cloudflare Pages 推荐，零代码修改：
-//                               Pages 项目 → Settings → Variables and Secrets
+//   3. 部署平台构建环境变量   —— Cloudflare Workers 推荐，零代码修改：
+//                               Worker → Settings → Build variables and secrets
 //                               → 添加 CONFIG_GOOGLE_CLIENT_ID / CONFIG_GITHUB_CLIENT_ID
 //                               → 重新部署（scripts/build-config.mjs 构建时自动生成覆盖）
 //
 // Client ID 是公开标识符，可安全放前端；Client Secret 必须只配置在
-// 服务端（Cloudflare Pages 的 GITHUB_CLIENT_SECRET / 本地 .github_secret）。
+// Worker Secret（GITHUB_CLIENT_SECRET）中。
 const DEFAULT_CONFIG = {
-  // GitHub Pages 项目路径（自定义域名 / Cloudflare Pages 根部署可用覆盖改为 '/'）
-  BASE_PATH: typeof SITE !== 'undefined' ? SITE.basePath : '/GitFiles',
+  // GitHub Pages 使用 /GitFiles；Workers + Static Assets 从根路径提供资源。
+  BASE_PATH: typeof location !== 'undefined' && /(^|\.)github\.io$/i.test(location.hostname) ? '/GitFiles' : '/',
   // Google Cloud OAuth 2.0 Web Client ID（Google Drive 登录用，见 README「配置」）
   CLIENT_ID: '',
   // GitHub OAuth App Client ID（公开值；回调地址必须与应用设置一致，见 README）
