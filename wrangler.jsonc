@@ -29,7 +29,13 @@
   "build": {
     "command": "node scripts/build-config.mjs"
   },
-  // Each deployment must bind its own D1 database in the Cloudflare
-  // Dashboard (Settings -> Bindings) using variable name DB. Do not commit
-  // an account-specific database_id to this public repository.
+  // Each deployment supplies its own D1 values as build variables. Wrangler
+  // resolves ${D1_DATABASE_NAME} and ${D1_DATABASE_ID} during deployment.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "${D1_DATABASE_NAME}",
+      "database_id": "${D1_DATABASE_ID}"
+    }
+  ]
 }
