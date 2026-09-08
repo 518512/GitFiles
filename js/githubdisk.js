@@ -10,7 +10,6 @@ const GithubDisk = (() => {
   const MAX_REPO_SIZE_BYTES = 100 * 1024 * 1024 * 1024;
 
   let disks = [];
-  const repoTreeCache = new Map();
   const pendingByFolder = new Map();
   const saveStateByPath = new Map();
   const deleteStateByPath = new Map();
@@ -39,6 +38,7 @@ const GithubDisk = (() => {
     if (status === 'syncing') return 'Uploading…';
     if (status === 'saving') return 'Saving…';
     if (status === 'moving') return 'Moving…';
+    if (status === 'conflict') return 'Conflict: remote updated';
     if (status === 'pending') {
       if (options.kind === 'save') return 'Pending save…';
       if (options.kind === 'move') return 'Pending movement…';
@@ -88,9 +88,75 @@ const GithubDisk = (() => {
     listChangeListener?.(diskId);
   }
 
+  async function requireDisk(diskId) {
+    const disk = getDisk(diskId);
+    if (!disk) throw new Error('GitHub storage not found');
+    return disk;
+  }
+
+  function isConflictError(err) {
+    return !!err && (err.name === 'ConflictError' || err.isConflict === true);
+  }
+
+  /**
+   * A remote CAS failure is never silently overwritten: the user must choose
+   * to rebase their operation onto the latest remote state (explicit overwrite)
+   * or cancel. PROJECT_SPEC §5.
+   */
+  async function offerConflictResolution(diskId, err) {
+    if (typeof Dialog === 'undefined') return false;
+    const lines = [
+      'The branch was updated by another device while this operation was running.',
+      '',
+      `Your base:   ${err.expectedHead || 'unknown'}`,
+      `Remote HEAD: ${err.remoteHead || 'unknown'}`,
+      '',
+      'Your operation was NOT applied. Overwriting remote changes must be explicit.',
+    ];
+    try {
+      const choice = await Dialog.choose({
+        title: 'Conflict detected',
+        message: lines.join('\n'),
+        buttons: [
+          { id: 'overwrite', label: 'Apply to latest remote state', primary: true },
+          { id: 'cancel', label: 'Cancel' },
+        ],
+      });
+      if (choice === 'overwrite') {
+        invalidateRepoTree(diskId);
+        return true;
+      }
+    } catch {
+      // Dialog unavailable or dismissed — treat as cancel.
+    }
+    return false;
+  }
+
+  /**
+   * Run one logical group of operations as ONE tree + ONE commit
+   * (Git Data API, CAS-protected).
+   */
+  async function executeOperations(diskId, operations, message) {
+    const disk = getDisk(diskId);
+    if (!disk) throw new Error('GitHub storage not found');
+    const result = await GithubOperations.executeCommitPipeline({
+      owner: disk.owner,
+      repo: disk.repo,
+      branch: disk.branch || 'main',
+      token: disk.token,
+      message,
+      operations,
+    });
+    invalidateRepoTree(diskId);
+    return result;
+  }
+
   function invalidateRepoTree(diskId) {
-    if (diskId) repoTreeCache.delete(diskId);
-    else repoTreeCache.clear();
+    // TreeIndex caches are keyed by owner/repo/branch/head (GithubTree): a
+    // changed HEAD invalidates them by itself, so there is nothing stale to
+    // drop here. Kept as a hook for callers that want a hard refresh.
+    void diskId;
+    GithubTree.clear();
   }
 
   function pendingFolderKey(diskId, parentId) {
@@ -205,11 +271,11 @@ const GithubDisk = (() => {
     }
   }
 
-  function failPending(tempId, message) {
+  function failPending(tempId, message, options = {}) {
     for (const [key, list] of pendingByFolder.entries()) {
       const entry = list.find((item) => item.tempId === tempId);
       if (!entry) continue;
-      entry.status = 'error';
+      entry.status = options.conflict ? 'conflict' : 'error';
       entry.error = message || 'Upload failed';
       trackOperationFinish(tempId, false);
       notifyListChange(key.split('\0')[0]);
@@ -402,14 +468,18 @@ const GithubDisk = (() => {
       notifyListChange(diskId);
       return { id: meta.destPath, name: meta.name, isFolder: !!meta.isFolder };
     } catch (err) {
-      failPending(destPendingId, err?.message || String(err));
+      failPending(destPendingId, err?.message || String(err), { conflict: isConflictError(err) });
       trackOperationFinish(normalizedSource, false);
       moveStateByPath.set(key, {
         ...moveStateByPath.get(key),
-        status: 'error',
+        status: isConflictError(err) ? 'conflict' : 'error',
         error: err?.message || String(err),
       });
       notifyListChange(diskId);
+      if (isConflictError(err)) {
+        const retry = await offerConflictResolution(diskId, err);
+        if (retry) return runPendingMove(diskId, sourcePath, toParentId, meta, action);
+      }
       throw err;
     }
   }
@@ -598,7 +668,7 @@ const GithubDisk = (() => {
       confirmDeleteOnServer(diskId, path, isFolder);
     } catch (err) {
       deleteStateByPath.set(key, {
-        status: 'error',
+        status: isConflictError(err) ? 'conflict' : 'error',
         error: err?.message || String(err),
         name: meta?.name || path.split('/').pop(),
         isFolder,
@@ -608,6 +678,10 @@ const GithubDisk = (() => {
       });
       trackOperationFinish(path, false);
       notifyListChange(diskId);
+      if (isConflictError(err)) {
+        const retry = await offerConflictResolution(diskId, err);
+        if (retry) return runPendingDelete(diskId, filePath, meta, action);
+      }
       throw err;
     }
   }
@@ -724,7 +798,7 @@ const GithubDisk = (() => {
       return result;
     } catch (err) {
       saveStateByPath.set(key, {
-        status: 'error',
+        status: isConflictError(err) ? 'conflict' : 'error',
         error: err?.message || String(err),
         expectedSha: null,
         kind: 'save',
@@ -733,6 +807,10 @@ const GithubDisk = (() => {
       });
       trackOperationFinish(path, false);
       notifySaveStateChange(diskId, path);
+      if (isConflictError(err)) {
+        const retry = await offerConflictResolution(diskId, err);
+        if (retry) return runPendingFileSave(diskId, filePath, meta, action);
+      }
       throw err;
     }
   }
@@ -859,7 +937,11 @@ const GithubDisk = (() => {
       notifyListChange(diskId);
       return result;
     } catch (err) {
-      failPending(tempId, err?.message || String(err));
+      failPending(tempId, err?.message || String(err), { conflict: isConflictError(err) });
+      if (isConflictError(err)) {
+        const retry = await offerConflictResolution(diskId, err);
+        if (retry) return runPendingMutation(diskId, parentId, meta, action);
+      }
       throw err;
     }
   }
@@ -1594,7 +1676,7 @@ const GithubDisk = (() => {
 
   function isDuplicateNameError(err) {
     const msg = (err?.message || String(err)).toLowerCase();
-    return /"sha"\s+wasn't supplied|sha wasn't supplied|already exists in this folder|file already exists/i.test(msg);
+    return /"sha"\s+wasn't supplied|sha wasn't supplied|already exists in this folder|file already exists|path already exists/i.test(msg);
   }
 
   function makeUniqueSiblingName(name, existsFn) {
@@ -1812,26 +1894,17 @@ const GithubDisk = (() => {
     return new Date(ts).toLocaleString();
   }
 
+  async function getRepoTreeState(disk, { force = false } = {}) {
+    return GithubTree.getTreeAt(disk.owner, disk.repo, disk.branch || 'main', disk.token, { force });
+  }
+
+  /**
+   * Full recursive tree of the current branch HEAD.
+   * Cached per owner/repo/branch/head — a moved HEAD re-keys the cache.
+   */
   async function getRepoTree(disk, { force = false } = {}) {
-    if (!force && repoTreeCache.has(disk.id)) {
-      return repoTreeCache.get(disk.id);
-    }
-    try {
-      const data = await apiRequest(
-        `/repos/${encodeURIComponent(disk.owner)}/${encodeURIComponent(disk.repo)}/git/trees/${encodeURIComponent(disk.branch)}?recursive=1`,
-        disk.token
-      );
-      const tree = data.tree || [];
-      repoTreeCache.set(disk.id, tree);
-      return tree;
-    } catch (err) {
-      // Brand-new repos have no commits yet, so the branch tree does not exist.
-      if (isEmptyGitTreeError(err)) {
-        repoTreeCache.set(disk.id, []);
-        return [];
-      }
-      throw err;
-    }
+    const state = await getRepoTreeState(disk, { force });
+    return state.tree;
   }
 
   async function listFiles(diskId, parentId = ROOT_ID) {
@@ -1979,51 +2052,17 @@ const GithubDisk = (() => {
     return new Blob([await res.arrayBuffer()], { type: mimeType });
   }
 
-  async function putFileContent(disk, path, content, message, sha = null) {
-    return apiRequest(
-      `/repos/${encodeURIComponent(disk.owner)}/${encodeURIComponent(disk.repo)}/contents/${encodeRepoPath(path)}`,
-      disk.token,
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message,
-          content: b64EncodeUtf8(content),
-          branch: disk.branch,
-          ...(sha ? { sha } : {}),
-        }),
-      }
-    );
-  }
-
-  async function putFileBlob(disk, path, blob, message, sha = null) {
-    const bytes = new Uint8Array(await blob.arrayBuffer());
+  function assertUploadSize(bytes) {
     if (bytes.length > 100 * 1024 * 1024) {
       throw new Error('GitHub storage supports files up to 100 MB');
     }
-    return apiRequest(
-      `/repos/${encodeURIComponent(disk.owner)}/${encodeURIComponent(disk.repo)}/contents/${encodeRepoPath(path)}`,
-      disk.token,
-      {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message,
-          content: b64EncodeBytes(bytes),
-          branch: disk.branch,
-          ...(sha ? { sha } : {}),
-        }),
-      }
-    );
   }
 
   async function createFolder(diskId, parentId, name) {
     return runPendingMutation(diskId, parentId, { name, isFolder: true }, async () => {
-      const disk = getDisk(diskId);
-      if (!disk) throw new Error('GitHub storage not found');
       const parentPath = normalizePath(parentId);
       const folderPath = parentPath ? `${parentPath}/${name}` : name;
-      await putFileContent(disk, `${folderPath}/.keep`, '', `Create folder ${folderPath}`);
+      await executeOperations(diskId, [{ type: 'mkdir', path: folderPath }], `Create folder ${folderPath}`);
       return {
         id: folderPath,
         name,
@@ -2037,11 +2076,9 @@ const GithubDisk = (() => {
 
   async function createFile(diskId, parentId, name, mimeType, content = '') {
     return runPendingMutation(diskId, parentId, { name, mimeType, size: new TextEncoder().encode(content || '').length }, async () => {
-      const disk = getDisk(diskId);
-      if (!disk) throw new Error('GitHub storage not found');
       const parentPath = normalizePath(parentId);
       const filePath = parentPath ? `${parentPath}/${name}` : name;
-      await putFileContent(disk, filePath, content, `Create file ${filePath}`);
+      await executeOperations(diskId, [{ type: 'create', path: filePath, content }], `Create file ${filePath}`);
       return {
         id: filePath,
         name,
@@ -2056,17 +2093,14 @@ const GithubDisk = (() => {
   async function createFileFromBlob(diskId, parentId, name, mimeType, blob) {
     const size = blob?.size || 0;
     return runPendingMutation(diskId, parentId, { name, mimeType, size }, async () => {
-      const disk = getDisk(diskId);
-      if (!disk) throw new Error('GitHub storage not found');
       const parentPath = normalizePath(parentId);
       const filePath = parentPath ? `${parentPath}/${name}` : name;
       const resolvedMime = mimeType || inferMimeType(name);
-      if (isTextFileMime(resolvedMime, name)) {
-        const text = await blob.text();
-        await putFileContent(disk, filePath, text, `Create file ${filePath}`);
-      } else {
-        await putFileBlob(disk, filePath, blob, `Create file ${filePath}`);
-      }
+      const content = isTextFileMime(resolvedMime, name)
+        ? await blob.text()
+        : new Uint8Array(await blob.arrayBuffer());
+      if (content instanceof Uint8Array) assertUploadSize(content);
+      await executeOperations(diskId, [{ type: 'create', path: filePath, content }], `Create file ${filePath}`);
       return {
         id: filePath,
         name,
@@ -2084,14 +2118,13 @@ const GithubDisk = (() => {
       parentId,
       { name, mimeType, size: new TextEncoder().encode(content || '').length },
       async () => {
-        const disk = getDisk(diskId);
-        if (!disk) throw new Error('GitHub storage not found');
         const parentPath = normalizePath(parentId);
         const filePath = parentPath ? `${parentPath}/${name}` : name;
-        const meta = await getFileContentMeta(disk, filePath);
-        if (meta.type === 'dir') throw new Error('Cannot replace a folder with a file');
-        await putFileContent(disk, filePath, content, `Replace file ${filePath}`, meta.sha);
-        invalidateRepoTree(diskId);
+        const tree = await getRepoTree(await requireDisk(diskId));
+        if (isPathVisibleInTree(tree, filePath, true) && !tree.some((e) => e.type === 'blob' && e.path === filePath)) {
+          throw new Error('Cannot replace a folder with a file');
+        }
+        await executeOperations(diskId, [{ type: 'update', path: filePath, content }], `Update file ${filePath}`);
         return {
           id: filePath,
           name,
@@ -2118,118 +2151,81 @@ const GithubDisk = (() => {
   }
 
   async function updateFileContent(diskId, fileId, content, _mimeType) {
-    const disk = getDisk(diskId);
-    if (!disk) throw new Error('GitHub storage not found');
     const path = normalizePath(fileId);
-    const meta = await getFileContentMeta(disk, path);
     await runPendingFileSave(
       diskId,
       path,
       { name: path.split('/').pop(), size: new TextEncoder().encode(content || '').length },
       async () => {
-        const response = await putFileContent(disk, path, content, `Update file ${path}`, meta.sha);
-        invalidateRepoTree(diskId);
-        return { expectedSha: response?.content?.sha || null };
+        await executeOperations(diskId, [{ type: 'update', path, content }], `Update file ${path}`);
+        return { expectedSha: null };
       }
     );
   }
 
   async function renameFile(diskId, fileId, name) {
-    const disk = getDisk(diskId);
-    if (!disk) throw new Error('GitHub storage not found');
     const oldPath = normalizePath(fileId);
     const parent = getParentPath(oldPath);
     const newPath = parent ? `${parent}/${name}` : name;
-    await moveFile(diskId, oldPath, parent || ROOT_ID, parent || ROOT_ID, newPath);
+    const disk = await requireDisk(diskId);
+    const tree = await getRepoTree(disk);
+    const isFolder = GithubOperations.isFolderPath(tree, oldPath);
+    return runPendingMove(
+      diskId,
+      oldPath,
+      parent || ROOT_ID,
+      {
+        name,
+        isFolder,
+        mimeType: isFolder ? FOLDER_MIME : inferMimeType(name),
+        size: 0,
+        destPath: newPath,
+      },
+      async () => {
+        await executeOperations(diskId, [{ type: 'rename', from: oldPath, to: newPath }], `Rename ${oldPath} → ${newPath}`);
+      }
+    );
   }
 
   async function isGithubFolder(diskId, path) {
     const normalized = normalizePath(path);
     if (!normalized) return false;
-    const children = await listFiles(diskId, normalized);
-    if (children.length > 0) return true;
-    const disk = getDisk(diskId);
-    if (!disk) return false;
+    const disk = await requireDisk(diskId);
     const tree = await getRepoTree(disk);
-    return tree.some((entry) => {
-      const entryPath = entry.path || '';
-      return entryPath === `${normalized}/.keep` || entryPath.startsWith(`${normalized}/`);
-    });
+    return GithubOperations.isFolderPath(tree, normalized);
   }
 
-  async function makeUniqueCopyName(diskId, parentId, name) {
-    const siblings = await listFiles(diskId, parentId);
-    const exists = (candidate) => siblings.some((file) => file.name.toLowerCase() === candidate.toLowerCase());
-    if (!exists(name)) return name;
-
-    const match = name.match(/^(.*?)(\.[^.]+)?$/);
-    const stem = match?.[1] || name;
-    const ext = match?.[2] || '';
-    let candidate = `${stem} (copy)${ext}`;
-    let counter = 2;
-    while (exists(candidate)) {
-      candidate = `${stem} (copy ${counter})${ext}`;
-      counter += 1;
-    }
-    return candidate;
+  async function makeUniqueCopyName(diskId, parentId, name, takenPaths = null) {
+    const disk = await requireDisk(diskId);
+    const tree = await getRepoTree(disk);
+    const targetPath = GithubOperations.joinPath(normalizePath(parentId), name);
+    const uniquePath = GithubOperations.makeUniquePath(tree, targetPath, takenPaths);
+    return GithubOperations.getBaseName(uniquePath);
   }
 
-  async function putFileFromBlob(disk, path, blob, message) {
-    const fileName = path.split('/').pop() || '';
-    const mimeType = inferMimeType(fileName);
-    if (isTextFileMime(mimeType, fileName)) {
-      const text = await blob.text();
-      return putFileContent(disk, path, text, message);
-    }
-    return putFileBlob(disk, path, blob, message);
-  }
-
-  async function collectDeleteBlobPaths(disk, targetPath) {
-    const normalized = normalizePath(targetPath);
-    const tree = await getRepoTree(disk, { force: true });
-    const paths = tree
-      .filter((e) => e.type === 'blob' && (e.path === normalized || e.path.startsWith(`${normalized}/`)))
-      .map((e) => e.path);
-
-    if (paths.length) return [...new Set(paths)];
-
-    try {
-      const meta = await getFileContentMeta(disk, normalized);
-      if (Array.isArray(meta)) {
-        return meta
-          .filter((item) => item?.type === 'file' && item.path)
-          .map((item) => item.path);
-      }
-      if (meta?.type === 'file') return [normalized];
-    } catch (err) {
-      const missing = /404|not found/i.test(err?.message || String(err));
-      if (missing) return [];
-      throw err;
-    }
-
-    return [];
-  }
-
+  /**
+   * Delete a file or a whole directory subtree as ONE tree rewrite + ONE commit.
+   * Never loops the Contents API (PROJECT_SPEC §2 Delete).
+   */
   async function deleteFile(diskId, fileId) {
-    const disk = getDisk(diskId);
-    if (!disk) throw new Error('GitHub storage not found');
+    const disk = await requireDisk(diskId);
     const targetPath = normalizePath(fileId);
     const fileName = targetPath.split('/').pop() || targetPath;
     let isFolder = false;
     let size = 0;
 
     try {
-      isFolder = await isGithubFolder(diskId, targetPath);
-    } catch {
-      isFolder = false;
-    }
-
-    try {
-      const meta = await getFileContentMeta(disk, targetPath);
-      size = meta.size || 0;
-      if (meta.type === 'dir') isFolder = true;
+      const tree = await getRepoTree(disk);
+      isFolder = GithubOperations.isFolderPath(tree, targetPath);
+      const descendants = GithubOperations.collectDescendants(tree, targetPath)
+        .filter((entry) => entry.type === 'blob' && entry.path !== targetPath);
+      if (!isFolder && descendants.length === 0) {
+        const self = tree.find((entry) => entry.type === 'blob' && entry.path === targetPath);
+        size = self?.size || 0;
+      }
     } catch {
       // Item may already be gone or still syncing.
+      isFolder = false;
     }
 
     await runPendingDelete(diskId, targetPath, {
@@ -2237,32 +2233,16 @@ const GithubDisk = (() => {
       isFolder,
       size,
     }, async () => {
-      const paths = await collectDeleteBlobPaths(disk, targetPath);
-      if (!paths.length) {
-        if (await isDeletedOnServer(disk, targetPath, isFolder)) return;
-        throw new Error(isFolder
-          ? 'Nothing to delete in this folder on GitHub'
-          : 'File not found on GitHub');
-      }
-
-      for (const path of paths) {
-        const meta = await getFileContentMeta(disk, path);
-        if (!meta?.sha) {
-          throw new Error(`Could not resolve GitHub revision for "${path}"`);
+      const alreadyGone = await isDeletedOnServer(disk, targetPath, isFolder);
+      if (alreadyGone) return;
+      try {
+        await executeOperations(diskId, [{ type: 'delete', path: targetPath }], `Delete ${targetPath}`);
+      } catch (err) {
+        if (err instanceof GithubOperations.ValidationError && /not found/i.test(err.message)
+          && (await isDeletedOnServer(disk, targetPath, isFolder))) {
+          return; // idempotent delete
         }
-        await apiRequest(
-          `/repos/${encodeURIComponent(disk.owner)}/${encodeURIComponent(disk.repo)}/contents/${encodeRepoPath(path)}`,
-          disk.token,
-          {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              message: `Delete ${path}`,
-              sha: meta.sha,
-              branch: disk.branch,
-            }),
-          }
-        );
+        throw err;
       }
     });
   }
@@ -2275,137 +2255,75 @@ const GithubDisk = (() => {
     throw new Error('GitHub storage does not support Recycle Bin restore');
   }
 
+  function getTreeEntrySize(tree, path) {
+    const entry = tree.find((item) => item.type === 'blob' && item.path === path);
+    return entry?.size || 0;
+  }
+
+  /**
+   * Copy a file or a whole directory subtree as ONE tree rewrite + ONE commit.
+   * Reuses the source Blob SHAs — content is never re-uploaded
+   * (PROJECT_SPEC §2 Copy).
+   */
   async function copyFile(diskId, fileId, parentId) {
-    const disk = getDisk(diskId);
-    if (!disk) throw new Error('GitHub storage not found');
+    const disk = await requireDisk(diskId);
     const sourcePath = normalizePath(fileId);
     const destParent = normalizePath(parentId);
     const sourceName = sourcePath.split('/').pop();
 
-    if (await isGithubFolder(diskId, sourcePath)) {
-      const destName = await makeUniqueCopyName(diskId, parentId, sourceName);
-      const folder = await createFolder(diskId, parentId, destName);
-      const children = await listFiles(diskId, sourcePath);
-      for (const child of children) {
-        await copyFile(diskId, child.id, folder.id);
-      }
-      return folder;
+    const tree = await getRepoTree(disk);
+    if (!GithubOperations.isFolderInTree(tree, sourcePath)
+      && !GithubOperations.isPathVisible(tree, sourcePath, false)) {
+      throw new Error(`Path not found on GitHub: ${sourcePath}`);
     }
+    const isFolder = GithubOperations.isFolderPath(tree, sourcePath);
 
-    const destName = await makeUniqueCopyName(diskId, parentId, sourceName);
-    const blob = await downloadFile(diskId, sourcePath);
+    const targetPath = destParent ? `${destParent}/${sourceName}` : sourceName;
+    const destPath = GithubOperations.makeUniquePath(tree, targetPath);
+    const destName = GithubOperations.getBaseName(destPath);
+    const size = isFolder
+      ? GithubOperations.collectDescendants(tree, sourcePath)
+        .filter((entry) => entry.type === 'blob')
+        .reduce((sum, entry) => sum + (entry.size || 0), 0)
+      : getTreeEntrySize(tree, sourcePath);
+
     return runPendingMutation(
       diskId,
       parentId,
-      { name: destName, mimeType: inferMimeType(destName), size: blob.size },
+      { name: destName, mimeType: isFolder ? FOLDER_MIME : inferMimeType(destName), size, isFolder },
       async () => {
-        const destPath = destParent ? `${destParent}/${destName}` : destName;
-        await putFileFromBlob(disk, destPath, blob, `Copy ${sourcePath} to ${destPath}`);
+        await executeOperations(
+          diskId,
+          [{ type: 'copy', from: sourcePath, to: destPath }],
+          `Copy ${sourcePath} to ${destPath}`
+        );
         return {
           id: destPath,
           name: destName,
-          mimeType: inferMimeType(destName),
+          isFolder,
+          mimeType: isFolder ? FOLDER_MIME : inferMimeType(destName),
           parents: [destParent || ROOT_ID],
           parentId: destParent || ROOT_ID,
-          viewUrl: getFileViewUrl(diskId, destPath),
-          webViewLink: getItemWebUrl(diskId, destPath, false),
+          viewUrl: isFolder ? undefined : getFileViewUrl(diskId, destPath),
+          webViewLink: getItemWebUrl(diskId, destPath, isFolder),
         };
       }
     );
   }
 
-  async function executeGithubMove(diskId, sourcePath, oldParent, toParent, explicitTargetPath = null) {
-    const disk = getDisk(diskId);
-    if (!disk) throw new Error('GitHub storage not found');
-    const tree = await getRepoTree(disk);
-    const files = tree
-      .filter((e) => e.type === 'blob' && (e.path === sourcePath || e.path.startsWith(`${sourcePath}/`)))
-      .map((e) => e.path);
-
-    if (!files.length) {
-      const fileName = sourcePath.split('/').pop();
-      const targetPath = explicitTargetPath || (toParent ? `${toParent}/${fileName}` : fileName);
-      const blob = await downloadFile(diskId, sourcePath);
-      await putFileFromBlob(disk, targetPath, blob, `Move ${sourcePath} to ${targetPath}`);
-      const meta = await getFileContentMeta(disk, sourcePath);
-      await apiRequest(
-        `/repos/${encodeURIComponent(disk.owner)}/${encodeURIComponent(disk.repo)}/contents/${encodeRepoPath(sourcePath)}`,
-        disk.token,
-        {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: `Delete ${sourcePath}`,
-            sha: meta.sha,
-            branch: disk.branch,
-          }),
-        }
-      );
-      return;
-    }
-
-    for (const oldPath of files) {
-      const relative = sourcePath ? oldPath.slice(sourcePath.length).replace(/^\/+/, '') : oldPath;
-      let baseTarget = '';
-      if (explicitTargetPath) {
-        baseTarget = explicitTargetPath;
-      } else {
-        const sourceName = sourcePath.split('/').pop();
-        baseTarget = toParent ? `${toParent}/${sourceName}` : sourceName;
-      }
-      const newPath = relative ? `${baseTarget}/${relative}` : baseTarget;
-      const blob = await downloadFile(diskId, oldPath);
-      await putFileFromBlob(disk, newPath, blob, `Move ${oldPath} to ${newPath}`);
-    }
-
-    const deletePaths = files.sort((a, b) => b.length - a.length);
-    for (const path of deletePaths) {
-      const meta = await getFileContentMeta(disk, path);
-      await apiRequest(
-        `/repos/${encodeURIComponent(disk.owner)}/${encodeURIComponent(disk.repo)}/contents/${encodeRepoPath(path)}`,
-        disk.token,
-        {
-          method: 'DELETE',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            message: `Delete ${path}`,
-            sha: meta.sha,
-            branch: disk.branch,
-          }),
-        }
-      );
-    }
-
-    if (oldParent) {
-      const keepPath = `${oldParent}/.keep`;
-      try {
-        const keepMeta = await getFileContentMeta(disk, keepPath);
-        await apiRequest(
-          `/repos/${encodeURIComponent(disk.owner)}/${encodeURIComponent(disk.repo)}/contents/${encodeRepoPath(keepPath)}`,
-          disk.token,
-          {
-            method: 'DELETE',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              message: `Cleanup ${keepPath}`,
-              sha: keepMeta.sha,
-              branch: disk.branch,
-            }),
-          }
-        );
-      } catch {
-        // ignore
-      }
-    }
-  }
-
+  /**
+   * Move/Rename via Git Tree path rewrite: descendants keep their Blob SHAs,
+   * one tree + one commit (PROJECT_SPEC §2 Move/Rename).
+   */
   async function moveFile(diskId, fileId, fromParentId, toParentId, explicitTargetPath = null) {
+    const disk = await requireDisk(diskId);
     const sourcePath = normalizePath(fileId);
     const toParent = normalizePath(toParentId);
-    const oldParent = normalizePath(fromParentId);
     const sourceName = sourcePath.split('/').pop();
     const targetPath = explicitTargetPath || (toParent ? `${toParent}/${sourceName}` : sourceName);
-    const isFolder = await isGithubFolder(diskId, sourcePath);
+
+    const tree = await getRepoTree(disk);
+    const isFolder = GithubOperations.isFolderPath(tree, sourcePath);
 
     return runPendingMove(
       diskId,
@@ -2415,11 +2333,54 @@ const GithubDisk = (() => {
         name: sourceName,
         isFolder,
         mimeType: isFolder ? FOLDER_MIME : inferMimeType(sourceName),
-        size: 0,
+        size: isFolder ? 0 : getTreeEntrySize(tree, sourcePath),
         destPath: targetPath,
       },
-      async () => executeGithubMove(diskId, sourcePath, oldParent, toParent, explicitTargetPath)
+      async () => {
+        await executeOperations(
+          diskId,
+          [{ type: 'move', from: sourcePath, to: targetPath }],
+          `Move ${sourcePath} to ${targetPath}`
+        );
+      }
     );
+  }
+
+  /**
+   * Batch API: run a group of operations as ONE commit.
+   * Used by the UI for multi-select move/copy/delete (PROJECT_SPEC §2 Batch).
+   *
+   * @param {Array} operations - raw Git operations, see js/github/operations.js
+   */
+  async function executeBatch(diskId, operations, message = 'Batch file operations') {
+    const result = await executeOperations(diskId, operations, message);
+    return result;
+  }
+
+  /** Pre-compute collision-free copy targets for a batch ("(copy)" naming). */
+  async function buildBatchCopyOperations(diskId, items, parentId) {
+    const disk = await requireDisk(diskId);
+    const tree = await getRepoTree(disk);
+    const taken = new Set();
+    return items.map((item) => {
+      const sourcePath = normalizePath(item.id);
+      const sourceName = sourcePath.split('/').pop();
+      const targetPath = GithubOperations.joinPath(normalizePath(parentId), sourceName);
+      const destPath = GithubOperations.makeUniquePath(tree, targetPath, taken);
+      return { type: 'copy', from: sourcePath, to: destPath };
+    });
+  }
+
+  /** Pre-compute move targets for a batch (absolute paths, planner validates). */
+  async function buildBatchMoveOperations(diskId, items, parentId) {
+    void diskId;
+    const destParent = normalizePath(parentId);
+    return items.map((item) => {
+      const sourcePath = normalizePath(item.id);
+      const sourceName = sourcePath.split('/').pop();
+      const destPath = destParent ? `${destParent}/${sourceName}` : sourceName;
+      return { type: 'move', from: sourcePath, to: destPath };
+    });
   }
 
   async function downloadFile(diskId, fileId) {
@@ -2625,6 +2586,10 @@ const GithubDisk = (() => {
     deleteFile,
     moveFile,
     copyFile,
+    executeBatch,
+    buildBatchCopyOperations,
+    buildBatchMoveOperations,
+    isConflictError,
     getTextFileContent,
     updateFileContent,
     downloadFile,

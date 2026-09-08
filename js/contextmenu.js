@@ -1104,20 +1104,20 @@ const ContextMenu = (() => {
     let transferSuccess = true;
     try {
       if (sourceGithub && destGithub) {
-        for (const item of items) {
-          if (crossDrive || mode === 'copy') {
-            if (crossDrive) {
-              await copyGithubItemToGithub(sourceUserId, destUserId, item, destParentId);
-            } else {
-              await GithubDisk.copyFile(destUserId, item.id, destParentId);
+        if (crossDrive) {
+          for (const item of items) {
+            await copyGithubItemToGithub(sourceUserId, destUserId, item, destParentId);
+            if (mode === 'cut') {
+              await GithubDisk.deleteFile(sourceUserId, item.id);
             }
-          } else {
-            const fromParent = sourceParentId || item.parents?.[0] || item.parentId || GithubDisk.ROOT_ID;
-            await GithubDisk.moveFile(destUserId, item.id, fromParent, destParentId);
           }
-          if (mode === 'cut' && crossDrive) {
-            await GithubDisk.deleteFile(sourceUserId, item.id);
-          }
+        } else if (mode === 'copy') {
+          // One logical batch = one tree + one commit (PROJECT_SPEC §2).
+          const ops = await GithubDisk.buildBatchCopyOperations(destUserId, items, destParentId);
+          await GithubDisk.executeBatch(destUserId, ops, `Copy ${items.length} item${items.length === 1 ? '' : 's'}`);
+        } else {
+          const ops = await GithubDisk.buildBatchMoveOperations(destUserId, items, destParentId);
+          await GithubDisk.executeBatch(destUserId, ops, `Move ${items.length} item${items.length === 1 ? '' : 's'}`);
         }
         app.clearTreeCache?.(destUserId);
         if (mode === 'cut') app.clearTreeCache?.(sourceUserId);

@@ -457,3 +457,46 @@ Users who signed in under an old readonly scope may be prompted to sign in again
 - **GitHub storage:** files live in repositories you own; tokens and mount metadata are stored in `localStorage`
 - Service worker caches static assets only; API calls use the network
 - On iOS Safari, "Add to Home Screen" uses `manifest.webmanifest` for a standalone-like experience
+
+## Fork: Git Data Engine (this fork only)
+
+This fork (`MbAIGC/GitFiles`) evolves Storage Hub toward the architecture in
+[`docs/PROJECT_SPEC.md`](docs/PROJECT_SPEC.md). Do **not** open PRs against the
+upstream repository.
+
+### What changed
+
+- **Git Data API write engine** (`js/github/` — `client`, `repository`, `reference`,
+  `tree`, `blob`, `commit`, `operations`): all GitHub writes now go through
+  Blob → Tree → Commit → Ref instead of the Contents API.
+- **Move/Rename** rewrite tree paths and **reuse the original Blob SHAs**
+  (no download → upload → delete).
+- **Copy** duplicates tree entries with the same Blob SHAs (no re-upload);
+  folder copies are a single commit.
+- **Delete** of a file or a whole directory subtree is **one tree + one commit**.
+- **Batch operations**: same-disk multi-select move/copy produce **one commit**
+  (`GithubDisk.executeBatch`).
+- **CAS concurrency control**: ref updates are non-forced; a remote change
+  between read and write raises `ConflictError` (409 semantics), surfaced in the
+  UI with an explicit "apply to latest remote state / cancel" dialog. Silent
+  overwrites are impossible.
+- **TreeIndex cache** is keyed by `owner/repo/branch/head`; a moved HEAD
+  invalidates it automatically.
+- **Service worker** never caches `/api/*`.
+
+### Tests
+
+```bash
+node tests/github-engine.test.mjs
+```
+
+Covers file/directory create, update, delete, rename, move, copy (incl. nested),
+batch (10/100/mixed), Blob-SHA reuse, one-commit batching and CAS conflict handling.
+
+### Known remaining gaps (tracked in docs/PROJECT_SPEC.md)
+
+- GitHub tokens are still kept in browser `localStorage` by the legacy PAT flow;
+  the target architecture (GitHub App + Cloudflare Pages Functions + D1 sessions
+  with HttpOnly cookies) is not implemented yet.
+- The Conflict Center is dialog-based for now (reload/overwrite), not a full
+  diff/merge UI.

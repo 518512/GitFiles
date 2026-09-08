@@ -19,6 +19,13 @@ const SHELL_ASSETS = [
   './js/auth.js',
   './js/drive.js',
   './js/localdisk.js',
+  './js/github/client.js',
+  './js/github/repository.js',
+  './js/github/blob.js',
+  './js/github/reference.js',
+  './js/github/tree.js',
+  './js/github/commit.js',
+  './js/github/operations.js',
   './js/githubdisk.js',
   './js/github-oauth-deliver.js',
   './js/localuser.js',
@@ -45,6 +52,7 @@ const SHELL_ASSETS = [
 const NETWORK_FIRST_PATHS = /\.(html?|css|js|webmanifest)$|\/$/;
 
 function isApiRequest(url) {
+  if (url.pathname.startsWith('/api/')) return true; // never cache app API (PROJECT_SPEC §15)
   return (
     url.hostname.endsWith('googleapis.com') ||
     url.hostname.endsWith('google.com') ||
