@@ -141,6 +141,8 @@ npx wrangler pages deploy .
 
 ### 方式三：Deploy to Cloudflare 按钮（备选）
 
+按钮链接格式为 `https://deploy.workers.cloudflare.com/?url=<你的仓库地址>`。**fork 用户请把链接中的仓库地址换成自己 fork 的地址**（点别人 README 的按钮也可以 —— Cloudflare 会引导授权并使用你自己账号下的仓库副本，但部署源不是你的 fork）。
+
 README 顶部的按钮会读取 `wrangler.jsonc` 引导部署，但其流程对纯静态 Pages 项目偶尔报错（见上）。若使用按钮后构建命令为空，请到项目 Settings → Build 手动补填 `node scripts/build-config.mjs`。
 
 ### 方式四：GitHub Pages

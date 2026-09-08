@@ -141,6 +141,8 @@ Best when you don't want Git integration or prefer publishing from your machine.
 
 ### Option 3: Deploy to Cloudflare button (fallback)
 
+The button URL format is `https://deploy.workers.cloudflare.com/?url=<your-repo-url>`. **Fork users should replace the repo URL with their own fork** (clicking someone else's button also works — Cloudflare guides authorization and uses a copy of the repo under your own account, but the deploy source will not be your fork).
+
 The button at the top of this README reads `wrangler.jsonc` and guides deployment, but the flow sometimes errors on pure-static Pages projects (see above). If the build command ends up empty after using the button, fill it manually in the project's Settings → Build with `node scripts/build-config.mjs`.
 
 GitHub's token endpoint blocks browser requests (CORS); exchanging the authorization code requires a server-side proxy:
