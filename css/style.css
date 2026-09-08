@@ -126,6 +126,39 @@ body {
   background: var(--win-blue-dark);
 }
 
+.btn-github {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  background: #24292f;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 12px 28px;
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.btn-github:hover {
+  background: #1c2128;
+}
+
+.btn-primary:disabled,
+.btn-github:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.btn-github:disabled:hover {
+  background: #24292f;
+}
+
+.btn-primary:disabled:hover {
+  background: var(--win-blue);
+}
+
 .login-error {
   margin-top: 16px;
   padding: 10px 12px;

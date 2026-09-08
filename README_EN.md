@@ -56,7 +56,7 @@ python3 serve.py          # dev server with the OAuth token proxy + SPA fallback
 # open http://localhost:8080
 ```
 
-> Use **Add storage → GitHub repo** in the sidebar to connect GitHub storage; Google Drive and local storage work out of the box.
+> On the home page, **Sign in with Google** (Drive) or **Sign in with GitHub** (auto-connects your GitHub storage); once inside, use **Add storage** in the sidebar for local storage or additional GitHub repos.
 
 ### Configuring Client IDs (fork users: no code changes needed)
 

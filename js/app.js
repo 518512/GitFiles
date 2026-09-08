@@ -2228,6 +2228,29 @@ const App = (() => {
     }
   }
 
+  async function signInWithGithub() {
+    const btn = $('#btn-sign-in-github');
+    if (!btn || btn.disabled) return;
+    btn.disabled = true;
+    showLoginError('');
+    try {
+      // OAuth popup 优先；代理不可达时 acquireAccessToken 内部降级为 PAT 对话框
+      await GithubDisk.acquireAccessToken();
+      if (GithubDisk.getDisks().length === 0) {
+        await GithubDisk.createDisk();
+      }
+      await showExplorer();
+      renderSidebarTree();
+    } catch (err) {
+      const message = err?.message || String(err);
+      if (!/sign-in cancelled|popup closed/i.test(message)) {
+        showLoginError(`GitHub sign-in failed: ${message}`);
+      }
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   let fallbackLoginTimer = null;
 
   function cancelFallbackLogin() {
@@ -2409,6 +2432,7 @@ const App = (() => {
     $('#sidebar-overlay')?.addEventListener('click', closeSidebar);
 
     $('#btn-sign-in').addEventListener('click', () => Auth.signIn());
+    $('#btn-sign-in-github')?.addEventListener('click', () => signInWithGithub());
     $('#btn-add-user')?.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();

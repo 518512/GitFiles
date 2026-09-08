@@ -56,7 +56,7 @@ python3 serve.py          # 内置 OAuth token 代理 + SPA 回退
 # 打开 http://localhost:8080
 ```
 
-> 侧边栏 **Add storage → GitHub repo** 即可连接 GitHub 存储；Google Drive / 本地存储开箱即用。
+> 首页可 **Sign in with Google**（Drive）或 **Sign in with GitHub**（自动连接 GitHub 存储）；进入应用后也可经侧边栏 **Add storage** 添加本地存储或更多 GitHub 仓库。
 
 ### 配置 Client ID（fork 用户无需改任何代码）
 
