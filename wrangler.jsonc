@@ -1,28 +1,28 @@
-// Cloudflare Pages 配置（Git 连接 / wrangler CLI 部署共用）。
+// Cloudflare Workers 配置（一键部署 / Git 集成 / wrangler CLI 三条路径共用）。
 //
-// 本项目为纯静态前端，Pages 直接发布仓库根目录；
-// functions/ 目录会被自动识别为 Pages Functions（/api/* 路由）；
-// SPA 回退由约定生效：根目录的 404.html 会被用作未匹配路径的兜底页。
+// 模式：Workers + Static Assets（assets-only + main 脚本）
+//   · 仓库根目录即静态站点（404.html 兜底、sw.js、PWA 全部原样保留）
+//   · workers/entry.js 作为 main：内置同源 token 代理（/api/github/oauth/token），
+//     其余请求全部回退到静态资源 —— 替代已弃用的 Pages Functions 方案
+//   · Deploy to Cloudflare 按钮 / Git 集成 / CLI 均按 Workers 标准解析
 //
-// 构建命令说明（生成 js/config.runtime.js，见 scripts/build-config.mjs）：
-//   · wrangler CLI 部署（npx wrangler pages deploy .）→ 自动执行此处的 build.command
-//   · Dashboard「Git 连接」部署 → 不读取本文件的 build 字段，请在
-//     项目 Settings → Build → Build command 中填写：node scripts/build-config.mjs
-//     （留空也能部署成功，只是 CONFIG_* 环境变量不会注入前端配置）
+// 部署后配置 secrets（Dashboard → Workers → gitfiles → Settings → Variables and Secrets）：
+//   GITHUB_CLIENT_SECRET   GitHub OAuth App 的 client secret（网页登录用）
+// 可选构建环境变量（构建命令 node scripts/build-config.mjs 消费，见 scripts/build-config.mjs）：
+//   CONFIG_GOOGLE_CLIENT_ID / CONFIG_GITHUB_CLIENT_ID / CONFIG_BASE_PATH
 //
-// 部署后配置 GitHub OAuth App 的 client secret（启用 GitHub 网页登录时必需）：
-//   方式一：Dashboard → Pages → 项目 → Settings → Variables and Secrets
-//           添加 secret：GITHUB_CLIENT_SECRET
-//   方式二：命令行  npx wrangler pages secret put GITHUB_CLIENT_SECRET
-// 可选 secret：GITHUB_CLIENT_ID（覆盖请求体中的 client_id，与 .github_secret 用法一致）。
-//
-// Pages 项目名会决定默认域名：https://<name>.pages.dev（仅小写字母、数字、连字符）。
-// 项目名/域名变更后，记得同步更新 GitHub OAuth App 的 Authorization callback URL。
+// Worker 名即默认域名：https://gitfiles.<你的子域>.workers.dev
+// 项目名/域名变更后，记得同步更新 GitHub OAuth App 的 callback URL。
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "gitfiles",
   "compatibility_date": "2026-09-01",
-  "pages_build_output_dir": ".",
+  "main": "workers/entry.js",
+  "assets": {
+    "directory": "./",
+    "binding": "ASSETS",
+    "not_found_handling": "404-page"
+  },
   "build": {
     "command": "node scripts/build-config.mjs"
   }

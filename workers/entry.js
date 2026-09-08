@@ -1,21 +1,25 @@
 /**
- * Pages Function：GitHub OAuth token 交换代理（/api/github/oauth/token）。
+ * Worker 入口：静态站点 + 同源 OAuth token 代理。
  *
- * 由 workers/github-oauth-token.js（独立 Worker 版）迁移而来，逻辑与 serve.py
- * 的本地开发代理保持一致（PROJECT_SPEC §20 推荐路径）：
- *   1. 请求体 `client_id === 'reachability-check'` → 原样转发（仅探测代理可达性）
- *   2. 请求体已带 `client_secret` → 原样转发（调用方自带凭据）
- *   3. 其余情况注入 secret（env.GITHUB_CLIENT_SECRET，可选 env.GITHUB_CLIENT_ID 覆盖）
+ * 路由：
+ *   POST /api/github/oauth/token  → GitHub OAuth token 交换代理（下述逻辑）
+ *   OPTIONS /api/github/oauth/token → CORS 预检
+ *   其余                          → env.ASSETS.fetch（静态资源；404.html 兜底）
  *
- * 部署后在 Pages 项目设置中添加 secret：GITHUB_CLIENT_SECRET（见 wrangler.jsonc 注释）。
+ * token 代理语义与 serve.py / workers/github-oauth-token.js 保持一致：
+ *   1. client_id === 'reachability-check' → 直接返回 JSON（前端可达性探测，不消耗凭据）
+ *   2. 请求体已带 client_secret → 原样转发
+ *   3. 其余注入 secret（env.GITHUB_CLIENT_SECRET，可选 env.GITHUB_CLIENT_ID 覆盖），
+ *      缺失返回 misconfigured_proxy
  */
 
 const GITHUB_TOKEN_URL = 'https://github.com/login/oauth/access_token';
+const TOKEN_PATH = '/api/github/oauth/token';
 
-/** 允许调用的来源（生产域名 + 本地开发任意端口）。 */
+/** 允许调用的来源（部署域名 + 本地开发任意端口）。 */
 function isAllowedOrigin(origin) {
   if (!origin) return false;
-  if (/^https:\/\/[^/]*\.pages\.dev$/.test(origin)) return true;
+  if (/^https:\/\/[^/]*\.workers\.dev$/.test(origin)) return true;
   if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) return true;
   return false;
 }
@@ -40,9 +44,7 @@ function jsonResponse(body, status, request) {
   });
 }
 
-export async function onRequestPost(context) {
-  const { request, env } = context;
-
+async function handleTokenExchange(request, env) {
   let payload;
   try {
     payload = JSON.parse(await request.text());
@@ -50,10 +52,8 @@ export async function onRequestPost(context) {
     return jsonResponse({ error: 'invalid_request', error_description: 'Body must be JSON' }, 400, request);
   }
 
-  // 前端可达性探测：原样转发，GitHub 返回的 JSON 即可让前端判定“代理在线”。
   if (payload.client_id === 'reachability-check') {
-    // no-op: 不消耗 GitHub 凭据，直接返回可解析的 JSON。
-    return jsonResponse({ ok: true, proxy: 'pages-function' }, 200, request);
+    return jsonResponse({ ok: true, proxy: 'worker' }, 200, request);
   }
 
   let body = payload;
@@ -62,7 +62,7 @@ export async function onRequestPost(context) {
     if (!secret) {
       return jsonResponse({
         error: 'misconfigured_proxy',
-        error_description: 'Missing GitHub OAuth client secret. Add the GITHUB_CLIENT_SECRET secret to the Pages project.',
+        error_description: 'Missing GitHub OAuth client secret. Add the GITHUB_CLIENT_SECRET secret to the Worker.',
       }, 500, request);
     }
     body = { ...payload, client_secret: secret };
@@ -90,10 +90,25 @@ export async function onRequestPost(context) {
   }
 }
 
-export async function onRequestOptions(context) {
-  return new Response(null, { status: 204, headers: corsHeaders(context.request) });
-}
+export default {
+  async fetch(request, env) {
+    const url = new URL(request.url);
 
-export async function onRequestGet() {
-  return new Response('Method not allowed', { status: 405 });
-}
+    if (url.pathname === TOKEN_PATH) {
+      if (request.method === 'OPTIONS') {
+        return new Response(null, { status: 204, headers: corsHeaders(request) });
+      }
+      if (request.method !== 'POST') {
+        return new Response('Method not allowed', { status: 405, headers: corsHeaders(request) });
+      }
+      return handleTokenExchange(request, env);
+    }
+
+    if (url.pathname.startsWith('/api/')) {
+      return jsonResponse({ error: 'not_found' }, 404, request);
+    }
+
+    // 其余路径交给静态资源（not_found_handling=404-page 时，未匹配路径回退 404.html）
+    return env.ASSETS.fetch(request);
+  },
+};
