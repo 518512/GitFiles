@@ -161,6 +161,8 @@ npx wrangler deploy    # 读取 wrangler.jsonc：先执行构建命令，再上�
 推送 `main` 分支后，仓库内置的 [`.github/workflows/pages.yml`](.github/workflows/pages.yml) 会自动发布。SPA 所需文件已就绪：`404.html`（回退）、`.nojekyll`、`sw.js`、`js/base-path.js`（自动识别 `/仓库名` 前缀）。
 
 > GitHub Pages 是纯静态托管，没有服务端代理。需按下一节部署 token 代理，或使用 PAT 登录。
+>
+> Pages 工作流会在部署前运行 `node scripts/build-config.mjs`（生成 `public/` 产物并注入配置）。在仓库 **Settings → Secrets and variables → Actions → Variables** 配置 `CONFIG_GITHUB_CLIENT_ID` / `CONFIG_GOOGLE_CLIENT_ID` 即可免改代码注入 Client ID（工作流已通过 `${{ vars.* }}` 透传）。
 
 ### 部署排查（Troubleshooting）
 

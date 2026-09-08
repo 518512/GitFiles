@@ -1624,32 +1624,47 @@ const GithubDisk = (() => {
     return token;
   }
 
+  let cachedUserToken = null;
+
   async function acquireAccessToken() {
-    if (prefersPatSignIn()) {
-      return signInWithPersonalAccessToken();
-    }
-
-    try {
-      await ensureTokenExchangeReachable();
-      return await oauthSignIn();
-    } catch (err) {
-      const message = err?.message || String(err);
-      if (!/token proxy|not reachable|GITHUB_TOKEN_EXCHANGE|static hosting/i.test(message)) {
-        throw err;
+    // 会话内复用已验证的 token：登录 → 创建/连接仓库等连续调用只弹一次授权。
+    if (cachedUserToken) {
+      try {
+        await getAuthenticatedUser(cachedUserToken);
+        return cachedUserToken;
+      } catch {
+        cachedUserToken = null; // 失效即重新走授权
       }
-      if (typeof Dialog === 'undefined') throw err;
-
-      const choice = await Dialog.choose({
-        title: 'GitHub sign-in',
-        message: `${message}\n\nConnect with a personal access token instead (no proxy needed).`,
-        buttons: [
-          { id: 'pat', label: 'Use personal access token', primary: true },
-          { id: 'cancel', label: 'Cancel' },
-        ],
-      });
-      if (choice !== 'pat') throw err;
-      return signInWithPersonalAccessToken();
     }
+
+    let token;
+    if (prefersPatSignIn()) {
+      token = await signInWithPersonalAccessToken();
+    } else {
+      try {
+        await ensureTokenExchangeReachable();
+        token = await oauthSignIn();
+      } catch (err) {
+        const message = err?.message || String(err);
+        if (!/token proxy|not reachable|GITHUB_TOKEN_EXCHANGE|static hosting/i.test(message)) {
+          throw err;
+        }
+        if (typeof Dialog === 'undefined') throw err;
+
+        const choice = await Dialog.choose({
+          title: 'GitHub sign-in',
+          message: `${message}\n\nConnect with a personal access token instead (no proxy needed).`,
+          buttons: [
+            { id: 'pat', label: 'Use personal access token', primary: true },
+            { id: 'cancel', label: 'Cancel' },
+          ],
+        });
+        if (choice !== 'pat') throw err;
+        token = await signInWithPersonalAccessToken();
+      }
+    }
+    cachedUserToken = token;
+    return token;
   }
 
   function formatGitHubApiError(payload, status) {
@@ -1721,7 +1736,9 @@ const GithubDisk = (() => {
     }
     if (!res.ok) {
       const err = await readJsonResponse(res).catch(() => ({}));
-      throw new Error(formatGitHubApiError(err, res.status));
+      const apiError = new Error(formatGitHubApiError(err, res.status));
+      if (res.status === 401 || res.status === 403) apiError.tokenExpired = true;
+      throw apiError;
     }
     if (options.raw) return res;
     if (res.status === 204) return null;
@@ -1809,6 +1826,90 @@ const GithubDisk = (() => {
     }
     const repo = await resolveRepositoryForDisk(token, profile);
     return upsertDiskFromRepo(profile, repo, token);
+  }
+
+  // T2: 统一入口 —— 连接已有仓库 ∥ 创建新 Drive-N 仓库（用户可自由选择）
+  async function ensureGithubStorage() {
+    if (typeof Dialog === 'undefined') return createDisk();
+    const choice = await Dialog.choose({
+      title: 'GitHub storage',
+      message: 'Connect an existing repository, or create a new private Drive repository?',
+      buttons: [
+        { id: 'connect', label: 'Connect existing repository', primary: true },
+        { id: 'create', label: 'Create new repository (Drive-N)' },
+        { id: 'cancel', label: 'Cancel' },
+      ],
+    });
+    if (choice === 'cancel') throw new Error('GitHub sign-in cancelled');
+    const token = await acquireAccessToken();
+    const profile = await getAuthenticatedUser(token);
+    const repoData = choice === 'connect'
+      ? await connectExistingRepository(token, profile, '')
+      : await resolveRepositoryForDisk(token, profile); // create 失败自动降级 Connect
+    return upsertDiskFromRepo(profile, repoData, token);
+  }
+
+  // T3: token 过期/被撤销的统一重授权入口（T1 缓存有效时静默复用）
+  async function reauthorizeDisk(diskId) {
+    const disk = getDisk(diskId);
+    if (!disk) throw new Error('GitHub storage not found');
+    const token = await acquireAccessToken();
+    const profile = await getAuthenticatedUser(token);
+    disk.token = token;
+    disk.accountLogin = profile.login;
+    disk.accountName = profile.name || profile.login;
+    disk.accountAvatar = resolveAssetUrl(profile.avatar_url || '');
+    saveDisks();
+    return disk;
+  }
+
+  // T4: 只读递归收集（无 commit），供跨仓库单 commit 批量写入
+  async function collectGithubItems(sourceDiskId, items) {
+    const files = [];
+    const emptyDirs = [];
+    async function walk(list, prefix) {
+      for (const item of list) {
+        const rel = prefix ? `${prefix}/${item.name}` : item.name;
+        if (item.isFolder || item.mimeType === FOLDER_MIME) {
+          const children = await listFiles(sourceDiskId, item.id);
+          if (children.length) {
+            await walk(children, rel);
+          } else {
+            emptyDirs.push(rel);
+          }
+        } else {
+          const blob = await downloadFile(sourceDiskId, item.id);
+          const content = isTextFileMime(item.mimeType, item.name)
+            ? await blob.text()
+            : new Uint8Array(await blob.arrayBuffer());
+          files.push({ relPath: rel, content });
+        }
+      }
+    }
+    await walk(items, '');
+    return { files, emptyDirs };
+  }
+
+  // T4: 收集结果在目标仓库单 commit 写入（create 复用 op 模型；空目录 mkdir 自动 .keep）
+  async function createBatchFromCollected(destDiskId, destParentId, collected, message) {
+    const parent = normalizePath(destParentId);
+    const join = (rel) => (parent ? `${parent}/${rel}` : rel);
+    const operations = [];
+    for (const { relPath, content } of collected.files) {
+      operations.push({ type: 'create', path: join(relPath), content });
+    }
+    for (const rel of collected.emptyDirs) {
+      operations.push({ type: 'mkdir', path: join(rel) });
+    }
+    if (!operations.length) return null;
+    return executeOperations(destDiskId, operations, message);
+  }
+
+  // T4: 批量删除（delete op 按路径前缀递归，整批一次 commit）
+  async function deleteBatch(diskId, items, message) {
+    const operations = items.map((item) => ({ type: 'delete', path: normalizePath(item.id) }));
+    if (!operations.length) return null;
+    return executeOperations(diskId, operations, message);
   }
 
   async function removeDisk(diskId) {
@@ -2613,6 +2714,11 @@ const GithubDisk = (() => {
     isNotepadFile,
     buildNotepadFilePath,
     resolveFileByPath,
+    ensureGithubStorage,
+    reauthorizeDisk,
+    collectGithubItems,
+    createBatchFromCollected,
+    deleteBatch,
     formatSize,
     formatDate,
   };
