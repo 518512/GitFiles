@@ -2847,3 +2847,7 @@ body.legal-page {
     border-radius: 8px;
   }
 }
+
+.empty-state .btn {
+  margin-top: 0.75rem;
+}
