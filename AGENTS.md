@@ -261,13 +261,12 @@ Worker（内置 API：workers/entry.js）
 +
 Static Assets
 +
-D1（规划中）
+D1（sessions / repository_access，部署时绑定 DB）
 ```
 
-> 注（2026-09-08）：原目标「Cloudflare Pages + Pages Functions + D1」中的 Pages 载体已演进为
-> **Workers + Static Assets**（Pages 产品线冻结、Deploy 按钮仅支持 Workers）。同源 token 代理
-> 由 `workers/entry.js` 承担（替代原 `functions/api/github/oauth/token.js`，已删除）。
-> 本文其余处「Pages Function」字样一律理解为「Worker 内的 API 处理」，原则不变。
+> 注（2026-09-08）：原目标「Cloudflare Pages + Pages Functions + D1」已迁移为
+> **Workers + Static Assets**。同源 session、仓库 ACL、OAuth 和 Git Data API 均由
+> `workers/entry.js` 及其模块承担；D1 binding 名称为 `DB`。本文不再使用 Pages Function 作为实现名称。
 
 原生 JS 优先。
 
@@ -297,9 +296,9 @@ GitHub Login
 ↓
 GitHub App Authorization
 ↓
-Pages Function
+Worker API (workers/entry.js)
 ↓
-Session
+D1 Session
 ↓
 HttpOnly Cookie
 ```
@@ -316,7 +315,7 @@ Authorization
 
 前端隐藏按钮只是 UX，不是安全机制。
 
-真正的权限检查必须在 Pages Function。
+真正的权限检查必须在 Worker API（`workers/entry.js` 及其模块）。
 
 ## 12. API
 
@@ -476,7 +475,7 @@ svg script
 
 ## 18. SSRF
 
-Pages Functions 不应该成为任意 URL Proxy。
+Worker API 不应该成为任意 URL Proxy。
 
 不要允许用户任意传 URL，然后服务端 fetch。
 
@@ -819,7 +818,7 @@ TreeIndex Cache
 
 ```text
 是否真的需要？
-Cloudflare Pages 是否支持？
+Cloudflare Workers 是否支持？
 是否增加 bundle？
 是否增加维护成本？
 是否有原生 JS 方案？
@@ -874,10 +873,10 @@ PWA 可用
 Browser / Android PWA
           │
           ▼
-Cloudflare Pages
+Cloudflare Workers + Static Assets
           │
           ▼
-Pages Functions
+Worker API (`workers/entry.js`)
           │
      ┌────┴────┐
      ▼         ▼

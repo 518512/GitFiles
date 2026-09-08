@@ -30,7 +30,14 @@
 
   function normalizePath(path) {
     if (!path || path === 'root') return '';
-    return String(path).replace(/^\/+|\/+$/g, '');
+    const normalized = String(path).replace(/^\/+|\/+$/g, '');
+    if (!normalized) return '';
+    if (normalized.includes('\0') || normalized.split('/').some((segment) => (
+      !segment || segment === '.' || segment === '..'
+    ))) {
+      throw new ValidationError(`Invalid repository path: ${String(path)}`);
+    }
+    return normalized;
   }
 
   function getParentPath(path) {
@@ -511,25 +518,26 @@
           parents: [],
         });
         commitSha = commitData.sha;
-        await global.GithubClient.request(
-          `/repos/${encodeURIComponent(p.owner)}/${encodeURIComponent(p.repo)}/git/refs`,
-          {
-            token,
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ ref: `refs/heads/${p.branch}`, sha: commitSha }),
-          }
-        );
+        await global.GithubReference.createRefCas({
+          owner: p.owner,
+          repo: p.repo,
+          branch: p.branch,
+          token,
+          expectedHead: null,
+          newHead: commitSha,
+        });
       }
 
-      await global.GithubReference.updateRefCas({
-        owner: p.owner,
-        repo: p.repo,
-        branch: p.branch,
-        token,
-        expectedHead: parentHead,
-        newHead: commitSha,
-      });
+      if (parentHead) {
+        await global.GithubReference.updateRefCas({
+          owner: p.owner,
+          repo: p.repo,
+          branch: p.branch,
+          token,
+          expectedHead: parentHead,
+          newHead: commitSha,
+        });
+      }
 
       // Cache is keyed by head: publish the new index, drop the stale one.
       global.GithubTree.putCached(p.owner, p.repo, p.branch, commitSha, planned.entries, null);

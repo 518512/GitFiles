@@ -134,6 +134,23 @@ const Dialog = (() => {
           wrap.appendChild(hint);
         }
 
+        if (field.type === 'select') {
+          const select = document.createElement('select');
+          select.id = `app-dialog-${field.id}`;
+          select.className = 'app-dialog-input';
+          (field.options || []).forEach((option) => {
+            const item = document.createElement('option');
+            item.value = String(option.value);
+            item.textContent = option.label;
+            if (String(option.value) === String(field.value ?? '')) item.selected = true;
+            select.appendChild(item);
+          });
+          wrap.appendChild(select);
+          form.appendChild(wrap);
+          focusables.push(select);
+          return;
+        }
+
         if (field.type === 'file') {
           const input = document.createElement('input');
           input.type = 'file';

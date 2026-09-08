@@ -1169,11 +1169,23 @@ const ContextMenu = (() => {
             `Copy ${items.length} item${items.length === 1 ? '' : 's'} from ${GithubDisk.getDisk(sourceUserId)?.name || 'GitHub'}`
           );
           if (mode === 'cut') {
-            await GithubDisk.deleteBatch(
-              sourceUserId,
-              items,
-              `Delete ${items.length} moved item${items.length === 1 ? '' : 's'}`
-            );
+            try {
+              await GithubDisk.deleteBatch(
+                sourceUserId,
+                items,
+                `Delete ${items.length} moved item${items.length === 1 ? '' : 's'}`
+              );
+            } catch (error) {
+              GithubDisk.notifyTransferRecovery({
+                sourceDiskId: sourceUserId,
+                destDiskId: destUserId,
+                items,
+                stage: 'destination_committed_source_delete_failed',
+                message: 'Destination commit completed, but source deletion failed. Retry source deletion after reviewing remote state.',
+                error,
+              });
+              throw error;
+            }
           }
         } else if (mode === 'copy') {
           // One logical batch = one tree + one commit (PROJECT_SPEC §2).

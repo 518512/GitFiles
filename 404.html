@@ -159,6 +159,8 @@
           <span class="window-title">GitFiles</span>
         </div>
         <div class="title-bar-controls">
+          <span id="worker-session-state" class="worker-session-state" role="status">GitHub session: checking</span>
+          <button id="btn-conflict-center" class="title-btn title-btn--conflicts hidden" type="button" aria-label="Open Conflict Center" title="Open Conflict Center">!</button>
           <button class="title-btn" aria-label="Minimize">─</button>
           <button class="title-btn" aria-label="Maximize">□</button>
           <button class="title-btn close" id="btn-sign-out" aria-label="Sign out all" title="Sign out all users">✕</button>
@@ -280,13 +282,8 @@
   <script src="js/auth.js"></script>
   <script src="js/drive.js"></script>
   <script src="js/localdisk.js"></script>
-  <script src="js/github/client.js"></script>
-  <script src="js/github/repository.js"></script>
-  <script src="js/github/blob.js"></script>
-  <script src="js/github/reference.js"></script>
-  <script src="js/github/tree.js"></script>
-  <script src="js/github/commit.js"></script>
-  <script src="js/github/operations.js"></script>
+  <script src="js/github-api.js"></script>
+  <script src="js/github-paths.js"></script>
   <script src="js/githubdisk.js"></script>
   <script src="js/localuser.js"></script>
   <script src="js/dialog.js"></script>

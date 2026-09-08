@@ -3,7 +3,7 @@
 // 模式：Workers + Static Assets（main 脚本 + assets-only 回退）
 //   · 静态资源目录 = ./public（由构建命令 node scripts/build-config.mjs 从仓库根
 //     汇集生成 —— 官方推荐的构建产物结构；仓库根仍是唯一来源，public/ 不入库）
-//   · workers/entry.js 作为 main：内置同源 token 代理（/api/github/oauth/token），
+//   · workers/entry.js 作为 main：同源 session、仓库 ACL 和 Git Data API（/api/*），
 //     其余请求回退到静态资源
 //   · not_found_handling: "single-page-application" —— 未匹配路径返回 index.html
 //     （状态 200），SPA 深链（/Drive-1/...）由前端 router 解析
@@ -27,5 +27,10 @@
   },
   "build": {
     "command": "node scripts/build-config.mjs"
-  }
+  },
+  // Create a D1 database, then replace the placeholder and uncomment this
+  // binding. The runtime binding name must remain DB.
+  // "d1_databases": [
+  //   { "binding": "DB", "database_name": "gitfiles", "database_id": "<D1_DATABASE_ID>" }
+  // ]
 }
