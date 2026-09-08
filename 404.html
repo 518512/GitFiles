@@ -56,9 +56,11 @@
 
       const root = detectRoot(location.pathname);
       const barePath = location.pathname.replace(/\/+$/, '') || '/';
-      if (!location.pathname.endsWith('/index.html')
-        && (barePath === '/' || (root && barePath === root))) {
-        location.replace(`${root || ''}/index.html${location.search}${location.hash}`);
+      // 根路径由静态托管直接返回 index.html；跳 /index.html 会与 Workers Static
+      // Assets 的 auto-trailing-slash 307 规范化（/index.html → /）形成死循环（白屏）。
+      // 仅在带部署前缀（GitHub Pages 项目站 /GitFiles）时规范化入口 URL。
+      if (root && barePath === root && !location.pathname.endsWith('/index.html')) {
+        location.replace(`${root}/index.html${location.search}${location.hash}`);
         return;
       }
 
