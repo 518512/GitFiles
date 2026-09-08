@@ -7,3 +7,6 @@ node_modules/
 .DS_Store
 js/config.local.js
 client_secret_*.json
+
+# 构建时生成的配置覆盖（勿提交）
+js/config.runtime.js
