@@ -14,6 +14,7 @@ const SHELL_ASSETS = [
   './js/app-version.js',
   './js/base-path.js',
   './js/config.js',
+  './js/config.runtime.js',
   './js/site-config.js',
   './js/storage-migrate.js',
   './js/auth.js',

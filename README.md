@@ -51,7 +51,7 @@ Cloudflare Worker + Static Assets
    node scripts/build-config.mjs
    ```
 
-3. 创建 D1 数据库，绑定名称必须为 `DB`。执行 schema：
+3. 在 Worker 的 **Settings → Bindings** 添加 D1 database binding。变量名必须为 `DB`，数据库选择你自己账号创建的 D1；不要把别人的 database ID 写入这个公共仓库。然后执行 schema：
 
    ```bash
    npx wrangler d1 execute <database-name> --file=workers/schema.sql
