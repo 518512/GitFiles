@@ -19,6 +19,31 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const outDir = path.join(root, 'public');
+const wranglerPath = path.join(root, 'wrangler.jsonc');
+const d1Name = (process.env.D1_DATABASE_NAME || '').trim();
+const d1Id = (process.env.D1_DATABASE_ID || '').trim();
+
+if ((d1Name && !d1Id) || (!d1Name && d1Id)) {
+  throw new Error('D1_DATABASE_NAME and D1_DATABASE_ID must be configured together');
+}
+if (d1Id && !/^[0-9a-f-]{36}$/i.test(d1Id)) {
+  throw new Error('D1_DATABASE_ID must be a valid D1 UUID');
+}
+
+const d1Binding = d1Name && d1Id
+  ? `    "d1_databases": [{ "binding": "DB", "database_name": ${JSON.stringify(d1Name)}, "database_id": ${JSON.stringify(d1Id)} }]`
+  : '    // "d1_databases": [{ "binding": "DB", "database_name": "<D1_DATABASE_NAME>", "database_id": "<D1_DATABASE_ID>" }]';
+const wranglerTemplate = fs.readFileSync(wranglerPath, 'utf8');
+const startMarker = '  // D1_BINDING_START';
+const endMarker = '  // D1_BINDING_END';
+const start = wranglerTemplate.indexOf(startMarker);
+const end = wranglerTemplate.indexOf(endMarker);
+if (start === -1 || end === -1 || end < start) {
+  throw new Error('wrangler.jsonc is missing the D1 binding markers');
+}
+const before = wranglerTemplate.slice(0, start);
+const after = wranglerTemplate.slice(end + endMarker.length);
+fs.writeFileSync(wranglerPath, `${before}${startMarker}\n${d1Binding}\n${endMarker}${after}`);
 
 /** 进入 public/ 的前端文件与目录（与部署相关的一切，不含仓库/开发文件）。 */
 const FILES = [
