@@ -96,7 +96,7 @@ Click the **Deploy to Cloudflare** button above and follow the wizard. The repo 
 - `wrangler.jsonc` — Pages config (pure static, no build step, `404.html` fallback)
 - `functions/api/github/oauth/token.js` — OAuth token-exchange Pages Function (`/api/github/oauth/token`)
 
-> The "project name" in the deployment wizard becomes your final domain `https://<project-name>.pages.dev` — it is known at creation time, so you can register the GitHub OAuth App right away.
+> The "project name" in the deployment wizard **defaults to the `name` in `wrangler.jsonc` (currently `gitfiles`)**, i.e. the final domain `https://gitfiles.pages.dev`; you may change it in the wizard (lowercase letters/digits/hyphens only). **If you change the project name, remember to update the GitHub OAuth App callback URL accordingly.**
 
 After deploying, add a secret in the Pages project settings to enable web GitHub sign-in:
 

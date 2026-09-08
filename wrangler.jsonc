@@ -9,10 +9,12 @@
 //   方式二：命令行  npx wrangler pages secret put GITHUB_CLIENT_SECRET
 // 可选 secret：GITHUB_CLIENT_ID（覆盖请求体中的 client_id，与 .github_secret 用法一致）。
 //
-// Pages 项目名会决定默认域名：https://<name>.pages.dev
+// Pages 项目名即默认域名：https://<name>.pages.dev（仅小写字母、数字、连字符）。
+// 一键部署向导会预填此处的 name，可改为其他未被占用的名称；
+// 项目名/域名变更后，记得同步更新 GitHub OAuth App 的 Authorization callback URL。
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "storage-hub",
+  "name": "gitfiles",
   "compatibility_date": "2026-09-01",
   "pages_build_output_dir": ".",
   "assets": {
