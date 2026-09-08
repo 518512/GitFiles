@@ -8,7 +8,7 @@
   <script>
     (function () {
       const APP_ROOT_KEY = 'storage_hub_app_root';
-      const DEPLOY_BASE = '/GitFiles';
+      const DEPLOY_BASE = /(^|\.)github\.io$/i.test(location.hostname) ? '/GitFiles' : '';
 
       function looksLikeDriveRouteSegment(segment) {
         return segment.includes('@') || (segment.includes('.') && !segment.includes(' '));

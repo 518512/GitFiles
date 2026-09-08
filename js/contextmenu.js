@@ -941,7 +941,7 @@ const ContextMenu = (() => {
         await Dialog.alert(message, { title: 'GitHub OAuth callback mismatch' });
         return;
       }
-      throw err;
+      await Dialog.alert(message || 'GitHub sign-in could not be started.', { title: 'GitHub sign-in failed' });
     }
   }
 
