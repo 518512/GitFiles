@@ -68,6 +68,21 @@ python3 serve.py          # 内置 OAuth token 代理 + SPA 回退
 | **② js/config.local.js（本地开发）** | 本地 `serve.py` | 复制 `js/config.local.example.js` 为 `js/config.local.js` 填入（已被 `.gitignore`，不会提交） |
 | **③ 直接改 js/config.js** | 不推荐 | 会与上游更新冲突 |
 
+#### 部署变量速查表（名字易混，以此为准）
+
+| 环境变量名 | Cloudflare 类型 | 消费阶段 | 作用 |
+|------------|------------------|----------|------|
+| `CONFIG_GITHUB_CLIENT_ID` | Text | 构建（build-config.mjs） | 注入前端 `CONFIG.GITHUB_CLIENT_ID`（GitHub 登录） |
+| `CONFIG_GOOGLE_CLIENT_ID` | Text | 构建 | 注入前端 `CONFIG.CLIENT_ID`（Google Drive 登录） |
+| `CONFIG_BASE_PATH` | Text | 构建 | 覆盖前端 `CONFIG.BASE_PATH`（一般无需设置） |
+| `GITHUB_CLIENT_SECRET` | **Secret** | 运行时（Worker） | token 代理用它向 GitHub 换取 access token |
+| `GITHUB_CLIENT_ID`（可选） | Text | 运行时（Worker） | 覆盖代理转发给 GitHub 的 client_id，一般无需配置 |
+
+命名规则：**`CONFIG_*` = 构建时消费**（必须 Text 类型 —— Secret 对构建不可见；前缀同时避开
+GitHub Actions 保留的 `GITHUB_` 开头）；**不带 `CONFIG_` 前缀 = 运行时由 Worker 消费**（Secret
+类型，命名与 GitHub OAuth 惯例一致）。注意环境变量名不是前端键名：`CONFIG_GITHUB_CLIENT_ID`
+的值最终写入前端的 `CONFIG.GITHUB_CLIENT_ID`。
+
 ### GitHub 登录配置
 
 > 可以现在就注册 OAuth App（callback 先填 `http://localhost:8080/github-oauth-callback.html`）开始本地开发，部署拿到正式域名后**回到同一应用修改 callback** 即可 —— 无需重建应用。
