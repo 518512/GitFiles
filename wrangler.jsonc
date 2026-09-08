@@ -1,0 +1,21 @@
+// Cloudflare Pages 一键部署配置（Deploy to Cloudflare 按钮 / wrangler CLI 共用）。
+//
+// 本项目为纯静态前端（无构建步骤），Pages 直接发布仓库根目录；
+// functions/ 目录会被自动识别为 Pages Functions（/api/* 路由）。
+//
+// 部署后请配置 GitHub OAuth App 的 client secret（启用 GitHub 网页登录时必需）：
+//   方式一：Dashboard → Pages → 项目 → Settings → Environment variables
+//           添加 secret：GITHUB_CLIENT_SECRET
+//   方式二：命令行  npx wrangler pages secret put GITHUB_CLIENT_SECRET
+// 可选 secret：GITHUB_CLIENT_ID（覆盖请求体中的 client_id，与 .github_secret 用法一致）。
+//
+// Pages 项目名会决定默认域名：https://<name>.pages.dev
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "storage-hub",
+  "compatibility_date": "2026-09-01",
+  "pages_build_output_dir": ".",
+  "assets": {
+    "not_found_handling": "404-page"
+  }
+}

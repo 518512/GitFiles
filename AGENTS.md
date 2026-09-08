@@ -889,3 +889,35 @@ Pages Functions
 最终产品定位：
 
 > 一个类似 GitHub Web 文件管理器的 PWA，将 GitHub Repository 作为可靠的云端文件系统，并通过 Cloudflare 实现多用户认证、权限和安全 API 层。
+
+## 33. 文档与提交规范（本 fork 强制）
+
+### 改造记录
+
+每次代码改动完成后，必须在 `docs/` 目录生成一份改造记录：
+
+```text
+docs/改造记录-YYYYMMDD-主题.md
+```
+
+- 文件名必须使用中文（允许包含日期数字）
+- 内容至少包含：修改了什么 / 为什么改 / 涉及文件 / 测试情况 / 遗留问题
+- 一次改动一份记录，不追加到旧文件
+
+### Commit
+
+Commit message 一律使用中文，格式：
+
+```text
+类型: 摘要
+```
+
+例如：`新增: Git Data 引擎与 CAS 并发控制`、`修复: 批量操作逐文件提交`、`文档: README 中文化`。
+
+### README 双语同步
+
+`README.md`（中文，主文档）与 `README_EN.md`（英文）内容必须保持同步，任何一处变更都要同时更新两个文件。
+
+### 上游
+
+本仓库禁止向上游（`fi3ik-mme/storage-hub`）提交 PR 或 Push；所有提交只推送到 `origin`。
