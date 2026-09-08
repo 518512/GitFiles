@@ -132,9 +132,11 @@ Cloudflare Workers 连接你的 fork（Workers Builds）
 3. 构建设置：
    - **Build command**：`node scripts/build-config.mjs`（**必填**：生成 `public/` 静态资源目录并注入 `CONFIG_*` 环境变量；留空会导致 assets 缺失、部署失败）
    - 其余保持默认（部署读取仓库根 `wrangler.jsonc`）
-4. **Settings → Variables and Secrets**（Production 与 Preview 都要）：
-   - `CONFIG_GITHUB_CLIENT_ID` / `CONFIG_GOOGLE_CLIENT_ID`（**Text 类型** —— Secret 对构建不可见，选错则配置注入失效）
-   - `GITHUB_CLIENT_SECRET`（**Secret 类型**，token 代理用）
+4. 配置变量（注意：分属两个不同的界面区块，配错位置不生效）：
+   - **Build variables**（Settings → Build → Build variables）：
+     `CONFIG_GITHUB_CLIENT_ID` / `CONFIG_GOOGLE_CLIENT_ID`（Text）—— 只有这里构建时才可见
+   - **Runtime variables and secrets**（Settings → Variables and secrets）：
+     `GITHUB_CLIENT_SECRET`（Secret）—— Worker 运行时读取，用于 token 代理
 5. 日常更新：本仓库发布新版后，进入你的 fork → **Sync fork → Update branch** → Cloudflare 自动构建部署
 
 ### 方式二：Deploy to Cloudflare 按钮（快速试用）
