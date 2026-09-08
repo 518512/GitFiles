@@ -58,6 +58,16 @@ python3 serve.py          # 内置 OAuth token 代理 + SPA 回退
 
 > 侧边栏 **Add storage → GitHub repo** 即可连接 GitHub 存储；Google Drive / 本地存储开箱即用。
 
+### 配置 Client ID（fork 用户无需改任何代码）
+
+`js/config.js` 是公开模板（Client ID 本来就是公开标识符，secret 才需要保护）。配置方式按优先级：
+
+| 方式 | 适用 | 操作 |
+|------|------|------|
+| **① Cloudflare Pages 环境变量（推荐）** | 直接 fork + 网页部署 | Pages 项目 → Settings → Variables and Secrets → 添加 `CONFIG_GITHUB_CLIENT_ID`（及可选 `CONFIG_GOOGLE_CLIENT_ID`、`CONFIG_BASE_PATH`）→ 重新部署。构建脚本 `scripts/build-config.mjs` 自动生成覆盖，**零代码修改、不污染 git** |
+| **② js/config.local.js（本地开发）** | 本地 `serve.py` | 复制 `js/config.local.example.js` 为 `js/config.local.js` 填入（已被 `.gitignore`，不会提交） |
+| **③ 直接改 js/config.js** | 不推荐 | 会与上游更新冲突 |
+
 ### GitHub 登录配置
 
 > 可以现在就注册 OAuth App（callback 先填 `http://localhost:8080/github-oauth-callback.html`）开始本地开发，部署拿到正式域名后**回到同一应用修改 callback** 即可 —— 无需重建应用。

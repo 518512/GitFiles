@@ -58,6 +58,16 @@ python3 serve.py          # dev server with the OAuth token proxy + SPA fallback
 
 > Use **Add storage → GitHub repo** in the sidebar to connect GitHub storage; Google Drive and local storage work out of the box.
 
+### Configuring Client IDs (fork users: no code changes needed)
+
+`js/config.js` is a public template (a Client ID is a public identifier by design; only the secret needs protection). Configuration options, by precedence:
+
+| Option | Use case | How |
+|--------|----------|-----|
+| **① Cloudflare Pages build variables (recommended)** | Fork + web deployment | Pages project → Settings → Variables and Secrets → add `CONFIG_GITHUB_CLIENT_ID` (plus optional `CONFIG_GOOGLE_CLIENT_ID`, `CONFIG_BASE_PATH`) → redeploy. The build script `scripts/build-config.mjs` generates the override automatically — **zero code changes, nothing polluting git** |
+| **② js/config.local.js (local dev)** | Local `serve.py` | Copy `js/config.local.example.js` to `js/config.local.js` and fill it in (gitignored, never committed) |
+| **③ Edit js/config.js directly** | Not recommended | Conflicts with upstream updates |
+
 ### GitHub sign-in configuration
 
 > You can register the OAuth App right now (with the callback set to `http://localhost:8080/github-oauth-callback.html`) to start local development, then **edit the callback in the same app** once your real domain exists — no need to recreate it.

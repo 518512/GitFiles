@@ -17,6 +17,12 @@
   "name": "gitfiles",
   "compatibility_date": "2026-09-01",
   "pages_build_output_dir": ".",
+  // 构建时从环境变量生成 js/config.runtime.js（零代码修改完成部署配置）：
+  //   Pages 项目 → Settings → Variables and Secrets 添加
+  //   CONFIG_GOOGLE_CLIENT_ID / CONFIG_GITHUB_CLIENT_ID（可选）/ CONFIG_BASE_PATH（可选）
+  "build": {
+    "command": "node scripts/build-config.mjs"
+  },
   "assets": {
     "not_found_handling": "404-page"
   }
