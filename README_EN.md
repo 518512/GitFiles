@@ -131,6 +131,15 @@ Push to `main` and the built-in [`.github/workflows/pages.yml`](.github/workflow
 
 > GitHub Pages is static hosting without a server-side proxy. Deploy a token proxy (next section) or sign in with a PAT.
 
+### Deployment troubleshooting
+
+| Symptom | Cause & fix |
+|---------|-------------|
+| `WorkerResource.getWorkerResult: response missing default_environment.script` | The repo config is not in standard Workers format (fixed on latest main of this repo). Make sure your deploy source is up to date; if it's an older fork, sync main first |
+| `Your GitHub authorization has expired. Please reauthorize … reinstall the Cloudflare GitHub App` | The Cloudflare GitHub App authorization on your account expired or is missing. GitHub → Settings → Applications → Installed GitHub Apps → **Cloudflare Workers** → Configure, and make sure Repository access includes your fork; if the app is absent, install it from the authorization step of the deploy wizard; if it still fails, disconnect and reconnect GitHub in Cloudflare. You can also bypass Git integration with `npx wrangler login && npx wrangler deploy` |
+| Empty build command | Git integration / the button does not read the `build` field from `wrangler.jsonc`. Fill `node scripts/build-config.mjs` manually under the project's Settings → Build (an empty command only affects `CONFIG_*` injection, deployment itself still works) |
+| `redirect_uri is not associated with this application` | The OAuth App callback does not exactly match the deployment domain — see "GitHub sign-in configuration" above |
+
 ### OAuth token proxy (three options)
 
 GitHub's token endpoint blocks browser requests (CORS); exchanging the authorization code requires a server-side proxy:

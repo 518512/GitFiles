@@ -131,6 +131,15 @@ npx wrangler deploy    # 读取 wrangler.jsonc：先执行构建命令，再上�
 
 > GitHub Pages 是纯静态托管，没有服务端代理。需按下一节部署 token 代理，或使用 PAT 登录。
 
+### 部署排查（Troubleshooting）
+
+| 现象 | 原因与处理 |
+|------|-----------|
+| `WorkerResource.getWorkerResult: response missing default_environment.script` | 仓库配置非 Workers 标准格式（本仓库已在最新 main 修复）。确认部署源是最新代码；若是自己的旧 fork，先同步 main |
+| `Your GitHub authorization has expired. Please reauthorize … reinstall the Cloudflare GitHub App` | Cloudflare 账号侧的 GitHub App 授权过期/未装。GitHub → Settings → Applications → Installed GitHub Apps → **Cloudflare Workers** → Configure，确认 Repository access 包含你的 fork；没有该 App 就在部署向导的授权步骤重新安装；仍不行则在 Cloudflare 断开 GitHub 连接后重连。也可先用 `npx wrangler login && npx wrangler deploy` 绕过 Git 集成 |
+| 构建命令为空（Build command 空） | Git 集成/按钮不读取 `wrangler.jsonc` 的 build 字段。到项目 Settings → Build 手动填 `node scripts/build-config.mjs`（留空仅影响 `CONFIG_*` 注入，部署本身可用） |
+| `redirect_uri is not associated with this application` | OAuth App 回调地址与部署域名不完全一致，见上文「GitHub 登录配置」 |
+
 ### OAuth token 代理（三种方式）
 
 GitHub 的 token 端点禁止浏览器直连（CORS），交换授权码需要服务端代理：
