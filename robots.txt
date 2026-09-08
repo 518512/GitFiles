@@ -1,4 +1,4 @@
 User-agent: *
 Allow: /
 
-Sitemap: https://fi3ik-mme.github.io/storage-hub/sitemap.xml
+Sitemap: https://mbaigc.github.io/GitFiles/sitemap.xml
