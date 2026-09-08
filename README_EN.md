@@ -68,6 +68,22 @@ python3 serve.py          # dev server with the OAuth token proxy + SPA fallback
 | **② js/config.local.js (local dev)** | Local `serve.py` | Copy `js/config.local.example.js` to `js/config.local.js` and fill it in (gitignored, never committed) |
 | **③ Edit js/config.js directly** | Not recommended | Conflicts with upstream updates |
 
+#### Deployment variables cheat sheet (names are confusing — this table wins)
+
+| Env var name | Cloudflare type | Consumed at | Purpose |
+|--------------|-----------------|-------------|---------|
+| `CONFIG_GITHUB_CLIENT_ID` | Text | Build (build-config.mjs) | Injects frontend `CONFIG.GITHUB_CLIENT_ID` (GitHub sign-in) |
+| `CONFIG_GOOGLE_CLIENT_ID` | Text | Build | Injects frontend `CONFIG.CLIENT_ID` (Google Drive sign-in) |
+| `CONFIG_BASE_PATH` | Text | Build | Overrides frontend `CONFIG.BASE_PATH` (rarely needed) |
+| `GITHUB_CLIENT_SECRET` | **Secret** | Runtime (Worker) | Used by the token proxy to exchange codes for access tokens |
+| `GITHUB_CLIENT_ID` (optional) | Text | Runtime (Worker) | Overrides the client_id the proxy forwards to GitHub; rarely needed |
+
+Naming rule: **`CONFIG_*` = consumed at build time** (must be Text — Secrets are invisible
+to builds; the prefix also avoids GitHub Actions' reserved `GITHUB_` prefix); **without
+the prefix = consumed at runtime by the Worker** (Secret type, named after the GitHub
+OAuth convention). Note the env var name is not the frontend key: `CONFIG_GITHUB_CLIENT_ID`
+ends up as `CONFIG.GITHUB_CLIENT_ID` in the frontend.
+
 ### GitHub sign-in configuration
 
 > You can register the OAuth App right now (with the callback set to `http://localhost:8080/github-oauth-callback.html`) to start local development, then **edit the callback in the same app** once your real domain exists — no need to recreate it.
