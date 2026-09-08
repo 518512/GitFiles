@@ -29,13 +29,9 @@
   "build": {
     "command": "node scripts/build-config.mjs"
   },
-  // Each deployment supplies its own D1 values as build variables. Wrangler
-  // resolves ${D1_DATABASE_NAME} and ${D1_DATABASE_ID} during deployment.
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "${D1_DATABASE_NAME}",
-      "database_id": "${D1_DATABASE_ID}"
-    }
-  ]
+  // scripts/build-config.mjs replaces the marked block with the deployment's
+  // D1 binding. The generated values are never committed to the repository.
+  // D1_BINDING_START
+    // "d1_databases": [{ "binding": "DB", "database_name": "<D1_DATABASE_NAME>", "database_id": "<D1_DATABASE_ID>" }]
+  // D1_BINDING_END
 }
