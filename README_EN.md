@@ -51,7 +51,14 @@ The only supported production deployment is **Cloudflare Workers + Static Assets
    node scripts/build-config.mjs
    ```
 
-3. In the Worker **Settings → Bindings**, add a D1 database binding. The variable name must be `DB`, and each deployment must select its own D1 database; never commit another user's database ID to this public repository. Apply the schema:
+3. Set per-deployment D1 variables (the values stay in your Cloudflare deployment configuration and are not committed to this public repository):
+
+   ```text
+   D1_DATABASE_NAME=your D1 database name
+   D1_DATABASE_ID=your D1 database ID
+   ```
+
+   Add both values as Build variables in Workers Builds, or as deployment variables in the Dashboard deployment settings. `wrangler.jsonc` uses them to create the fixed `DB` D1 binding. Apply the schema:
 
    ```bash
    npx wrangler d1 execute <database-name> --file=workers/schema.sql
