@@ -255,12 +255,19 @@ TreeIndex
 目标：
 
 ```text
-Cloudflare Pages
+Cloudflare Workers
 +
-Pages Functions
+Worker（内置 API：workers/entry.js）
 +
-D1
+Static Assets
++
+D1（规划中）
 ```
+
+> 注（2026-09-08）：原目标「Cloudflare Pages + Pages Functions + D1」中的 Pages 载体已演进为
+> **Workers + Static Assets**（Pages 产品线冻结、Deploy 按钮仅支持 Workers）。同源 token 代理
+> 由 `workers/entry.js` 承担（替代原 `functions/api/github/oauth/token.js`，已删除）。
+> 本文其余处「Pages Function」字样一律理解为「Worker 内的 API 处理」，原则不变。
 
 原生 JS 优先。
 

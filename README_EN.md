@@ -64,7 +64,7 @@ python3 serve.py          # dev server with the OAuth token proxy + SPA fallback
 
 | Option | Use case | How |
 |--------|----------|-----|
-| **① Cloudflare Pages build variables (recommended)** | Fork + web deployment | Pages project → Settings → Variables and Secrets → add `CONFIG_GITHUB_CLIENT_ID` (plus optional `CONFIG_GOOGLE_CLIENT_ID`, `CONFIG_BASE_PATH`) → redeploy. The build script `scripts/build-config.mjs` generates the override automatically — **zero code changes, nothing polluting git** |
+| **① Cloudflare Workers build variables (recommended)** | Fork + web deployment | Worker project → Settings → Variables and Secrets → add `CONFIG_GITHUB_CLIENT_ID` (plus optional `CONFIG_GOOGLE_CLIENT_ID`, `CONFIG_BASE_PATH`) → redeploy. The build script `scripts/build-config.mjs` generates the override automatically — **zero code changes, nothing polluting git** |
 | **② js/config.local.js (local dev)** | Local `serve.py` | Copy `js/config.local.example.js` to `js/config.local.js` and fill it in (gitignored, never committed) |
 | **③ Edit js/config.js directly** | Not recommended | Conflicts with upstream updates |
 
@@ -79,9 +79,9 @@ python3 serve.py          # dev server with the OAuth token proxy + SPA fallback
 |-------------|----------------------------|
 | Local dev | `http://localhost:8080/github-oauth-callback.html` |
 | GitHub Pages | `https://mbaigc.github.io/GitFiles/github-oauth-callback.html` |
-| Cloudflare Pages | `https://<your-project>.pages.dev/github-oauth-callback.html` |
+| Cloudflare Workers | `https://gitfiles.<your-subdomain>.workers.dev/github-oauth-callback.html` |
 
-3. Put the **Client ID** into `js/config.js` → `GITHUB_CLIENT_ID`
+3. Put the **Client ID** into your configuration (see the table above)
 
 <details>
 <summary>Seeing <code>redirect_uri is not associated with this application</code>?</summary>
@@ -97,59 +97,47 @@ A **PAT mode** is available as a fallback when the OAuth proxy is unreachable: c
 
 ## ☁️ Deployment
 
-> **Order of operations**: the GitHub OAuth App is not a prerequisite for deployment — deploy first to get your `*.pages.dev` domain, then register the OAuth App, configure the secret, and redeploy. GitHub does not validate the `Homepage URL` field at all (fill in the repo URL for now); the `callback URL` can be edited later without recreating the app.
+> **Order of operations**: the GitHub OAuth App is not a prerequisite for deployment — deploy first to get your `*.workers.dev` domain, then register the OAuth App, configure the secret, and redeploy. GitHub does not validate the `Homepage URL` field at all (fill in the repo URL for now); the `callback URL` can be edited later without recreating the app.
 
-### Option 1: Connect your Git repository (recommended)
+### Option 1: One-click deploy (recommended)
 
-This is Cloudflare's official primary path and the most reliable one for fork users (no reliance on the one-click button):
+Click the **Deploy to Cloudflare** button above (fork users: replace the repo URL in the link with your own fork) and follow the wizard:
 
-1. **Cloudflare Dashboard → Workers & Pages → Create application → Pages → Connect to Git**
-2. Authorize and pick your forked `GitFiles` repository → **Begin setup**
-3. Build settings:
-   - **Project name**: becomes the domain `https://<project-name>.pages.dev` (defaults from `wrangler.jsonc` `name` = `gitfiles`)
-   - **Framework preset**: `None`
-   - **Build command**: `node scripts/build-config.mjs` (injects `CONFIG_*` environment variables into the frontend config; **deployment also works if left empty** — you just lose the env-var config channel)
-   - **Build output directory**: `/`
-4. **Settings → Variables and Secrets** (set for both Production and Preview):
-   - `CONFIG_GITHUB_CLIENT_ID` = your GitHub OAuth App Client ID (optional, for GitHub sign-in)
-   - `CONFIG_GOOGLE_CLIENT_ID` = your Google OAuth Client ID (optional, for Google Drive sign-in)
+1. Authorize GitHub and confirm — Cloudflare copies the repository to your account and creates a **Workers** project from the root `wrangler.jsonc` (static site + built-in same-origin token proxy; the config is already in standard Workers format)
+2. After deploying you get `https://gitfiles.<your-subdomain>.workers.dev`
+3. Configure secrets and variables (Dashboard → Workers & Pages → gitfiles → Settings → Variables and Secrets):
    - `GITHUB_CLIENT_SECRET` = your GitHub OAuth App client secret (**Secret type**, used by the token proxy)
-5. Every push to `main` builds automatically; after changing variables, **Retry deployment** or push again
+   - `CONFIG_GITHUB_CLIENT_ID` = your GitHub OAuth App Client ID (optional, frontend config injection)
+   - `CONFIG_GOOGLE_CLIENT_ID` = your Google OAuth Client ID (optional)
+4. In **Settings → Build → Build command** enter `node scripts/build-config.mjs` (injects the `CONFIG_*` variables into the frontend; leaving it empty still works, you just fall back to the `js/config.js` defaults) → **Retry deployment**
 
-> If the one-click button failed for you with `WorkerResource.getWorkerResult: response missing default_environment.script`, or the build command came out empty — those are known button-flow issues. Use the Git connection above and set the Build command manually to `node scripts/build-config.mjs`.
+Zero frontend code changes: the same-origin `/api/github/oauth/token` is provided by the built-in Worker.
 
-Deployment files already included in the repo:
+### Option 2: Connect your Git repository
 
-- `wrangler.jsonc` — Pages config (pure static; `wrangler pages deploy` CLI runs the build command automatically)
-- `functions/api/github/oauth/token.js` — OAuth token-exchange Pages Function (`/api/github/oauth/token`, same-origin)
-- `404.html` — SPA fallback (enabled by Pages convention)
+The manual version of Option 1: Dashboard → **Workers & Pages → Create → Workers → Connect to Git**, pick your fork, and fill the build settings as in Option 1 steps 3-4. Useful if your repo already exists and you want to skip the button wizard.
 
-After deploying, enable web GitHub sign-in (zero frontend code changes):
-
-```bash
-npx wrangler pages secret put GITHUB_CLIENT_SECRET   # your GitHub OAuth App client secret
-```
-
-### Option 2: wrangler CLI direct deploy
+### Option 3: wrangler CLI direct deploy
 
 ```bash
-# The build command (config override generation) is declared in wrangler.jsonc and runs automatically
-npx wrangler pages deploy .
+npx wrangler deploy    # reads wrangler.jsonc: runs the build command, then uploads the Worker + static assets
 ```
 
-Best when you don't want Git integration or prefer publishing from your machine.
+Best for publishing straight from your machine. Configure secrets with `npx wrangler secret put GITHUB_CLIENT_SECRET`.
 
-### Option 3: Deploy to Cloudflare button (fallback)
+### Option 4: GitHub Pages
 
-The button URL format is `https://deploy.workers.cloudflare.com/?url=<your-repo-url>`. **Fork users should replace the repo URL with their own fork** (clicking someone else's button also works — Cloudflare guides authorization and uses a copy of the repo under your own account, but the deploy source will not be your fork).
+Push to `main` and the built-in [`.github/workflows/pages.yml`](.github/workflows/pages.yml) deploys automatically. SPA files are ready: `404.html` (fallback), `.nojekyll`, `sw.js`, and `js/base-path.js` (auto-detects the `/repo-name` prefix).
 
-The button at the top of this README reads `wrangler.jsonc` and guides deployment, but the flow sometimes errors on pure-static Pages projects (see above). If the build command ends up empty after using the button, fill it manually in the project's Settings → Build with `node scripts/build-config.mjs`.
+> GitHub Pages is static hosting without a server-side proxy. Deploy a token proxy (next section) or sign in with a PAT.
+
+### OAuth token proxy (three options)
 
 GitHub's token endpoint blocks browser requests (CORS); exchanging the authorization code requires a server-side proxy:
 
 | Option | Use case | Setup |
 |--------|----------|-------|
-| **Pages Function** (bundled) | Cloudflare Pages | Works out of the box; just set `GITHUB_CLIENT_SECRET` |
+| **Built-in Worker proxy** (`workers/entry.js`, ships with one-click deploy) | Cloudflare Workers | Works out of the box; just set `GITHUB_CLIENT_SECRET` |
 | **Standalone Worker** (`workers/github-oauth-token.js`) | GitHub Pages and other static hosts | Create a Worker manually and point `GITHUB_TOKEN_EXCHANGE_URL` at it |
 | **serve.py built-in proxy** | Local development | Zero config; put the secret in a `.github_secret` file (never commit it) |
 
@@ -222,9 +210,10 @@ Covers the core PROJECT_SPEC §24 requirements:
 │   ├── localdisk.js            # Local storage backend
 │   ├── app.js / contextmenu.js / router.js / notepad.js
 │   └── config.js / site-config.js / base-path.js
-├── functions/api/github/oauth/token.js   # ★ Pages Function (token proxy)
+├── workers/entry.js                      # ★ Worker entry (static assets + built-in token proxy)
 ├── workers/github-oauth-token.js         # Standalone Worker token proxy
-├── wrangler.jsonc                        # ★ Cloudflare Pages config
+├── wrangler.jsonc                        # ★ Cloudflare Workers config
+├── scripts/build-config.mjs              # ★ Build-time config injection
 ├── tests/github-engine.test.mjs          # ★ Engine test suite
 ├── docs/                                 # Project spec + change records (Chinese)
 ├── serve.py                              # Dev server (with token proxy)
@@ -242,7 +231,7 @@ Covers the core PROJECT_SPEC §24 requirements:
 | Batch operations | Per-item loop, one commit each | Same-disk batches merge into 1 commit |
 | Concurrency control | None (remote can be silently overwritten) | CAS: non-forced updates, conflict dialog, 409 semantics |
 | Directory listing cache | Cached per disk (goes stale) | Cached by `owner/repo/branch/head` |
-| Token proxy | Manual Worker deployment | Bundled Pages Function + one-click deploy |
+| Token proxy | Manual Worker deployment | Built-in Worker (`workers/entry.js`) + one-click deploy |
 
 ## 📝 Documentation
 
@@ -253,29 +242,13 @@ Covers the core PROJECT_SPEC §24 requirements:
 ## ⚠️ Known limitations
 
 - GitHub caps files at **100 MB** and directory listings at **1000** entries per folder (Contents API limits)
-- The GitHub access token is still kept in browser `localStorage` by the legacy PAT/OAuth flow — the target architecture (GitHub App + Pages Functions + D1 sessions + HttpOnly cookies) is not implemented yet, see PROJECT_SPEC
+- The GitHub access token is still kept in browser `localStorage` by the legacy PAT/OAuth flow — the target architecture (GitHub App + server-side sessions + D1 + HttpOnly cookies) is not implemented yet, see PROJECT_SPEC
 - The Conflict Center is dialog-based for now (apply latest remote state / cancel), without a diff/merge view
 - Cross-drive copy between GitHub and Google/local storage is still incomplete (same-drive operations are fully supported)
 
 ## 🙏 Acknowledgements
 
 Built on [Storage Hub](https://github.com/fi3ik-mme/storage-hub) by [Mykhailo Mikus](https://github.com/fi3ik-mme). The app is not affiliated with Google LLC or GitHub.
-
-### Option 4: GitHub Pages
-
-Push to `main` and the built-in [`.github/workflows/pages.yml`](.github/workflows/pages.yml) deploys automatically. SPA files are ready: `404.html` (fallback), `.nojekyll`, `sw.js`, and `js/base-path.js` (auto-detects the `/repo-name` prefix).
-
-> GitHub Pages is static hosting without a server-side proxy. Deploy a token proxy (next section) or sign in with a PAT.
-
-### OAuth token proxy (three options)
-
-GitHub's token endpoint blocks browser requests (CORS); exchanging the authorization code requires a server-side proxy:
-
-| Option | Use case | Setup |
-|--------|----------|-------|
-| **Pages Function** (bundled) | Cloudflare Pages | Works out of the box; just set `GITHUB_CLIENT_SECRET` |
-| **Standalone Worker** (`workers/github-oauth-token.js`) | GitHub Pages and other static hosts | Create a Worker manually and point `GITHUB_TOKEN_EXCHANGE_URL` at it |
-| **serve.py built-in proxy** | Local development | Zero config; put the secret in a `.github_secret` file (never commit it) |
 
 ### OAuth application description (for registration forms)
 

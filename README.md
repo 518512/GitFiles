@@ -79,7 +79,7 @@ python3 serve.py          # 内置 OAuth token 代理 + SPA 回退
 |------|----------------------------|
 | 本地开发 | `http://localhost:8080/github-oauth-callback.html` |
 | GitHub Pages | `https://mbaigc.github.io/GitFiles/github-oauth-callback.html` |
-| Cloudflare Pages | `https://<你的项目名>.pages.dev/github-oauth-callback.html` |
+| Cloudflare Workers | `https://gitfiles.<你的子域>.workers.dev/github-oauth-callback.html` |
 
 3. 将 **Client ID** 填入 `js/config.js` → `GITHUB_CLIENT_ID`
 
@@ -97,53 +97,33 @@ python3 serve.py          # 内置 OAuth token 代理 + SPA 回退
 
 ## ☁️ 部署
 
-> **操作顺序提示**：GitHub OAuth App 不是部署的前置条件 —— 先部署拿到 `*.pages.dev` 域名，再注册 OAuth App、配置 secret，最后重新部署即可。`Homepage URL` 字段 GitHub 不做任何校验（可先填仓库地址）；`callback URL` 支持事后修改，无需重建应用。
+> **操作顺序提示**：GitHub OAuth App 不是部署的前置条件 —— 先部署拿到 `*.workers.dev` 域名，再注册 OAuth App、配置 secret，最后重新部署即可。`Homepage URL` 字段 GitHub 不做任何校验（可先填仓库地址）；`callback URL` 支持事后修改，无需重建应用。
 
-### 方式一：连接 Git 仓库自动部署（推荐）
+### 方式一：一键部署（推荐）
 
-这是 Cloudflare 官方主路径，对 fork 用户最可靠（不依赖一键按钮）：
+点击上方 **Deploy to Cloudflare** 按钮（fork 用户把链接中的仓库地址换成自己 fork 的地址），按向导完成：
 
-1. **Cloudflare Dashboard → Workers & Pages → Create application → Pages → Connect to Git**
-2. 授权并选择你 fork 的 `GitFiles` 仓库 → **Begin setup**
-3. 构建设置：
-   - **Project name**：即域名 `https://<项目名>.pages.dev`（默认读 `wrangler.jsonc` 的 `name` = `gitfiles`）
-   - **Framework preset**：`None`
-   - **Build command**：填 `node scripts/build-config.mjs`（作用：把 `CONFIG_*` 环境变量注入前端配置；**留空也能正常部署**，只是环境变量配置方式不生效）
-   - **Build output directory**：`/`
-4. **Settings → Variables and Secrets**（Production 与 Preview 都要）：
-   - `CONFIG_GITHUB_CLIENT_ID` = 你的 GitHub OAuth App Client ID（可选，GitHub 登录用）
-   - `CONFIG_GOOGLE_CLIENT_ID` = 你的 Google OAuth Client ID（可选，Google Drive 登录用）
+1. 授权 GitHub 并确认 —— Cloudflare 会把仓库复制到你账号下，并按仓库根的 `wrangler.jsonc` 创建 **Workers** 项目（静态站点 + 内置同源 token 代理，`wrangler.jsonc` 已是 Workers 标准配置）
+2. 部署完成后拿到域名 `https://gitfiles.<你的子域>.workers.dev`
+3. 配置 secrets 与环境变量（Dashboard → Workers & Pages → gitfiles → Settings → Variables and Secrets）：
    - `GITHUB_CLIENT_SECRET` = 你的 GitHub OAuth App client secret（**Secret 类型**，token 代理用）
-5. 部署后每次 push 到 `main` 自动构建发布；修改环境变量后需 **Retry deployment** 或重新 push
+   - `CONFIG_GITHUB_CLIENT_ID` = 你的 GitHub OAuth App Client ID（可选，前端配置注入）
+   - `CONFIG_GOOGLE_CLIENT_ID` = 你的 Google OAuth Client ID（可选）
+4. 在 **Settings → Build → Build command** 填 `node scripts/build-config.mjs`（把上面的 `CONFIG_*` 变量注入前端；留空也能用，只是走 `js/config.js` 默认值）→ **Retry deployment**
 
-> 若你之前用一键按钮部署时遇到 `WorkerResource.getWorkerResult: response missing default_environment.script` 之类的报错，或看到构建命令为空 —— 属于按钮流程的已知问题；请改用上面的 Git 连接方式，并把 Build command 手动填为 `node scripts/build-config.mjs`。
+前端零代码修改：同源 `/api/github/oauth/token` 由 Worker 内置提供。
 
-仓库已内置部署所需文件：
+### 方式二：连接 Git 仓库自动部署
 
-- `wrangler.jsonc` —— Pages 配置（纯静态；`wrangler pages deploy` CLI 部署时自动执行构建命令）
-- `functions/api/github/oauth/token.js` —— OAuth token 交换 Pages Function（`/api/github/oauth/token`，同源自动生效）
-- `404.html` —— SPA 回退（Pages 约定自动启用）
+与方式一相同目标的「手动版」：Dashboard → **Workers & Pages → Create → Workers → Connect to Git** 选择你 fork 的仓库，构建设置按方式一第 3-4 步填写。适合已经先建好仓库、想跳过按钮向导的用户。
 
-部署完成后即可启用网页版 GitHub 登录（前端零代码修改）：
-
-```bash
-npx wrangler pages secret put GITHUB_CLIENT_SECRET   # GitHub OAuth App 的 client secret
-```
-
-### 方式二：wrangler CLI 直接部署
+### 方式三：wrangler CLI 直接部署
 
 ```bash
-# 构建命令（生成配置覆盖）已声明在 wrangler.jsonc，deploy 时自动执行
-npx wrangler pages deploy .
+npx wrangler deploy    # 读取 wrangler.jsonc：先执行构建命令，再上传 Worker + 静态资源
 ```
 
-适合不想走 Git 集成、或想从本地直接发布的场景。
-
-### 方式三：Deploy to Cloudflare 按钮（备选）
-
-按钮链接格式为 `https://deploy.workers.cloudflare.com/?url=<你的仓库地址>`。**fork 用户请把链接中的仓库地址换成自己 fork 的地址**（点别人 README 的按钮也可以 —— Cloudflare 会引导授权并使用你自己账号下的仓库副本，但部署源不是你的 fork）。
-
-README 顶部的按钮会读取 `wrangler.jsonc` 引导部署，但其流程对纯静态 Pages 项目偶尔报错（见上）。若使用按钮后构建命令为空，请到项目 Settings → Build 手动补填 `node scripts/build-config.mjs`。
+适合从本地直接发布。secrets 用 `npx wrangler secret put GITHUB_CLIENT_SECRET` 配置。
 
 ### 方式四：GitHub Pages
 
@@ -157,7 +137,7 @@ GitHub 的 token 端点禁止浏览器直连（CORS），交换授权码需要�
 
 | 方式 | 适用场景 | 配置 |
 |------|----------|------|
-| **Pages Function**（本仓库内置） | Cloudflare Pages | 部署即用，配置 `GITHUB_CLIENT_SECRET` 即可 |
+| **Worker 内置代理**（`workers/entry.js`，一键部署自带） | Cloudflare Workers | 部署即用，配置 `GITHUB_CLIENT_SECRET` 即可 |
 | **独立 Worker**（`workers/github-oauth-token.js`） | GitHub Pages 等静态托管 | 手动创建 Worker，`GITHUB_TOKEN_EXCHANGE_URL` 指向它 |
 | **serve.py 内置代理** | 本地开发 | 零配置，密钥放 `.github_secret` 文件（勿提交） |
 
@@ -230,9 +210,9 @@ node tests/github-engine.test.mjs
 │   ├── localdisk.js            # 本地存储后端
 │   ├── app.js / contextmenu.js / router.js / notepad.js
 │   └── config.js / site-config.js / base-path.js
-├── functions/api/github/oauth/token.js   # ★ Pages Function（token 代理）
+├── workers/entry.js                      # ★ Worker 入口（静态资源 + 内置 token 代理）
 ├── workers/github-oauth-token.js         # 独立 Worker 版 token 代理
-├── wrangler.jsonc                        # ★ Cloudflare Pages 配置
+├── wrangler.jsonc                        # ★ Cloudflare Workers 配置
 ├── tests/github-engine.test.mjs          # ★ 引擎测试套件
 ├── docs/                                 # 项目规格 + 改造记录（中文）
 ├── serve.py                              # 本地开发服务器（含 token 代理）
@@ -250,7 +230,7 @@ node tests/github-engine.test.mjs
 | 批量操作 | 逐项循环，每项一个 Commit | 同盘批量合并为 1 Commit |
 | 并发控制 | 无（可静默覆盖远端） | CAS：非 force 更新，冲突弹窗，409 语义 |
 | 目录列表缓存 | 按磁盘缓存（易过期） | 按 `owner/repo/branch/head` 缓存 |
-| token 代理 | 需手动部署 Worker | Pages Function 内置 + 一键部署 |
+| token 代理 | 需手动部署 Worker | Worker 内置（workers/entry.js）+ 一键部署 |
 
 ## 📝 文档
 
@@ -261,10 +241,14 @@ node tests/github-engine.test.mjs
 ## ⚠️ 已知限制
 
 - GitHub 单文件上限 **100 MB**；目录列表单层 **1000** 项（Contents API 限制）
-- GitHub 访问令牌仍由旧 PAT/OAuth 流程保存在浏览器 `localStorage` —— 目标架构（GitHub App + Pages Functions + D1 会话 + HttpOnly Cookie）尚未实现，见 PROJECT_SPEC
+- GitHub 访问令牌仍由旧 PAT/OAuth 流程保存在浏览器 `localStorage` —— 目标架构（GitHub App + 服务端会话 + D1 + HttpOnly Cookie）尚未实现，见 PROJECT_SPEC
 - Conflict Center 目前为对话框级（应用最新远端状态 / 取消），暂无 diff/merge 视图
 - GitHub 与 Google/本地存储之间的跨盘复制尚不完整（同盘内完整支持）
 
 ## 🙏 致谢
 
 基于 [Mykhailo Mikus](https://github.com/fi3ik-mme) 的 [Storage Hub](https://github.com/fi3ik-mme/storage-hub) 改造而成。应用与 Google LLC、GitHub 无隶属关系；OAuth 描述文案见 [`README_EN.md`](README_EN.md)。
+
+### OAuth 应用描述（注册表单可直接粘贴）
+
+> **Storage Hub** 是一个纯客户端网页文件管理器。用户自行选择要连接的存储：Google Drive 账号、浏览器本地存储（IndexedDB），或为文件存储而创建的私有 GitHub 仓库。应用完全运行在浏览器中，仅在用户登录并授权后才访问 Google Drive 与 GitHub API。我们不运营后端服务器，也不在开发者控制的基础设施上存储用户文件。功能包括目录浏览、文件创建/重命名/移动/删除、受支持的跨盘复制粘贴、内置记事本（文本与 JSON），以及可分享的路径式链接。
