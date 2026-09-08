@@ -1040,7 +1040,7 @@ const GithubDisk = (() => {
   function ensureConfigured() {
     const clientId = CONFIG.GITHUB_CLIENT_ID || '';
     if (!clientId || /^YOUR_/.test(clientId)) {
-      throw new Error('GitHub sign-in is not configured. Set GITHUB_CLIENT_ID via js/config.local.js or Cloudflare Pages build variables (see README "Configuration")');
+      throw new Error('GitHub sign-in is not configured. Set GITHUB_CLIENT_ID via js/config.local.js or the CONFIG_GITHUB_CLIENT_ID build variable (see README "Configuring Client IDs")');
     }
   }
 
