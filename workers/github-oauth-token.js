@@ -1,5 +1,5 @@
 /**
- * Cloudflare Worker: GitHub OAuth token exchange proxy for Storage Hub.
+ * Cloudflare Worker: GitHub OAuth token exchange proxy for GitFiles.
  *
  * Deploy: Cloudflare dashboard → Workers → Create → paste this file → Deploy.
  * Route: e.g. https://github-oauth-token.<your-subdomain>.workers.dev/api/github/oauth/token
@@ -11,7 +11,7 @@ const TOKEN_PATH = '/api/github/oauth/token';
 
 /** Origins allowed to call this worker (add your GitHub Pages URL). */
 const ALLOWED_ORIGINS = new Set([
-  'https://fi3ik-mme.github.io',
+  'https://mbaigc.github.io',
   'http://localhost:8080',
   'http://127.0.0.1:8080',
 ]);
@@ -49,7 +49,7 @@ export default {
       headers: {
         'Content-Type': 'application/json',
         Accept: 'application/json',
-        'User-Agent': 'StorageHub-TokenProxy',
+        'User-Agent': 'GitFiles-TokenProxy',
       },
       body: await request.text(),
     });

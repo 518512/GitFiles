@@ -1,4 +1,4 @@
-const StorageHubCache = (() => {
+const GitFilesCache = (() => {
   const VERSION_KEY = 'storage_hub_app_version';
   const LEGACY_VERSION_KEY = 'mikus_drive_app_version';
 
@@ -131,5 +131,5 @@ window.StorageHub.clearCache = () => StorageHubCache.invalidateAppCaches().then(
 window.MikusDrive = window.StorageHub;
 
 window.addEventListener('load', () => {
-  StorageHubCache.register();
+  GitFilesCache.register();
 });

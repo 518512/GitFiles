@@ -5,11 +5,10 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0078d4">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="google-site-verification" content="eNqApo7Us9h2GKVx8_t4RmmMv1CDldejNsnmMH7RjQ8">
   <script>
     (function () {
       const APP_ROOT_KEY = 'storage_hub_app_root';
-      const DEPLOY_BASE = '/storage-hub';
+      const DEPLOY_BASE = '/GitFiles';
 
       function looksLikeDriveRouteSegment(segment) {
         return segment.includes('@') || (segment.includes('.') && !segment.includes(' '));
@@ -77,7 +76,7 @@
   <script src="js/base-path.js"></script>
   <script src="js/app-version.js"></script>
   <script>BasePath.bootstrapHeadAssets();</script>
-  <title>Storage Hub</title>
+  <title>GitFiles</title>
   <link rel="icon" href="assets/favicon-32.png" sizes="32x32" type="image/png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/logo-180.png">
@@ -100,10 +99,10 @@
   <div id="login-screen" class="login-screen">
     <div class="login-card">
       <div class="login-logo">
-        <img src="assets/logo.svg" width="72" height="72" alt="Storage Hub logo">
+        <img src="assets/logo.svg" width="72" height="72" alt="GitFiles logo">
       </div>
-      <h1>Storage Hub</h1>
-      <p class="login-brand">by Mykhailo Mikus</p>
+      <h1>GitFiles</h1>
+      <p class="login-brand">by MbAIGC</p>
       <p>A unified file manager for Google Drive, local storage, and GitHub repositories.</p>
       <button id="btn-sign-in" class="btn-primary">
         <svg viewBox="0 0 24 24" width="20" height="20">
@@ -120,13 +119,14 @@
         <ol>
           <li>Click <strong>Sign in with Google</strong> above.</li>
           <li>On Google’s screen, open <strong>Advanced</strong> (bottom-left).</li>
-          <li>Choose <strong>Go to Storage Hub (unsafe)</strong> — the app is open source and only accesses Drive after you approve it. Google shows this until full app review is complete.</li>
+          <li>Choose <strong>Go to GitFiles (unsafe)</strong> — the app is open source and only accesses Drive after you approve it. Google shows this until full app review is complete.</li>
           <li>Review the permissions and click <strong>Allow</strong>.</li>
         </ol>
       </details>
       <p class="login-hint">Sign in once and allow Google Drive access when prompted.</p>
       <p class="login-about">
-        <a href="https://github.com/fi3ik-mme/storage-hub">Storage Hub</a> is an independent project by
+        <a href="https://github.com/MbAIGC/GitFiles">GitFiles</a> is a fork of
+        <a href="https://github.com/fi3ik-mme/storage-hub">Storage Hub</a> by
         <a href="https://github.com/fi3ik-mme">Mykhailo Mikus</a>.
         Not affiliated with Google LLC.
       </p>
@@ -145,7 +145,7 @@
       <div class="title-bar">
         <div class="title-bar-left">
           <img src="assets/logo.svg" class="window-logo" width="18" height="18" alt="">
-          <span class="window-title">Storage Hub</span>
+          <span class="window-title">GitFiles</span>
         </div>
         <div class="title-bar-controls">
           <button class="title-btn" aria-label="Minimize">─</button>
@@ -201,7 +201,7 @@
                 <div class="tree-row">
                   <button type="button" class="tree-toggle" data-tree-toggle="root" aria-expanded="true" aria-label="Collapse"><span class="tree-chevron" aria-hidden="true"></span></button>
                   <button id="nav-home" class="sidebar-item tree-root-item active" data-nav="home">
-                    <span class="sidebar-icon">🏠</span> Storage Hub
+                    <span class="sidebar-icon">🏠</span> GitFiles
                   </button>
                 </div>
                 <ul id="sidebar-tree-users" class="tree-children tree-level-1"></ul>

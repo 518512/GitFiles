@@ -1,14 +1,14 @@
 const SITE = {
-  name: 'Storage Hub',
+  name: 'GitFiles',
   tagline: 'A unified file manager for Google Drive, local storage, and GitHub repositories.',
-  developer: 'Mykhailo Mikus',
-  developerUrl: 'https://github.com/fi3ik-mme',
-  githubRepo: 'https://github.com/fi3ik-mme/storage-hub',
-  homepage: 'https://fi3ik-mme.github.io/storage-hub/',
-  basePath: '/storage-hub',
+  developer: 'MbAIGC',
+  developerUrl: 'https://github.com/MbAIGC',
+  githubRepo: 'https://github.com/MbAIGC/GitFiles',
+  homepage: 'https://mbaigc.github.io/GitFiles/',
+  basePath: '/GitFiles',
   // Search Console → URL prefix → HTML tag → paste content value here.
   // Must also appear as a static <meta> inside <head> of index.html (Google does not run JS).
-  googleSiteVerification: 'eNqApo7Us9h2GKVx8_t4RmmMv1CDldejNsnmMH7RjQ8',
+  googleSiteVerification: '', // 你自己的 Search Console 验证值（上游值对本站无效）
 };
 
 (function applySiteHead() {

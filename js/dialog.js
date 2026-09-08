@@ -265,7 +265,7 @@ const Dialog = (() => {
     return runExclusive(() =>
       show({
         type: 'alert',
-        title: options.title || (typeof SITE !== 'undefined' ? SITE.name : 'Storage Hub'),
+        title: options.title || (typeof SITE !== 'undefined' ? SITE.name : 'GitFiles'),
         message,
         okLabel: options.okLabel || 'OK',
       })

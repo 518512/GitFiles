@@ -1,6 +1,6 @@
 importScripts('./js/app-version.js');
 
-const CACHE_NAME = `storage-hub-${APP_VERSION}`;
+const CACHE_NAME = `gitfiles-${APP_VERSION}`;
 
 const SHELL_ASSETS = [
   './',

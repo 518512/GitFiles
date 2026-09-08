@@ -1,4 +1,4 @@
-name: Deploy Storage Hub to Pages
+name: Deploy GitFiles to Pages
 
 on:
   push:
