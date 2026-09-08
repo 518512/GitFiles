@@ -2719,13 +2719,21 @@ const App = (() => {
 
     if (isMobileLayout()) state.view = 'list';
 
-    if (CONFIG.CLIENT_ID === 'YOUR_CLIENT_ID.apps.googleusercontent.com') {
+    if (!CONFIG.CLIENT_ID || /^YOUR_/.test(CONFIG.CLIENT_ID)) {
       $('#btn-sign-in').disabled = true;
-      document.querySelector('.login-hint').textContent =
-        'Set your OAuth Client ID in js/config.js (see README.md).';
+      const hint = document.querySelector('.login-hint');
+      if (hint) {
+        hint.textContent =
+          'Google sign-in is not configured (set the CONFIG_GOOGLE_CLIENT_ID build variable — see README "Configuring Client IDs").';
+      }
     }
 
     Auth.init((result) => {
+      if (result.initialized === false) {
+        // GSI 未初始化（缺 CONFIG_GOOGLE_CLIENT_ID）：提示但不中断后续初始化
+        return;
+      }
+
       if (result.success) {
         cancelFallbackLogin();
         showLoginError(null);
