@@ -2427,6 +2427,7 @@ const GithubDisk = (() => {
     invalidateRepoTree,
     setListChangeListener,
     setSaveStateListener,
+    setConflictListener,
     setTransferListener,
     getFileSaveState,
     getDisks,
