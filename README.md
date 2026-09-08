@@ -96,7 +96,7 @@ python3 serve.py          # 内置 OAuth token 代理 + SPA 回退
 - `wrangler.jsonc` —— Pages 配置（纯静态、无构建、`404.html` 兜底）
 - `functions/api/github/oauth/token.js` —— OAuth token 交换 Pages Function（`/api/github/oauth/token`）
 
-> 部署向导中的「项目名」即最终域名 `https://<项目名>.pages.dev`，创建时就能确定，可直接拿去注册 GitHub OAuth App。
+> 部署向导中的「项目名」**默认取自 `wrangler.jsonc` 的 `name`（当前为 `gitfiles`）**，即最终域名 `https://gitfiles.pages.dev`；向导中可改名（仅小写字母/数字/连字符）。**项目名一旦变更，记得同步更新 GitHub OAuth App 的 callback URL。**
 
 部署后在 Pages 项目设置中添加 secret，即可启用网页版 GitHub 登录：
 
