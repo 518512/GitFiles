@@ -133,9 +133,11 @@ This repo publishes → you click "Sync fork" on GitHub → auto build & deploy
 3. Build settings:
    - **Build command**: `node scripts/build-config.mjs` (**required**: generates the `public/` asset directory and injects `CONFIG_*` variables; leaving it empty means missing assets and a failed deploy)
    - Everything else default (deployment reads the root `wrangler.jsonc`)
-4. **Settings → Variables and Secrets** (both Production and Preview):
-   - `CONFIG_GITHUB_CLIENT_ID` / `CONFIG_GOOGLE_CLIENT_ID` (**Text type** — Secrets are invisible to builds; wrong type silently breaks config injection)
-   - `GITHUB_CLIENT_SECRET` (**Secret type**, used by the token proxy)
+4. Configure variables (two DIFFERENT dashboard sections — wrong place = no effect):
+   - **Build variables** (Settings → Build → Build variables):
+     `CONFIG_GITHUB_CLIENT_ID` / `CONFIG_GOOGLE_CLIENT_ID` (Text) — only visible to the build here
+   - **Runtime variables and secrets** (Settings → Variables and secrets):
+     `GITHUB_CLIENT_SECRET` (Secret) — read by the Worker at runtime for the token proxy
 5. Ongoing updates: when this repo publishes, open your fork → **Sync fork → Update branch** → Cloudflare deploys automatically
 
 ### Option 2: Deploy to Cloudflare button (quick trial)
