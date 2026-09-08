@@ -360,6 +360,7 @@ const Notepad = (() => {
         syncBrowserUrl();
         await open(file, diskId);
       } catch (err) {
+        app.showError(`Opened as a draft instead — could not load this file from ${segments[0]} (${githubDisk.accountLogin || 'GitHub'}): ${err.message}. Re-add the GitHub storage if its token has expired.`);
         await openDraftFromPath(segments, githubDisk.id, err.message);
       }
       return;

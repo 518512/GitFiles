@@ -1791,8 +1791,22 @@ const GithubDisk = (() => {
   }
 
   async function createDisk() {
-    const token = await acquireAccessToken();
-    const profile = await getAuthenticatedUser(token);
+    // 已有未失效的 token 时直接复用，避免每次添加仓库都弹出 GitHub 授权
+    const reusable = disks.map((d) => d.token).find(Boolean);
+    let token;
+    let profile;
+    if (reusable) {
+      try {
+        profile = await getAuthenticatedUser(reusable);
+        token = reusable;
+      } catch {
+        token = null;
+      }
+    }
+    if (!token || !profile) {
+      token = await acquireAccessToken();
+      profile = await getAuthenticatedUser(token);
+    }
     const repo = await resolveRepositoryForDisk(token, profile);
     return upsertDiskFromRepo(profile, repo, token);
   }
