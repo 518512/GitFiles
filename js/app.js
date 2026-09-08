@@ -1126,10 +1126,17 @@ const App = (() => {
       renderList();
     }
 
-    if (state.files.length === 0) {
-      show($('#empty-state'));
-    } else {
+    if (!hasMountedDrives()) {
+      // 登录后尚未挂载任何存储：欢迎空态引导添加 Repository（Mutation 由用户显式发起）
       hide($('#empty-state'));
+      show($('#no-storage-state'));
+    } else {
+      hide($('#no-storage-state'));
+      if (state.files.length === 0) {
+        show($('#empty-state'));
+      } else {
+        hide($('#empty-state'));
+      }
     }
 
     const count = state.files.length;
@@ -2234,18 +2241,35 @@ const App = (() => {
     btn.disabled = true;
     showLoginError('');
     try {
-      // OAuth popup 优先；代理不可达时 acquireAccessToken 内部降级为 PAT 对话框
+      // OAuth popup 优先；代理不可达时 acquireAccessToken 内部降级为 PAT 对话框。
+      // 登录只负责认证（Authentication）：不创建仓库、不挂载存储（Mutation）。
+      // 无挂载存储时由 explorer 的欢迎空态引导用户添加 Repository。
       await GithubDisk.acquireAccessToken();
-      if (GithubDisk.getDisks().length === 0) {
-        // 无已挂载仓库：让用户选择连接已有仓库或创建新 Drive-N（不再强制建 Drive-1）
-        await GithubDisk.ensureGithubStorage();
-      }
       await showExplorer();
       renderSidebarTree();
     } catch (err) {
       const message = err?.message || String(err);
       if (!/sign-in cancelled|popup closed/i.test(message)) {
         showLoginError(`GitHub sign-in failed: ${message}`);
+      }
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  // 欢迎空态的 Add Repository 入口：点击后才发起 Mount（连接已有 ∥ 创建新仓库）
+  async function addRepositoryFromWelcome() {
+    const btn = $('#btn-add-repository');
+    if (!btn || btn.disabled) return;
+    btn.disabled = true;
+    try {
+      await GithubDisk.ensureGithubStorage();
+      await showExplorer();
+      renderSidebarTree();
+    } catch (err) {
+      const message = err?.message || String(err);
+      if (!/sign-in cancelled|popup closed/i.test(message)) {
+        showError(`Could not add repository: ${message}`);
       }
     } finally {
       btn.disabled = false;
@@ -2434,6 +2458,7 @@ const App = (() => {
 
     $('#btn-sign-in').addEventListener('click', () => Auth.signIn());
     $('#btn-sign-in-github')?.addEventListener('click', () => signInWithGithub());
+    $('#btn-add-repository')?.addEventListener('click', () => addRepositoryFromWelcome());
     $('#btn-add-user')?.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
