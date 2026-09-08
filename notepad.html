@@ -73,9 +73,10 @@
     })();
   </script>
   <script src="js/site-config.js"></script>
-  <script src="js/config.js"></script>
+  <!-- 覆盖文件须在 config.js 之前加载：config.js 执行时读取 window.CONFIG_OVERRIDES 完成合并 -->
   <script src="js/config.local.js"></script>
   <script src="js/config.runtime.js"></script>
+  <script src="js/config.js"></script>
   <script src="js/base-path.js"></script>
   <script src="js/app-version.js"></script>
   <script>BasePath.bootstrapHeadAssets();</script>
