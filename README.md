@@ -60,6 +60,8 @@ python3 serve.py          # 内置 OAuth token 代理 + SPA 回退
 
 ### GitHub 登录配置
 
+> 可以现在就注册 OAuth App（callback 先填 `http://localhost:8080/github-oauth-callback.html`）开始本地开发，部署拿到正式域名后**回到同一应用修改 callback** 即可 —— 无需重建应用。
+
 1. GitHub → **Settings → Developer settings → OAuth Apps → New OAuth App**
 2. 填写回调地址（必须与实际部署地址**完全一致**）：
 
@@ -85,12 +87,16 @@ python3 serve.py          # 内置 OAuth token 代理 + SPA 回退
 
 ## ☁️ 部署
 
+> **操作顺序提示**：GitHub OAuth App 不是部署的前置条件 —— 先部署拿到 `*.pages.dev` 域名，再注册 OAuth App、配置 secret，最后重新部署即可。`Homepage URL` 字段 GitHub 不做任何校验（可先填仓库地址）；`callback URL` 支持事后修改，无需重建应用。
+
 ### 方式一：一键部署到 Cloudflare Pages（推荐）
 
 点击上方 **Deploy to Cloudflare** 按钮，按向导完成即可。仓库已内置：
 
 - `wrangler.jsonc` —— Pages 配置（纯静态、无构建、`404.html` 兜底）
 - `functions/api/github/oauth/token.js` —— OAuth token 交换 Pages Function（`/api/github/oauth/token`）
+
+> 部署向导中的「项目名」即最终域名 `https://<项目名>.pages.dev`，创建时就能确定，可直接拿去注册 GitHub OAuth App。
 
 部署后在 Pages 项目设置中添加 secret，即可启用网页版 GitHub 登录：
 
