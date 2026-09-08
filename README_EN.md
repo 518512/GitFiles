@@ -163,6 +163,8 @@ Best for publishing straight from your machine. Configure secrets with `npx wran
 Push to `main` and the built-in [`.github/workflows/pages.yml`](.github/workflows/pages.yml) deploys automatically. SPA files are ready: `404.html` (fallback), `.nojekyll`, `sw.js`, and `js/base-path.js` (auto-detects the `/repo-name` prefix).
 
 > GitHub Pages is static hosting without a server-side proxy. Deploy a token proxy (next section) or sign in with a PAT.
+>
+> The Pages workflow runs `node scripts/build-config.mjs` before deploying (builds the `public/` bundle and injects config). Set `CONFIG_GITHUB_CLIENT_ID` / `CONFIG_GOOGLE_CLIENT_ID` under **Settings → Secrets and variables → Actions → Variables** to inject Client IDs without code changes (the workflow forwards `${{ vars.* }}`).
 
 ### Deployment troubleshooting
 

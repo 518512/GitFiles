@@ -215,6 +215,7 @@ const ContextMenu = (() => {
       { sep: true },
       { action: 'github-disk-info', label: 'Information', icon: 'ℹ️' },
       { sep: true },
+      { action: 'reauth-github-disk', label: 'Re-authorize', icon: '🔁' },
       { action: 'eject-github-disk', label: 'Eject', icon: '⏏️' },
       { sep: true },
       { action: 'refresh', label: 'Refresh', icon: '🔄' },
@@ -702,6 +703,18 @@ const ContextMenu = (() => {
           }
           break;
         }
+        case 'reauth-github-disk': {
+          const disk = getContextGithubDisk(ctx);
+          if (!disk) break;
+          try {
+            await GithubDisk.reauthorizeDisk(disk.id);
+            app.refresh?.();
+            app.showStatus?.(`GitHub storage "${disk.name}" re-authorized`);
+          } catch (err) {
+            await Dialog.alert(err.message, { title: 'Re-authorization failed' });
+          }
+          break;
+        }
         case 'eject-github-disk': {
           const disk = getContextGithubDisk(ctx);
           if (!disk) break;
@@ -910,7 +923,7 @@ const ContextMenu = (() => {
 
   async function createGithubDisk() {
     try {
-      const disk = await GithubDisk.createDisk();
+      const disk = await GithubDisk.ensureGithubStorage();
       app.refresh?.();
       app.showStatus(`Connected GitHub storage "${disk.name}"`);
     } catch (err) {
@@ -1076,6 +1089,48 @@ const ContextMenu = (() => {
     return GithubDisk.createFileFromBlob(destDiskId, parentId, item.name, item.mimeType, blob);
   }
 
+  // T4: local 递归收集到批量结构（只读）
+  async function collectLocalIntoBatch(sourceDiskId, item, prefix, files, emptyDirs) {
+    const rel = prefix ? `${prefix}/${item.name}` : item.name;
+    if (item.isFolder || item.mimeType === LocalDisk.FOLDER_MIME) {
+      const children = await LocalDisk.listFiles(sourceDiskId, item.id);
+      if (!children.length) {
+        emptyDirs.push(rel);
+        return;
+      }
+      for (const child of children) {
+        await collectLocalIntoBatch(sourceDiskId, child, rel, files, emptyDirs);
+      }
+      return;
+    }
+    const blob = await LocalDisk.downloadFile(sourceDiskId, item.id);
+    const content = GithubDisk.isTextFileMime(item.mimeType, item.name)
+      ? await blob.text()
+      : new Uint8Array(await blob.arrayBuffer());
+    files.push({ relPath: rel, content });
+  }
+
+  // T4: Google 递归收集到批量结构（只读）
+  async function collectGoogleIntoBatch(sourceToken, item, prefix, files, emptyDirs) {
+    const rel = prefix ? `${prefix}/${item.name}` : item.name;
+    if (item.isFolder) {
+      const children = await Drive.listFiles(sourceToken, item.id);
+      if (!children.length) {
+        emptyDirs.push(rel);
+        return;
+      }
+      for (const child of children) {
+        await collectGoogleIntoBatch(sourceToken, child, rel, files, emptyDirs);
+      }
+      return;
+    }
+    const exported = await Drive.getFileBlobForExternalCopy(sourceToken, item.id, item);
+    const content = GithubDisk.isTextFileMime(exported.mimeType, exported.name)
+      ? await exported.blob.text()
+      : new Uint8Array(await exported.blob.arrayBuffer());
+    files.push({ relPath: rel, content });
+  }
+
   function storageKind(userId) {
     if (GithubDisk.isGithubId(userId)) return 'github';
     if (LocalDisk.isLocalId(userId)) return 'local';
@@ -1105,11 +1160,20 @@ const ContextMenu = (() => {
     try {
       if (sourceGithub && destGithub) {
         if (crossDrive) {
-          for (const item of items) {
-            await copyGithubItemToGithub(sourceUserId, destUserId, item, destParentId);
-            if (mode === 'cut') {
-              await GithubDisk.deleteFile(sourceUserId, item.id);
-            }
+          // 跨仓库复制 = 目标仓库单 commit；cut 时源仓库单 commit（AGENTS §3 Batch）
+          const collected = await GithubDisk.collectGithubItems(sourceUserId, items);
+          await GithubDisk.createBatchFromCollected(
+            destUserId,
+            destParentId,
+            collected,
+            `Copy ${items.length} item${items.length === 1 ? '' : 's'} from ${GithubDisk.getDisk(sourceUserId)?.name || 'GitHub'}`
+          );
+          if (mode === 'cut') {
+            await GithubDisk.deleteBatch(
+              sourceUserId,
+              items,
+              `Delete ${items.length} moved item${items.length === 1 ? '' : 's'}`
+            );
           }
         } else if (mode === 'copy') {
           // One logical batch = one tree + one commit (PROJECT_SPEC §2).
@@ -1126,15 +1190,25 @@ const ContextMenu = (() => {
       }
 
       if (destGithub && crossDrive) {
+        // local/Google → GitHub：先只读收集，目标仓库单 commit（AGENTS §3 Batch）
+        const files = [];
+        const emptyDirs = [];
         for (const item of items) {
           if (sourceLocal) {
-            await copyLocalItemToGithub(sourceUserId, destUserId, item, destParentId);
+            await collectLocalIntoBatch(sourceUserId, item, '', files, emptyDirs);
           } else if (!sourceGithub) {
             const sourceToken = await Auth.ensureValidToken(sourceUserId);
-            await copyGoogleItemToGithub(sourceToken, destUserId, item, destParentId);
+            await collectGoogleIntoBatch(sourceToken, item, '', files, emptyDirs);
           }
-
-          if (mode === 'cut') {
+        }
+        await GithubDisk.createBatchFromCollected(
+          destUserId,
+          destParentId,
+          { files, emptyDirs },
+          `Copy ${items.length} item${items.length === 1 ? '' : 's'}`
+        );
+        if (mode === 'cut') {
+          for (const item of items) {
             if (sourceLocal) {
               await LocalDisk.deleteFile(sourceUserId, item.id);
             } else if (!sourceGithub) {

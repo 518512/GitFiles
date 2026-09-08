@@ -2237,7 +2237,8 @@ const App = (() => {
       // OAuth popup 优先；代理不可达时 acquireAccessToken 内部降级为 PAT 对话框
       await GithubDisk.acquireAccessToken();
       if (GithubDisk.getDisks().length === 0) {
-        await GithubDisk.createDisk();
+        // 无已挂载仓库：让用户选择连接已有仓库或创建新 Drive-N（不再强制建 Drive-1）
+        await GithubDisk.ensureGithubStorage();
       }
       await showExplorer();
       renderSidebarTree();
