@@ -60,6 +60,8 @@ python3 serve.py          # dev server with the OAuth token proxy + SPA fallback
 
 ### GitHub sign-in configuration
 
+> You can register the OAuth App right now (with the callback set to `http://localhost:8080/github-oauth-callback.html`) to start local development, then **edit the callback in the same app** once your real domain exists — no need to recreate it.
+
 1. GitHub → **Settings → Developer settings → OAuth Apps → New OAuth App**
 2. Fill in the callback URL (must match your deployment **exactly**):
 
@@ -85,12 +87,16 @@ A **PAT mode** is available as a fallback when the OAuth proxy is unreachable: c
 
 ## ☁️ Deployment
 
+> **Order of operations**: the GitHub OAuth App is not a prerequisite for deployment — deploy first to get your `*.pages.dev` domain, then register the OAuth App, configure the secret, and redeploy. GitHub does not validate the `Homepage URL` field at all (fill in the repo URL for now); the `callback URL` can be edited later without recreating the app.
+
 ### Option 1: One-click deploy to Cloudflare Pages (recommended)
 
 Click the **Deploy to Cloudflare** button above and follow the wizard. The repo ships with:
 
 - `wrangler.jsonc` — Pages config (pure static, no build step, `404.html` fallback)
 - `functions/api/github/oauth/token.js` — OAuth token-exchange Pages Function (`/api/github/oauth/token`)
+
+> The "project name" in the deployment wizard becomes your final domain `https://<project-name>.pages.dev` — it is known at creation time, so you can register the GitHub OAuth App right away.
 
 After deploying, add a secret in the Pages project settings to enable web GitHub sign-in:
 
