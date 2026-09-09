@@ -3,6 +3,7 @@ import test from 'node:test';
 import worker from '../workers/entry.js';
 import { executeOperations } from '../workers/operations.js';
 import { githubRequest } from '../workers/github.js';
+import { requireRepositoryAccess } from '../workers/session.js';
 
 function request(path, options = {}) {
   return new Request(`https://gitfiles.example${path}`, options);
@@ -61,18 +62,52 @@ test('repo list requires a session cookie', async () => {
   assert.equal(body.error, 'unauthorized');
 });
 
-test('repository reads require explicit repository authorization', async () => {
+test('repository reads reject an uncached repository without GitHub read permission', async () => {
   const env = {
     DB: dbWith({
       session: { id: 's1', github_login: 'octo', access_token: 'secret', expires_at: Date.now() + 60_000 },
       access: null,
     }),
   };
-  const { response, body } = await responseJson('/api/repos/octo/private/tree?branch=main', env, {
-    headers: { Cookie: 'gitfiles_session=s1' },
-  });
-  assert.equal(response.status, 403);
-  assert.equal(body.error, 'forbidden');
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ permissions: { pull: false, push: false } }), { status: 200 });
+  try {
+    const { response, body } = await responseJson('/api/repos/octo/private/tree?branch=main', env, {
+      headers: { Cookie: 'gitfiles_session=s1' },
+    });
+    assert.equal(response.status, 403);
+    assert.equal(body.error, 'forbidden');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('uncached repository access is discovered from GitHub and persisted', async () => {
+  const writes = [];
+  const env = {
+    DB: {
+      prepare(sql) {
+        return {
+          bind(...args) {
+            return {
+              async first() { return sql.startsWith('SELECT can_read') ? null : null; },
+              async run() { writes.push({ sql, args }); return { success: true }; },
+            };
+          },
+        };
+      },
+    },
+  };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ permissions: { pull: true, push: true } }), { status: 200 });
+  try {
+    const access = await requireRepositoryAccess(env, { id: 's1', access_token: 'secret' }, 'octo', 'repo', true);
+    assert.deepEqual(access, { can_read: 1, can_write: 1 });
+    assert.equal(writes.length, 1);
+    assert.match(writes[0].sql, /INSERT OR REPLACE INTO repository_access/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('operations require same-origin and reject before GitHub access', async () => {
