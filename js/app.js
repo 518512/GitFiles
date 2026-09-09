@@ -2286,6 +2286,7 @@ const App = (() => {
     const label = btn.querySelector('.btn-label');
     const originalLabel = label?.textContent || '使用 GitHub 登录';
     if (label) label.textContent = '正在连接 GitHub…';
+    showStatus('正在验证 GitHub 会话…');
     btn.setAttribute('aria-busy', 'true');
     showLoginError('');
     try {
@@ -2293,10 +2294,14 @@ const App = (() => {
       // 登录只负责认证（Authentication）：不创建仓库、不挂载存储（Mutation）。
       // 无挂载存储时由 explorer 的欢迎空态引导用户添加 Repository。
       await GithubDisk.acquireAccessToken();
+      state.githubSession = 'connected';
+      renderGithubSessionState();
       await showExplorer();
       renderSidebarTree();
     } catch (err) {
       const message = err?.message || String(err);
+      state.githubSession = 'expired';
+      renderGithubSessionState();
       if (!/sign-in cancelled|popup closed/i.test(message)) {
         showLoginError(`GitHub 登录失败：${message}`);
       }
@@ -2507,6 +2512,8 @@ const App = (() => {
     $('#sidebar-overlay')?.addEventListener('click', closeSidebar);
 
     $('#btn-sign-in-github')?.addEventListener('click', () => signInWithGithub());
+    window.addEventListener('online', () => showStatus('网络已恢复'));
+    window.addEventListener('offline', () => showStatus('当前离线：本地存储仍可用，GitHub 操作需要联网'));
     $('#btn-add-repository')?.addEventListener('click', () => addRepositoryFromWelcome());
     $('#btn-add-user')?.addEventListener('click', (e) => {
       e.preventDefault();
