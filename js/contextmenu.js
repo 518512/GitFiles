@@ -851,6 +851,8 @@ const ContextMenu = (() => {
 
   async function createGithubDisk() {
     try {
+      const session = await GithubApi.request('/api/me');
+      if (!session) throw new Error('请先完成 GitHub 登录，再添加仓库。');
       const disk = await GithubDisk.ensureGithubStorage();
       app.refresh?.();
       app.showStatus(`已连接 GitHub 存储“${disk.name}”`);
