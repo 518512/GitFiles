@@ -126,8 +126,6 @@
         使用 GitHub 登录
       </button>
       <p id="login-error" class="login-error hidden"></p>
-      <button id="btn-install-pwa" class="btn-install" type="button">安装 GitFiles</button>
-      <p id="pwa-install-hint" class="login-hint">Edge 未显示安装按钮时，请打开浏览器菜单 → 应用 → 将此站点安装为应用。</p>
       <p class="login-about">
         <a href="https://github.com/MbAIGC/GitFiles">GitFiles</a> 是
         <a href="https://github.com/fi3ik-mme/storage-hub">Storage Hub</a> 的分支项目，原作者：
@@ -200,6 +198,10 @@
                 <button id="btn-add-user" class="sidebar-add-btn tree-add-btn">
                   <span class="sidebar-icon">＋</span> 添加存储
                 </button>
+                <button id="btn-install-pwa" class="sidebar-install-btn hidden" type="button">
+                  <span class="sidebar-icon">⇩</span> 安装 GitFiles
+                </button>
+                <p id="pwa-install-hint" class="sidebar-install-hint">Edge 可从菜单“应用”中安装。</p>
               </li>
             </ul>
           </div>

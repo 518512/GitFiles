@@ -2315,6 +2315,13 @@ const App = (() => {
 
   // 欢迎空态的添加仓库入口：点击后才发起 Mount（连接已有 ∥ 创建新仓库）
   async function addRepositoryFromWelcome() {
+    if (state.githubSession !== 'connected') {
+      await signInWithGithub();
+      if (state.githubSession !== 'connected') {
+        showError('请先完成 GitHub 登录，再添加仓库。');
+        return;
+      }
+    }
     const btn = $('#btn-add-repository');
     if (!btn || btn.disabled) return;
     btn.disabled = true;
@@ -2519,9 +2526,9 @@ const App = (() => {
       return;
     }
     button.classList.remove('hidden');
-    if (hint && deferredInstallPrompt) {
-      hint.textContent = '可将 GitFiles 安装到设备主屏幕，获得更快的独立应用体验。';
-    }
+    if (hint) hint.textContent = deferredInstallPrompt
+      ? '点击安装 GitFiles，或从 Edge 菜单“应用”中安装。'
+      : 'Edge 未提供快捷提示时，请从菜单 → 应用 → 将此站点安装为应用。';
   }
 
   async function promptInstallPwa() {

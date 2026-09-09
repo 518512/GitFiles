@@ -1180,9 +1180,48 @@ body {
   font-size: 0.7rem;
 }
 
+.sidebar-install-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 12px 0 32px;
+  width: calc(100% - 44px);
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid #9db7cc;
+  border-radius: 5px;
+  color: #174a6e;
+  background: linear-gradient(180deg, #f4fbff 0%, #dceefa 100%);
+  font-weight: 600;
+  cursor: pointer;
+}
+.sidebar-install-btn:hover { border-color: #4e9bc7; background: #e8f5fc; }
+.sidebar-install-hint {
+  margin: 4px 12px 8px 32px;
+  color: var(--win-text-muted);
+  font-size: 0.68rem;
+  line-height: 1.35;
+}
+
 .btn-install {
   width: 100%;
-  margin-top: 10px;
+  margin: 12px 0 4px;
+  min-height: 40px;
+  border: 1px solid #9db7cc;
+  border-radius: 6px;
+  color: #174a6e;
+  background: linear-gradient(180deg, #f4fbff 0%, #dceefa 100%);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(20, 55, 80, 0.12);
+}
+
+.btn-install:hover {
+  background: linear-gradient(180deg, #ffffff 0%, #cde8f8 100%);
+  border-color: #4e9bc7;
+}
+
+.btn-install:active {
+  transform: translateY(1px);
 }
 
 .worker-session-state[data-state="connected"] {
