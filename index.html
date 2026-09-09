@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -86,15 +86,15 @@
   <link rel="manifest" href="manifest.webmanifest">
 </head>
 <body>
-  <!-- Login screen -->
+  <!-- 登录界面 -->
   <div id="login-screen" class="login-screen">
     <div class="login-card">
       <div class="login-logo">
-        <img src="assets/logo.svg" width="72" height="72" alt="GitFiles logo">
+        <img src="assets/logo.svg" width="72" height="72" alt="GitFiles 徽标">
       </div>
       <h1>GitFiles</h1>
-      <p class="login-brand">by MbAIGC</p>
-      <p>A unified file manager for Google Drive, local storage, and GitHub repositories.</p>
+      <p class="login-brand">MbAIGC 出品</p>
+      <p>统一管理 Google Drive、本地存储和 GitHub 仓库的文件管理器。</p>
       <button id="btn-sign-in" class="btn-primary">
         <svg viewBox="0 0 24 24" width="20" height="20">
           <path fill="currentColor" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z"/>
@@ -102,95 +102,95 @@
           <path fill="currentColor" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
           <path fill="currentColor" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
         </svg>
-        Sign in with Google
+        <span class="btn-label">使用 Google 登录</span>
       </button>
       <button id="btn-sign-in-github" class="btn-github">
         <svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true">
           <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
         </svg>
-        Sign in with GitHub
+        <span class="btn-label">使用 GitHub 登录</span>
       </button>
       <p id="login-error" class="login-error hidden"></p>
       <details class="login-verify-notice">
-        <summary>Google shows “This app hasn’t been verified”?</summary>
+        <summary>Google 提示“此应用未经验证”怎么办？</summary>
         <ol>
-          <li>Click <strong>Sign in with Google</strong> above.</li>
-          <li>On Google’s screen, open <strong>Advanced</strong> (bottom-left).</li>
-          <li>Choose <strong>Go to GitFiles (unsafe)</strong> — the app is open source and only accesses Drive after you approve it. Google shows this until full app review is complete.</li>
-          <li>Review the permissions and click <strong>Allow</strong>.</li>
+          <li>点击上方的<strong>使用 Google 登录</strong>。</li>
+          <li>在 Google 页面左下角打开<strong>高级设置</strong>。</li>
+          <li>选择<strong>继续前往 GitFiles（不安全）</strong>。本项目开源，只有在你授权后才会访问 Drive。</li>
+          <li>检查权限后点击<strong>允许</strong>。</li>
         </ol>
       </details>
-      <p class="login-hint">Sign in once and allow Google Drive access when prompted.</p>
+      <p class="login-hint">首次登录时，请按提示授权访问 Google Drive。</p>
       <p class="login-about">
-        <a href="https://github.com/MbAIGC/GitFiles">GitFiles</a> is a fork of
-        <a href="https://github.com/fi3ik-mme/storage-hub">Storage Hub</a> by
-        <a href="https://github.com/fi3ik-mme">Mykhailo Mikus</a>.
-        Not affiliated with Google LLC.
+        <a href="https://github.com/MbAIGC/GitFiles">GitFiles</a> 是
+        <a href="https://github.com/fi3ik-mme/storage-hub">Storage Hub</a> 的分支项目，原作者：
+        <a href="https://github.com/fi3ik-mme">Mykhailo Mikus</a>。
+        本项目与 Google LLC 无关联。
       </p>
       <p class="login-footer">
-        <a href="privacy.html">Privacy Policy</a>
+        <a href="privacy.html">隐私政策</a>
         ·
-        <a href="terms.html">Terms of Service</a>
+        <a href="terms.html">服务条款</a>
       </p>
     </div>
   </div>
 
-  <!-- Explorer window -->
+  <!-- 文件管理器 -->
   <div id="explorer" class="explorer hidden">
     <div class="window">
-      <!-- Title bar -->
+      <!-- 标题栏 -->
       <div class="title-bar">
         <div class="title-bar-left">
           <img src="assets/logo.svg" class="window-logo" width="18" height="18" alt="">
           <span class="window-title">GitFiles</span>
         </div>
         <div class="title-bar-controls">
-          <span id="worker-session-state" class="worker-session-state" role="status">GitHub session: checking</span>
-          <button id="btn-conflict-center" class="title-btn title-btn--conflicts hidden" type="button" aria-label="Open Conflict Center" title="Open Conflict Center">!</button>
-          <button class="title-btn" aria-label="Minimize">─</button>
-          <button class="title-btn" aria-label="Maximize">□</button>
-          <button class="title-btn close" id="btn-sign-out" aria-label="Sign out all" title="Sign out all users">✕</button>
+          <span id="worker-session-state" class="worker-session-state" role="status">GitHub 会话：检查中</span>
+          <button id="btn-conflict-center" class="title-btn title-btn--conflicts hidden" type="button" aria-label="打开冲突中心" title="打开冲突中心">!</button>
+          <button class="title-btn" aria-label="最小化">─</button>
+          <button class="title-btn" aria-label="最大化">□</button>
+          <button class="title-btn close" id="btn-sign-out" aria-label="退出登录" title="退出登录">✕</button>
         </div>
       </div>
 
-      <!-- Ribbon / toolbar -->
+      <!-- 工具栏 -->
       <div class="ribbon">
         <div class="nav-buttons">
-          <button id="btn-sidebar-toggle" class="tool-btn mobile-only" type="button" title="Show navigation" aria-label="Show navigation">
+          <button id="btn-sidebar-toggle" class="tool-btn mobile-only" type="button" title="显示导航" aria-label="显示导航">
             <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
           </button>
-          <button id="btn-back" class="tool-btn" title="Back" disabled>
+          <button id="btn-back" class="tool-btn" title="后退" disabled>
             <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>
           </button>
-          <button id="btn-forward" class="tool-btn" title="Forward" disabled>
+          <button id="btn-forward" class="tool-btn" title="前进" disabled>
             <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/></svg>
           </button>
-          <button id="btn-up" class="tool-btn" title="Up" disabled>
+          <button id="btn-up" class="tool-btn" title="向上" disabled>
             <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"/></svg>
           </button>
-          <button id="btn-refresh" class="tool-btn" title="Refresh">
+          <button id="btn-refresh" class="tool-btn" title="刷新">
             <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
           </button>
-          <button id="btn-mobile-menu" class="tool-btn mobile-only" type="button" title="Actions" aria-label="Actions menu">
+          <button id="btn-mobile-menu" class="tool-btn mobile-only" type="button" title="操作" aria-label="操作菜单">
             <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
           </button>
         </div>
         <div class="address-bar">
           <span class="address-icon">📁</span>
           <div id="breadcrumbs" class="breadcrumbs"></div>
-          <button id="btn-copy-url" class="address-copy-btn" type="button" title="Copy link to this location">🔗</button>
+          <button id="btn-copy-url" class="address-copy-btn" type="button" title="复制当前位置链接">🔗</button>
         </div>
         <div class="view-toggle">
-          <button id="btn-view-grid" class="tool-btn active" title="Large icons">
+          <button id="btn-view-grid" class="tool-btn active" title="大图标">
             <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M4 4h4v4H4V4zm6 0h4v4h-4V4zm6 0h4v4h-4V4zM4 10h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4z"/></svg>
           </button>
-          <button id="btn-view-list" class="tool-btn" title="Details">
+          <button id="btn-view-list" class="tool-btn" title="详细信息">
             <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
           </button>
         </div>
       </div>
 
-      <!-- Main content -->
+      <!-- 主内容 -->
       <div class="main-area">
         <div id="sidebar-overlay" class="sidebar-overlay hidden" aria-hidden="true"></div>
         <aside class="sidebar">
@@ -198,14 +198,14 @@
             <ul class="sidebar-tree">
               <li id="tree-root-node" class="tree-root-node">
                 <div class="tree-row">
-                  <button type="button" class="tree-toggle" data-tree-toggle="root" aria-expanded="true" aria-label="Collapse"><span class="tree-chevron" aria-hidden="true"></span></button>
+                  <button type="button" class="tree-toggle" data-tree-toggle="root" aria-expanded="true" aria-label="折叠"><span class="tree-chevron" aria-hidden="true"></span></button>
                   <button id="nav-home" class="sidebar-item tree-root-item active" data-nav="home">
                     <span class="sidebar-icon">🏠</span> GitFiles
                   </button>
                 </div>
                 <ul id="sidebar-tree-users" class="tree-children tree-level-1"></ul>
                 <button id="btn-add-user" class="sidebar-add-btn tree-add-btn">
-                  <span class="sidebar-icon">＋</span> Add storage
+                  <span class="sidebar-icon">＋</span> 添加存储
                 </button>
               </li>
             </ul>
@@ -215,36 +215,36 @@
         <main class="content">
           <div id="loading" class="loading hidden">
             <div class="spinner"></div>
-            <span>Loading...</span>
+            <span>正在加载…</span>
           </div>
           <div id="error" class="error-banner hidden"></div>
           <div id="file-grid" class="file-grid"></div>
           <div id="file-list" class="file-list hidden">
             <div class="list-header">
-              <span class="col-name">Name</span>
-              <span class="col-modified">Date modified</span>
-              <span class="col-size">Size</span>
-              <span class="col-type">Type</span>
+              <span class="col-name">名称</span>
+              <span class="col-modified">修改日期</span>
+              <span class="col-size">大小</span>
+              <span class="col-type">类型</span>
             </div>
             <div id="file-list-body" class="list-body"></div>
           </div>
           <div id="no-storage-state" class="empty-state hidden">
             <span class="empty-icon">🔗</span>
-            <p>Welcome back</p>
-            <p class="empty-hint">No GitHub repository is mounted yet.</p>
-            <button id="btn-add-repository" class="btn btn-primary">Add Repository</button>
+            <p>欢迎回来</p>
+            <p class="empty-hint">尚未挂载 GitHub 仓库。</p>
+            <button id="btn-add-repository" class="btn btn-primary">添加仓库</button>
           </div>
           <div id="empty-state" class="empty-state hidden">
             <span class="empty-icon">📂</span>
-            <p>This folder is empty</p>
-            <p class="empty-hint mobile-only">Tap <strong>⋮</strong> in the toolbar for folder actions</p>
+            <p>此文件夹为空</p>
+            <p class="empty-hint mobile-only">点击工具栏中的 <strong>⋮</strong> 查看文件夹操作</p>
           </div>
         </main>
       </div>
 
-      <!-- Status bar -->
+      <!-- 状态栏 -->
       <div class="status-bar">
-        <span id="status-count">0 items</span>
+        <span id="status-count">0 个项目</span>
         <span id="status-selected"></span>
       </div>
     </div>
@@ -257,7 +257,7 @@
     <div class="props-card">
       <div class="props-header">
         <span class="props-title"></span>
-        <button type="button" class="props-close" aria-label="Close">✕</button>
+        <button type="button" class="props-close" aria-label="关闭">✕</button>
       </div>
       <div class="props-body"></div>
     </div>

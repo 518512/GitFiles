@@ -187,11 +187,11 @@ const OperationProgress = (() => {
 
   function formatEta(ms) {
     if (!Number.isFinite(ms) || ms <= 0) return '';
-    if (ms < 1000) return '<1s';
+    if (ms < 1000) return '不到 1 秒';
     const seconds = Math.ceil(ms / 1000);
-    if (seconds < 60) return `${seconds}s`;
+    if (seconds < 60) return `${seconds} 秒`;
     const minutes = Math.ceil(seconds / 60);
-    return `${minutes}m`;
+    return `${minutes} 分钟`;
   }
 
   return {

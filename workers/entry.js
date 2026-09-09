@@ -23,6 +23,9 @@ async function createSession(env, tokenPayload) {
   if (!env.DB) throw new Error('D1 session storage is not configured');
   if (!tokenPayload.access_token) throw new Error('GitHub did not return an access token');
   const session = { access_token: tokenPayload.access_token };
+
+  // Only the profile is needed to create the session. Repository ACL discovery
+  // is intentionally lazy and runs when the repository picker is opened.
   const { payload: user } = await githubRequest(session, '/user');
   const id = crypto.randomUUID();
   const expiresAt = Date.now() + (Number(tokenPayload.expires_in || 60 * 60 * 24 * 7) * 1000);
@@ -30,25 +33,6 @@ async function createSession(env, tokenPayload) {
     'INSERT INTO sessions (id, github_login, access_token, expires_at) VALUES (?, ?, ?, ?)'
   ).bind(id, user.login, tokenPayload.access_token, expiresAt).run();
 
-  // The server derives repository authorization from the OAuth session and
-  // persists the resulting ACL. Browser-provided owner/repo values never grant access.
-  for (let page = 1; page <= 10; page += 1) {
-    const { payload: repos } = await githubRequest(
-      session,
-      `/user/repos?affiliation=owner,collaborator,organization_member&per_page=100&page=${page}`
-    );
-    const list = Array.isArray(repos) ? repos : [];
-    for (const repo of list) {
-      const owner = repo?.owner?.login;
-      if (!owner || !repo?.name) continue;
-      const canRead = repo.permissions?.pull !== false ? 1 : 0;
-      const canWrite = repo.permissions?.push || repo.permissions?.admin ? 1 : 0;
-      await env.DB.prepare(
-        'INSERT OR REPLACE INTO repository_access (session_id, owner, repo, can_read, can_write) VALUES (?, ?, ?, ?, ?)'
-      ).bind(id, owner, repo.name, canRead, canWrite).run();
-    }
-    if (list.length < 100) break;
-  }
   return id;
 }
 

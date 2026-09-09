@@ -1,6 +1,6 @@
 const SITE = {
   name: 'GitFiles',
-  tagline: 'A unified file manager for Google Drive, local storage, and GitHub repositories.',
+  tagline: '统一管理 Google Drive、本地存储和 GitHub 仓库的文件管理器。',
   developer: 'MbAIGC',
   developerUrl: 'https://github.com/MbAIGC',
   githubRepo: 'https://github.com/MbAIGC/GitFiles',

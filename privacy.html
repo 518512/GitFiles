@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0078d4">
   <script src="js/site-config.js"></script>
-  <title>Privacy Policy — GitFiles</title>
+  <title>隐私政策 — GitFiles</title>
   <link rel="icon" href="assets/favicon-32.png" sizes="32x32" type="image/png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/style.css">
@@ -18,111 +18,117 @@
         <span>GitFiles</span>
       </a>
       <nav class="legal-nav">
-        <a href="./">Home</a>
-        <a href="privacy.html" aria-current="page">Privacy</a>
-        <a href="terms.html">Terms</a>
+        <a href="./">首页</a>
+        <a href="privacy.html" aria-current="page">隐私政策</a>
+        <a href="terms.html">服务条款</a>
       </nav>
     </header>
 
     <article class="legal-card">
-      <h1>Privacy Policy</h1>
-      <p class="legal-meta">Last updated: June 6, 2026</p>
+      <h1>隐私政策</h1>
+      <p class="legal-meta">最后更新：2026 年 6 月 6 日</p>
 
       <p>
-        GitFiles (<a href="https://mbaigc.github.io/GitFiles/">https://mbaigc.github.io/GitFiles/</a>)
-        is a browser-based file manager, maintained as a fork of Storage Hub by Mykhailo Mikus. It lets you browse Google Drive accounts.
-        This policy explains what information the app handles and how.
+        GitFiles（<a href="https://mbaigc.github.io/GitFiles/">https://mbaigc.github.io/GitFiles/</a>）是一个浏览器文件管理器，
+        由 MbAIGC 维护，是基于 Mykhailo Mikus 的 Storage Hub 修改的分支项目。它可以访问 Google Drive、本地存储以及 GitHub 仓库。
+        本政策说明应用处理哪些信息以及处理方式。
       </p>
 
-      <h2>About the developer</h2>
+      <h2>开发者信息</h2>
       <p>
-        GitFiles is an open-source project maintained by
-        <a href="https://github.com/MbAIGC">MbAIGC</a>, based on Storage Hub by
-        <a href="https://github.com/fi3ik-mme">Mykhailo Mikus</a>.
-        It is not affiliated with, endorsed by, or sponsored by Google LLC.
+        GitFiles 是一个由 <a href="https://github.com/MbAIGC">MbAIGC</a> 维护的开源项目，基于
+        <a href="https://github.com/fi3ik-mme/storage-hub">Storage Hub</a>（原作者：
+        <a href="https://github.com/fi3ik-mme">Mykhailo Mikus</a>）。
+        本项目不隶属于 Google LLC，也未获得其认可或赞助。
       </p>
 
-      <h2>Summary</h2>
+      <h2>摘要</h2>
       <ul>
-        <li>The app runs entirely in your browser. We do not operate a backend server that stores your files or account data.</li>
-        <li>Sign-in is handled by Google. We receive only the data Google shares after you grant permission.</li>
-        <li>OAuth tokens and session preferences are stored locally in your browser (<code>localStorage</code>).</li>
-        <li>We do not sell your personal information.</li>
+        <li>Google Drive 和本地存储功能主要在浏览器中运行；GitHub 仓库功能通过同源 Cloudflare Worker 处理 OAuth 会话与 GitHub API 请求。</li>
+        <li>Google 登录由 Google 处理；只有在你明确授权后，应用才会收到 Google 返回的信息。</li>
+        <li>GitHub OAuth 访问令牌仅保存在 Worker 的 HttpOnly 会话和 D1 会话存储中，不会返回给浏览器或写入浏览器存储。</li>
+        <li>为支持 Google 多账号和本地存储，部分 Google 会话信息、本地用户列表及界面偏好会保存在你的浏览器中。</li>
+        <li>我们不会出售你的个人信息。</li>
       </ul>
 
-      <h2>Information we access</h2>
-      <p>When you sign in with Google and approve the requested permissions, the app may access:</p>
+      <h2>我们访问的信息</h2>
+      <p>当你使用 Google 登录并同意权限请求时，应用可能访问：</p>
       <ul>
-        <li>Basic profile information (name, email address, profile picture) via OpenID Connect.</li>
-        <li>Google Drive files and metadata needed to browse folders, open files, create or edit items, and perform actions you request in the app.</li>
+        <li>通过 OpenID Connect 获取的基本资料（姓名、邮箱地址、头像）。</li>
+        <li>浏览文件夹、打开文件、创建或编辑项目以及执行你发起的操作所需的 Google Drive 文件和元数据。</li>
       </ul>
-      <p>The app only accesses Google data after you explicitly sign in and consent.</p>
+      <p>应用只有在你明确登录并同意授权后才会访问 Google 数据。</p>
+      <p>当你使用 GitHub 登录时，GitHub OAuth 授权码会发送到配置的 Worker。Worker 会将访问令牌保存在 D1 会话记录中，并根据 GitHub 返回的仓库权限建立会话访问控制列表。</p>
 
-      <h2>How information is used</h2>
-      <p>Information accessed through Google APIs is used solely to provide app functionality, including:</p>
+      <h2>信息用途</h2>
+      <p>通过 Google API 或 GitHub API 访问的信息仅用于提供应用功能，包括：</p>
       <ul>
-        <li>Displaying your Drive files and folders</li>
-        <li>Navigation, search, and file operations you initiate</li>
-        <li>Supporting multiple signed-in Google accounts in one browser</li>
-        <li>Opening supported text files in the built-in Notepad editor</li>
-      </ul>
-
-      <h2>Where data is stored</h2>
-      <ul>
-        <li><strong>Your Google account:</strong> Files remain in Google Drive unless you change or delete them through the app or Google services.</li>
-        <li><strong>Your browser:</strong> OAuth access tokens, refresh tokens (if provided), signed-in user list, and UI preferences are stored in <code>localStorage</code> on your device.</li>
-        <li><strong>Service worker cache:</strong> Static app files (HTML, CSS, JavaScript, icons) may be cached locally for offline loading of the app shell. Cached content does not include your Drive files.</li>
-      </ul>
-      <p>Clearing site data in your browser or signing out removes locally stored session information for this app.</p>
-
-      <h2>What we do not collect</h2>
-      <ul>
-        <li>We do not operate our own database of user accounts or Drive contents.</li>
-        <li>We do not receive your Google password.</li>
-        <li>We do not run third-party advertising or analytics trackers in this app.</li>
+        <li>展示你的云端文件、文件夹和已授权的 GitHub 仓库；</li>
+        <li>执行你主动发起的导航、查看、搜索、创建、编辑、移动、复制和删除操作；</li>
+        <li>在同一浏览器中支持多个 Google 账号以及挂载多个本地存储或 GitHub 仓库；</li>
+        <li>在内置记事本中打开支持的文本文件。</li>
       </ul>
 
-      <h2>Third-party services</h2>
-      <p>The app communicates directly with Google services, including:</p>
+      <h2>数据存储位置</h2>
       <ul>
-        <li>Google Identity Services (sign-in)</li>
+        <li><strong>你的 Google Drive 或 GitHub 仓库：</strong>文件仍由对应服务保存，除非你通过应用或服务本身修改或删除它们。</li>
+        <li><strong>你的浏览器：</strong>Google 会话令牌、已登录用户列表、本地存储元数据和界面偏好可能保存在设备浏览器的本地存储中。GitHub 访问令牌不保存在浏览器。</li>
+        <li><strong>Cloudflare Worker 与 D1：</strong>GitHub 会话令牌、登录名、过期时间以及仓库访问控制信息用于完成同源 API 请求和权限检查。</li>
+        <li><strong>Service Worker 缓存：</strong>HTML、CSS、JavaScript、图标和其他应用外壳文件可能被缓存以支持离线加载；缓存不会包含 Google Drive 或 GitHub 文件内容，也不会缓存 `/api/` 响应。</li>
+      </ul>
+      <p>清除网站数据、退出 Google 账号，或退出 GitHub 会话，会移除该应用可移除的本地或服务器端会话信息。</p>
+
+      <h2>我们不会收集的内容</h2>
+      <ul>
+        <li>我们不会建立用于销售或分析的用户资料数据库或文件内容数据库。</li>
+        <li>我们不会收到你的 Google 或 GitHub 密码。</li>
+        <li>应用不运行第三方广告或分析跟踪器。</li>
+      </ul>
+
+      <h2>第三方服务</h2>
+      <p>应用会与以下服务通信：</p>
+      <ul>
+        <li>Google Identity Services（登录）</li>
         <li>Google Drive API</li>
+        <li>GitHub OAuth 和 Git Data API</li>
+        <li>Cloudflare Workers 与 D1（同源 API、会话和访问控制）</li>
       </ul>
-      <p>Google’s use of information is governed by <a href="https://policies.google.com/privacy" rel="noopener noreferrer">Google’s Privacy Policy</a>.</p>
-      <p>The app is hosted on <a href="https://pages.github.com/" rel="noopener noreferrer">GitHub Pages</a>. GitHub may process technical connection data as described in <a href="https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement" rel="noopener noreferrer">GitHub’s Privacy Statement</a>.</p>
+      <p>Google 对信息的使用受其<a href="https://policies.google.com/privacy" rel="noopener noreferrer">隐私政策</a>约束。</p>
+      <p>GitHub 对信息的使用受其<a href="https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement" rel="noopener noreferrer">隐私声明</a>约束。Cloudflare 可能按照其服务条款和隐私政策处理技术连接数据。</p>
 
-      <h2>Data retention</h2>
-      <p>Locally stored tokens and preferences remain until you sign out, remove a user account from the app, or clear browser storage for this site. We do not retain copies on our own servers because none are used.</p>
+      <h2>数据保留</h2>
+      <p>浏览器中的 Google 会话信息和偏好会保留到你退出、移除账号或清除该站点存储为止。GitHub Worker 会话会在过期后失效；退出 GitHub 会话会清除对应 Cookie 和服务器端会话记录。文件内容仍由 Google Drive 或 GitHub 按其自身规则保留。</p>
 
-      <h2>Security</h2>
-      <p>All communication with Google APIs uses HTTPS. You are responsible for securing the device and browser where you use the app. Do not use the app on shared or untrusted devices if your Google account contains sensitive data.</p>
+      <h2>安全</h2>
+      <p>应用通过 HTTPS 与 Google、GitHub 和 Worker API 通信。GitHub 访问令牌仅在 Worker 侧使用，并通过 HttpOnly、Secure、SameSite Cookie 关联浏览器会话。你仍应负责保护使用应用的设备和浏览器；请勿在共享或不受信任的设备上处理敏感数据。</p>
 
-      <h2>Children’s privacy</h2>
-      <p>The app is not directed to children under 13, and we do not knowingly collect personal information from children.</p>
+      <h2>儿童隐私</h2>
+      <p>本应用不面向 13 岁以下儿童，我们不会故意收集儿童的个人信息。</p>
 
-      <h2>Your choices</h2>
+      <h2>你的选择</h2>
       <ul>
-        <li>You can revoke the app’s access at any time in your <a href="https://myaccount.google.com/permissions" rel="noopener noreferrer">Google Account permissions</a>.</li>
-        <li>You can sign out individual users or all users from within the app.</li>
-        <li>You can stop using the app at any time without creating an account with us.</li>
+        <li>你可以随时在 <a href="https://myaccount.google.com/permissions" rel="noopener noreferrer">Google 账号权限页面</a>撤销应用访问权限。</li>
+        <li>你可以在 GitHub 账号设置中撤销 GitFiles 的 OAuth 授权。</li>
+        <li>你可以在应用中退出单个 Google 用户、退出 GitHub 会话或移除所有已挂载存储。</li>
+        <li>你可以随时停止使用应用。</li>
       </ul>
 
-      <h2>Changes to this policy</h2>
-      <p>We may update this Privacy Policy from time to time. The “Last updated” date at the top will reflect the latest revision. Continued use of the app after changes means you accept the updated policy.</p>
+      <h2>政策变更</h2>
+      <p>我们可能不时更新本隐私政策。页面顶部的“最后更新”日期会反映最新版本。政策变更后继续使用应用，即表示你接受更新后的政策。</p>
 
-      <h2>Contact</h2>
+      <h2>联系我们</h2>
       <p>
-        Questions about this Privacy Policy can be sent via the project repository:
-        <a href="https://github.com/MbAIGC/GitFiles/issues" rel="noopener noreferrer">github.com/MbAIGC/GitFiles/issues</a>.
+        关于本隐私政策的问题，可以通过项目仓库提交 Issue：
+        <a href="https://github.com/MbAIGC/GitFiles/issues" rel="noopener noreferrer">github.com/MbAIGC/GitFiles/issues</a>。
       </p>
     </article>
 
     <footer class="legal-footer">
-      <a href="./">Home</a>
+      <a href="./">首页</a>
       <span aria-hidden="true">·</span>
-      <a href="privacy.html">Privacy Policy</a>
+      <a href="privacy.html">隐私政策</a>
       <span aria-hidden="true">·</span>
-      <a href="terms.html">Terms of Service</a>
+      <a href="terms.html">服务条款</a>
     </footer>
   </main>
 </body>
