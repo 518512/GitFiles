@@ -43,19 +43,19 @@ const GithubDisk = (() => {
   }
 
   function getPendingStatusLabel(status, options = {}) {
-    if (status === 'syncing' && options.kind === 'delete') return 'Deleting…';
-    if (status === 'syncing') return 'Uploading…';
-    if (status === 'saving') return 'Saving…';
-    if (status === 'moving') return 'Moving…';
-    if (status === 'conflict') return 'Conflict: remote updated';
+    if (status === 'syncing' && options.kind === 'delete') return '正在删除…';
+    if (status === 'syncing') return '正在上传…';
+    if (status === 'saving') return '正在保存…';
+    if (status === 'moving') return '正在移动…';
+    if (status === 'conflict') return '冲突：远端已更新';
     if (status === 'pending') {
-      if (options.kind === 'save') return 'Pending save…';
-      if (options.kind === 'move') return 'Pending movement…';
-      if (options.kind === 'delete') return 'Finishing delete…';
-      return 'Pending on GitHub…';
+      if (options.kind === 'save') return '等待保存…';
+      if (options.kind === 'move') return '等待移动…';
+      if (options.kind === 'delete') return '正在完成删除…';
+      return '等待 GitHub 完成…';
     }
-    if (status === 'error') return options.error || 'Failed';
-    return 'Syncing…';
+    if (status === 'error') return options.error || '操作失败';
+    return '正在同步…';
   }
 
   function moveStateKey(diskId, sourcePath) {
@@ -99,7 +99,7 @@ const GithubDisk = (() => {
 
   async function requireDisk(diskId) {
     const disk = getDisk(diskId);
-    if (!disk) throw new Error('GitHub storage not found');
+    if (!disk) throw new Error('找不到 GitHub 存储');
     return disk;
   }
 
@@ -120,25 +120,25 @@ const GithubDisk = (() => {
       repository: disk ? `${disk.owner}/${disk.repo}` : diskId,
       expectedHead: err.expectedHead || null,
       remoteHead: err.remoteHead || null,
-      message: err.message || 'The remote branch changed.',
+      message: err.message || '远端分支已发生变化。',
       createdAt: Date.now(),
     });
     if (typeof Dialog === 'undefined') return false;
     const lines = [
-      'The branch was updated by another device while this operation was running.',
+      '操作执行期间，分支已被其他设备更新。',
       '',
-      `Your base:   ${err.expectedHead || 'unknown'}`,
-      `Remote HEAD: ${err.remoteHead || 'unknown'}`,
+      `本地基线：${err.expectedHead || '未知'}`,
+      `远端 HEAD：${err.remoteHead || '未知'}`,
       '',
-      'Your operation was NOT applied. Overwriting remote changes must be explicit.',
+      '本次操作未应用。覆盖远端更改必须由你明确确认。',
     ];
     try {
       const choice = await Dialog.choose({
-        title: 'Conflict detected',
+        title: '检测到冲突',
         message: lines.join('\n'),
         buttons: [
-          { id: 'overwrite', label: 'Apply to latest remote state', primary: true },
-          { id: 'cancel', label: 'Cancel' },
+          { id: 'overwrite', label: '应用到最新远端状态', primary: true },
+          { id: 'cancel', label: '取消' },
         ],
       });
       if (choice === 'overwrite') {
@@ -157,7 +157,7 @@ const GithubDisk = (() => {
    */
   async function executeOperations(diskId, operations, message) {
     const disk = getDisk(diskId);
-    if (!disk) throw new Error('GitHub storage not found');
+    if (!disk) throw new Error('找不到 GitHub 存储');
     // Read the current server head immediately before mutation. The Worker
     // repeats this comparison before it writes the ref, providing CAS.
     if (!disk.head) await getRepoTreeState(disk, { force: true });
@@ -996,7 +996,7 @@ const GithubDisk = (() => {
 
   function getRepoWebUrl(diskId) {
     const disk = getDisk(diskId);
-    if (!disk) throw new Error('GitHub storage not found');
+    if (!disk) throw new Error('找不到 GitHub 存储');
     const base = disk.repoHtmlUrl || `https://github.com/${disk.owner}/${disk.repo}`;
     const branch = disk.branch || 'main';
     return `${base}/tree/${branch}`;
@@ -1004,10 +1004,10 @@ const GithubDisk = (() => {
 
   function getItemWebUrl(diskId, itemId, isFolder = false) {
     const disk = getDisk(diskId);
-    if (!disk) throw new Error('GitHub storage not found');
+    if (!disk) throw new Error('找不到 GitHub 存储');
     const path = normalizePath(itemId);
     if (String(itemId).startsWith('pending:')) {
-      throw new Error('Item is not available on GitHub yet');
+      throw new Error('项目暂时无法在 GitHub 上访问');
     }
     if (!path || path === ROOT_ID) return getRepoWebUrl(diskId);
     const base = disk.repoHtmlUrl || `https://github.com/${disk.owner}/${disk.repo}`;
@@ -1020,10 +1020,10 @@ const GithubDisk = (() => {
 
   function getFileViewUrl(diskId, fileId) {
     const disk = getDisk(diskId);
-    if (!disk) throw new Error('GitHub storage not found');
+    if (!disk) throw new Error('找不到 GitHub 存储');
     const path = normalizePath(fileId);
     if (!path || String(fileId).startsWith('pending:')) {
-      throw new Error('File is not available to open yet');
+      throw new Error('文件暂时无法打开');
     }
     const encodedPath = encodeRepoPath(path);
     const branch = disk.branch || 'main';
@@ -1080,7 +1080,7 @@ const GithubDisk = (() => {
   function ensureConfigured() {
     const clientId = CONFIG.GITHUB_CLIENT_ID || '';
     if (!clientId || /^YOUR_/.test(clientId)) {
-      throw new Error('GitHub sign-in is not configured. Set GITHUB_CLIENT_ID via js/config.local.js or the CONFIG_GITHUB_CLIENT_ID build variable (see README "Configuring Client IDs")');
+      throw new Error('GitHub 登录尚未配置。请通过 js/config.local.js 或 CONFIG_GITHUB_CLIENT_ID 构建变量设置 GITHUB_CLIENT_ID（参阅 README 的“配置客户端 ID”）。');
     }
   }
 
@@ -1262,34 +1262,6 @@ const GithubDisk = (() => {
     return lines.join('\n');
   }
 
-  async function ensureTokenExchangeReachable() {
-    if (isGithubPagesHost() && !CONFIG.GITHUB_TOKEN_EXCHANGE_URL) {
-      throw new Error(getTokenExchangeHelp());
-    }
-
-    const url = getTokenExchangeUrl();
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Accept: 'application/json',
-        },
-        body: JSON.stringify({ client_id: 'reachability-check' }),
-      });
-      const json = await res.json().catch(() => null);
-      if (!json || typeof json !== 'object') {
-        throw new Error('invalid proxy response');
-      }
-    } catch (err) {
-      const message = err?.message || String(err);
-      if (!/invalid proxy response|failed to fetch|networkerror|load failed/i.test(message)) {
-        throw err;
-      }
-      throw new Error(`GitHub token proxy is not reachable.\n\n${getTokenProxyUnavailableHelp()}`);
-    }
-  }
-
   async function exchangeCodeForToken(code, codeVerifier, redirectUri, clientId) {
     const url = getTokenExchangeUrl();
     let tokenRes;
@@ -1352,7 +1324,7 @@ const GithubDisk = (() => {
       const handlePayload = (data) => {
         if (!data || data.source !== OAUTH_MESSAGE_SOURCE) return;
         if (data.state !== state) {
-          finish(() => reject(new Error('Invalid GitHub OAuth state')));
+          finish(() => reject(new Error('GitHub OAuth 状态无效')));
           return;
         }
         if (data.error) {
@@ -1360,14 +1332,14 @@ const GithubDisk = (() => {
           return;
         }
         if (!data.code) {
-          finish(() => reject(new Error('GitHub did not return an authorization code')));
+          finish(() => reject(new Error('GitHub 未返回授权码')));
           return;
         }
         finish(() => resolve(data.code));
       };
 
       const timeout = setTimeout(() => {
-        finish(() => reject(new Error('GitHub sign-in timed out')));
+        finish(() => reject(new Error('GitHub 登录等待超时')));
       }, 120000);
 
       const onMessage = (event) => {
@@ -1437,7 +1409,6 @@ const GithubDisk = (() => {
 
   async function oauthSignIn() {
     ensureConfigured();
-    await ensureTokenExchangeReachable();
     const clientId = CONFIG.GITHUB_CLIENT_ID;
     const state = createOAuthState();
     const codeVerifier = randomString(48);
@@ -1461,7 +1432,7 @@ const GithubDisk = (() => {
     );
 
     if (!popup) {
-      throw new Error('Could not open GitHub sign-in popup. Please allow popups for this site.');
+      throw new Error('无法打开 GitHub 登录窗口，请允许此网站打开弹窗。');
     }
 
     let code;
@@ -1480,7 +1451,7 @@ const GithubDisk = (() => {
 
   function parseRepoInput(input, defaultOwner) {
     const trimmed = String(input || '').trim();
-    if (!trimmed) throw new Error('Repository name cannot be empty');
+    if (!trimmed) throw new Error('仓库名称不能为空');
 
     let path = trimmed
       .replace(/^https?:\/\/(?:www\.)?github\.com\//i, '')
@@ -1493,25 +1464,25 @@ const GithubDisk = (() => {
     if (parts.length === 1) {
       return { owner: defaultOwner, repo: parts[0] };
     }
-    throw new Error('Enter repository as owner/repo, a repo name, or a github.com/owner/repo URL');
+    throw new Error('请输入 owner/repo、仓库名称，或 github.com/owner/repo URL');
   }
 
   async function connectExistingRepository() {
-    if (typeof Dialog === 'undefined') throw new Error('Repository selection requires the application dialog UI');
+    if (typeof Dialog === 'undefined') throw new Error('选择仓库需要应用对话框组件。');
     const { repositories = [] } = await GithubApi.request('/api/repos');
     const mounted = new Set(disks.map((disk) => disk.id));
     const choices = repositories.filter((repo) => repo.can_write && !mounted.has(`${ID_PREFIX}${repo.owner}/${repo.repo}`));
-    if (!choices.length) throw new Error('No writable repositories are available in this Worker session');
+    if (!choices.length) throw new Error('当前 Worker 会话中没有可写仓库。');
     const result = await Dialog.form({
-      title: 'Connect GitHub repository',
-      message: 'Choose a writable repository authorized by the Worker session.',
+      title: '连接 GitHub 仓库',
+      message: '请选择 Worker 会话已授权且可写入的仓库。',
       fields: [{
-        id: 'repo', label: 'Repository', type: 'select',
+        id: 'repo', label: '仓库', type: 'select',
         options: choices.map((repo) => ({ value: `${repo.owner}/${repo.repo}`, label: `${repo.owner}/${repo.repo}` })),
       }],
-      submitLabel: 'Connect',
+      submitLabel: '连接',
     });
-    if (!result) throw new Error('GitHub sign-in cancelled');
+    if (!result) throw new Error('GitHub 登录已取消');
     const { owner, repo } = parseRepoInput(result.repo, '');
     const repository = await GithubApi.request(`/api/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`);
     return repository.repository;
@@ -1531,9 +1502,9 @@ const GithubDisk = (() => {
         hasWorkerSession = false;
       }
     }
-    await ensureTokenExchangeReachable();
     await oauthSignIn();
-    await GithubApi.request('/api/me');
+    // The Worker only returns ok after it has created the HttpOnly session.
+    // Avoid a second /api/me round trip on the login critical path.
     hasWorkerSession = true;
     return true;
   }
@@ -1592,10 +1563,10 @@ const GithubDisk = (() => {
   async function createNewRepository() {
     await acquireAccessToken();
     const name = await Dialog.prompt('Repository name', '', {
-      title: 'Create private repository',
-      submitLabel: 'Create',
+      title: '创建私有仓库',
+      submitLabel: '创建',
     });
-    if (!name?.trim()) throw new Error('Repository creation cancelled');
+    if (!name?.trim()) throw new Error('已取消创建仓库');
     const { repository } = await GithubApi.request('/api/repos', {
       method: 'POST',
       body: { name: name.trim(), private: true },
@@ -1609,15 +1580,15 @@ const GithubDisk = (() => {
   async function ensureGithubStorage() {
     await acquireAccessToken();
     const choice = await Dialog.choose({
-      title: 'Add GitHub repository',
-      message: 'Mount a repository already authorized for this session, or create a new private repository.',
+      title: '添加 GitHub 仓库',
+      message: '可以挂载当前会话已授权的仓库，或创建新的私有仓库。',
       buttons: [
-        { id: 'connect', label: 'Mount existing repository', primary: true },
-        { id: 'create', label: 'Create private repository' },
-        { id: 'cancel', label: 'Cancel' },
+        { id: 'connect', label: '挂载已有仓库', primary: true },
+        { id: 'create', label: '创建私有仓库' },
+        { id: 'cancel', label: '取消' },
       ],
     });
-    if (choice === 'cancel' || !choice) throw new Error('GitHub repository selection cancelled');
+    if (choice === 'cancel' || !choice) throw new Error('已取消选择 GitHub 仓库');
     if (choice === 'create') return createNewRepository();
     const profile = await GithubApi.request('/api/me');
     const repoData = await connectExistingRepository();
@@ -1626,7 +1597,7 @@ const GithubDisk = (() => {
 
   async function reauthorizeDisk(diskId) {
     const disk = getDisk(diskId);
-    if (!disk) throw new Error('GitHub storage not found');
+    if (!disk) throw new Error('找不到 GitHub 存储');
     await acquireAccessToken();
     const profile = await GithubApi.request('/api/me');
     disk.accountLogin = profile.login;
@@ -1819,7 +1790,7 @@ const GithubDisk = (() => {
 
   async function listFiles(diskId, parentId = ROOT_ID) {
     const disk = getDisk(diskId);
-    if (!disk) throw new Error('GitHub storage not found');
+    if (!disk) throw new Error('找不到 GitHub 存储');
     const tree = await getRepoTree(disk);
     const base = normalizePath(parentId);
     const folders = new Map();
@@ -1932,7 +1903,7 @@ const GithubDisk = (() => {
 
   function assertUploadSize(bytes) {
     if (bytes.length > 100 * 1024 * 1024) {
-      throw new Error('GitHub storage supports files up to 100 MB');
+      throw new Error('GitHub 存储支持的单文件大小上限为 100 MB');
     }
   }
 
@@ -2000,7 +1971,7 @@ const GithubDisk = (() => {
         const filePath = parentPath ? `${parentPath}/${name}` : name;
         const tree = await getRepoTree(await requireDisk(diskId));
         if (isPathVisibleInTree(tree, filePath, true) && !tree.some((e) => e.type === 'blob' && e.path === filePath)) {
-          throw new Error('Cannot replace a folder with a file');
+          throw new Error('不能用文件替换文件夹');
         }
         await executeOperations(diskId, [{ type: 'update', path: filePath, content }], `Update file ${filePath}`);
         return {
@@ -2017,10 +1988,10 @@ const GithubDisk = (() => {
 
   async function getTextFileContent(diskId, fileId) {
     const disk = getDisk(diskId);
-    if (!disk) throw new Error('GitHub storage not found');
+    if (!disk) throw new Error('找不到 GitHub 存储');
     const path = normalizePath(fileId);
     const meta = await getFileContentMeta(disk, path);
-    if (meta.type !== 'file') throw new Error('Item is not a file');
+    if (meta.type !== 'file') throw new Error('项目不是文件');
     if (meta.encoding === 'base64' && typeof meta.content === 'string') {
       return b64DecodeUtf8(meta.content);
     }
@@ -2130,7 +2101,7 @@ const GithubDisk = (() => {
   }
 
   async function restoreFile(_diskId, _fileId) {
-    throw new Error('GitHub storage does not support Recycle Bin restore');
+    throw new Error('GitHub 存储不支持从回收站恢复');
   }
 
   function getTreeEntrySize(tree, path) {
@@ -2263,7 +2234,7 @@ const GithubDisk = (() => {
 
   async function downloadFile(diskId, fileId) {
     const disk = getDisk(diskId);
-    if (!disk) throw new Error('GitHub storage not found');
+    if (!disk) throw new Error('找不到 GitHub 存储');
     const path = normalizePath(fileId);
     const fileName = path.split('/').pop() || '';
     const response = await GithubApi.request(
@@ -2289,7 +2260,7 @@ const GithubDisk = (() => {
 
   async function getFileProperties(diskId, fileId) {
     const disk = getDisk(diskId);
-    if (!disk) throw new Error('GitHub storage not found');
+    if (!disk) throw new Error('找不到 GitHub 存储');
     const path = normalizePath(fileId);
     const meta = await getFileContentMeta(disk, path);
     const isFolder = meta.type === 'dir';
@@ -2314,7 +2285,7 @@ const GithubDisk = (() => {
 
   async function getStorageQuota(diskId) {
     const disk = getDisk(diskId);
-    if (!disk) throw new Error('GitHub storage not found');
+    if (!disk) throw new Error('找不到 GitHub 存储');
     const { repository: repo } = await GithubApi.request(
       `/api/repos/${encodeURIComponent(disk.owner)}/${encodeURIComponent(disk.repo)}`
     );
@@ -2356,13 +2327,13 @@ const GithubDisk = (() => {
   }
 
   async function resolveFileByPath(segments) {
-    if (!segments?.length) throw new Error('Invalid file path');
+    if (!segments?.length) throw new Error('文件路径无效');
     const disk = getDiskByName(segments[0]);
-    if (!disk) throw new Error('GitHub storage not found');
+    if (!disk) throw new Error('找不到 GitHub 存储');
     const parts = segments[1] === 'My Drive' ? segments.slice(2) : segments.slice(1);
     const path = parts.join('/');
     const fileName = parts[parts.length - 1];
-    if (!fileName) throw new Error('Invalid file path');
+    if (!fileName) throw new Error('文件路径无效');
     const parentPath = getParentPath(path) || ROOT_ID;
     const files = await listFiles(disk.id, parentPath);
     const file = files.find((f) => !f.isFolder && f.name === fileName);
@@ -2370,14 +2341,14 @@ const GithubDisk = (() => {
 
     const direct = await tryResolveFileByDirectPath(disk, disk.id, path);
     if (direct) return { diskId: disk.id, file: direct };
-    throw new Error('File not found');
+    throw new Error('找不到文件');
   }
 
   async function tryResolveFileByDirectPath(disk, diskId, path) {
     for (let attempt = 0; attempt < 4; attempt += 1) {
       try {
         const meta = await getFileContentMeta(disk, path);
-        if (meta.type === 'dir') throw new Error('Item is a folder');
+        if (meta.type === 'dir') throw new Error('项目是文件夹');
         const fileName = path.split('/').pop() || path;
         const parentPath = getParentPath(path);
         const mimeType = inferMimeType(fileName);

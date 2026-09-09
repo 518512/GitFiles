@@ -19,7 +19,7 @@ const Dialog = (() => {
       <div class="app-dialog-card" role="dialog" aria-modal="true" aria-labelledby="app-dialog-title">
         <div class="app-dialog-header">
           <span id="app-dialog-title" class="app-dialog-title"></span>
-          <button type="button" class="app-dialog-close" aria-label="Close">✕</button>
+          <button type="button" class="app-dialog-close" aria-label="关闭">✕</button>
         </div>
         <div class="app-dialog-body"></div>
         <div class="app-dialog-footer"></div>
@@ -210,22 +210,22 @@ const Dialog = (() => {
     }
 
     if (config.type === 'alert') {
-      footerEl.appendChild(button(config.okLabel || 'OK', 'btn-primary', true));
+      footerEl.appendChild(button(config.okLabel || '确定', 'btn-primary', true));
     } else if (config.type === 'confirm') {
-      footerEl.appendChild(button(config.cancelLabel || 'Cancel', 'btn-dialog', false));
+      footerEl.appendChild(button(config.cancelLabel || '取消', 'btn-dialog', false));
       footerEl.appendChild(
         button(
-          config.confirmLabel || 'OK',
+          config.confirmLabel || '确定',
           config.danger ? 'btn-primary btn-danger' : 'btn-primary',
           true
         )
       );
     } else if (config.type === 'prompt' || config.type === 'form') {
-      footerEl.appendChild(button(config.cancelLabel || 'Cancel', 'btn-dialog', null));
+      footerEl.appendChild(button(config.cancelLabel || '取消', 'btn-dialog', null));
       const submit = document.createElement('button');
       submit.type = 'button';
       submit.className = 'btn-primary';
-      submit.textContent = config.submitLabel || 'OK';
+      submit.textContent = config.submitLabel || '确定';
       submit.addEventListener('click', async () => {
         if (config.type === 'prompt') {
           const input = bodyEl.querySelector('.app-dialog-input');
@@ -284,7 +284,7 @@ const Dialog = (() => {
         type: 'alert',
         title: options.title || (typeof SITE !== 'undefined' ? SITE.name : 'GitFiles'),
         message,
-        okLabel: options.okLabel || 'OK',
+        okLabel: options.okLabel || '确定',
       })
     );
   }
@@ -293,10 +293,10 @@ const Dialog = (() => {
     return runExclusive(() =>
       show({
         type: 'confirm',
-        title: options.title || 'Confirm',
+        title: options.title || '确认',
         message,
-        confirmLabel: options.confirmLabel || 'OK',
-        cancelLabel: options.cancelLabel || 'Cancel',
+        confirmLabel: options.confirmLabel || '确定',
+        cancelLabel: options.cancelLabel || '取消',
         danger: !!options.danger,
       })
     );
@@ -309,8 +309,8 @@ const Dialog = (() => {
         title: options.title || label,
         label: options.fieldLabel || label,
         defaultValue,
-        submitLabel: options.submitLabel || 'OK',
-        cancelLabel: options.cancelLabel || 'Cancel',
+        submitLabel: options.submitLabel || '确定',
+        cancelLabel: options.cancelLabel || '取消',
       })
     );
   }
@@ -319,12 +319,12 @@ const Dialog = (() => {
     return runExclusive(() =>
       show({
         type: 'form',
-        title: options.title || 'Input',
+        title: options.title || '输入',
         message: options.message || '',
         messageHtml: options.messageHtml || '',
         fields: options.fields || [],
-        submitLabel: options.submitLabel || 'OK',
-        cancelLabel: options.cancelLabel || 'Cancel',
+        submitLabel: options.submitLabel || '确定',
+        cancelLabel: options.cancelLabel || '取消',
       })
     );
   }
@@ -333,7 +333,7 @@ const Dialog = (() => {
     return runExclusive(() =>
       show({
         type: 'choose',
-        title: options.title || 'Choose',
+        title: options.title || '选择',
         message: options.message || '',
         messageHtml: options.messageHtml || '',
         buttons: options.buttons || [],
@@ -346,15 +346,15 @@ const Dialog = (() => {
       const kind = isFolder ? 'folder' : 'file';
       const choice = await show({
         type: 'choose',
-        title: isFolder ? 'Folder already exists' : 'File already exists',
-        message: `A ${kind} named "${name}" already exists in this location.`,
+        title: isFolder ? '文件夹已存在' : '文件已存在',
+        message: `${isFolder ? '文件夹' : '文件'}“${name}”在此位置已经存在。`,
         buttons: [
           ...(allowReplace && !isFolder
-            ? [{ id: 'replace', label: 'Replace existing', primary: true }]
+            ? [{ id: 'replace', label: '替换现有文件', primary: true }]
             : []),
-          { id: 'rename', label: 'Choose another name', primary: isFolder },
-          { id: 'alternative', label: 'Use alternative name' },
-          { id: 'cancel', label: 'Cancel' },
+          { id: 'rename', label: '选择其他名称', primary: isFolder },
+          { id: 'alternative', label: '使用建议名称' },
+          { id: 'cancel', label: '取消' },
         ],
       });
 
@@ -369,11 +369,11 @@ const Dialog = (() => {
       if (choice === 'rename') {
         const renamed = await show({
           type: 'prompt',
-          title: isFolder ? 'New folder' : 'New file',
-          label: 'Name:',
+          title: isFolder ? '新建文件夹' : '新建文件',
+          label: '名称：',
           defaultValue: name,
-          submitLabel: 'Create',
-          cancelLabel: 'Cancel',
+          submitLabel: '创建',
+          cancelLabel: '取消',
         });
         const trimmed = renamed?.trim();
         return trimmed ? { action: 'create', name: trimmed } : null;

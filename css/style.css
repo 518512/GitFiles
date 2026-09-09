@@ -155,6 +155,27 @@ body {
   background: #24292f;
 }
 
+.btn-primary[aria-busy="true"],
+.btn-github[aria-busy="true"] {
+  position: relative;
+}
+
+.btn-primary[aria-busy="true"]::after,
+.btn-github[aria-busy="true"]::after {
+  content: '';
+  width: 14px;
+  height: 14px;
+  margin-left: 2px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: login-spin .7s linear infinite;
+}
+
+@keyframes login-spin {
+  to { transform: rotate(360deg); }
+}
+
 .btn-primary:disabled:hover {
   background: var(--win-blue);
 }

@@ -102,5 +102,32 @@ export async function handleRepoList(request, env) {
   const rows = await env.DB.prepare(
     'SELECT owner, repo, can_read, can_write FROM repository_access WHERE session_id = ? ORDER BY owner, repo'
   ).bind(session.id).all();
-  return json({ repositories: rows.results || [] });
+  const cached = rows.results || [];
+  if (cached.length) return json({ repositories: cached });
+
+  const discovered = [];
+  for (let page = 1; page <= 10; page += 1) {
+    const { payload } = await githubRequest(
+      session,
+      `/user/repos?affiliation=owner,collaborator,organization_member&per_page=100&page=${page}`
+    );
+    const list = Array.isArray(payload) ? payload : [];
+    discovered.push(...list);
+    if (list.length < 100) break;
+  }
+  const statements = discovered.flatMap((repo) => {
+    const owner = repo?.owner?.login;
+    if (!owner || !repo?.name) return [];
+    return [env.DB.prepare(
+      'INSERT OR REPLACE INTO repository_access (session_id, owner, repo, can_read, can_write) VALUES (?, ?, ?, ?, ?)'
+    ).bind(session.id, owner, repo.name, repo.permissions?.pull !== false ? 1 : 0, repo.permissions?.push || repo.permissions?.admin ? 1 : 0)];
+  });
+  if (statements.length && typeof env.DB.batch === 'function') await env.DB.batch(statements);
+  else await Promise.all(statements.map((statement) => statement.run()));
+  return json({ repositories: discovered.map((repo) => ({
+    owner: repo.owner.login,
+    repo: repo.name,
+    can_read: repo.permissions?.pull !== false ? 1 : 0,
+    can_write: repo.permissions?.push || repo.permissions?.admin ? 1 : 0,
+  })) });
 }

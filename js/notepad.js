@@ -54,10 +54,10 @@ const Notepad = (() => {
       el.textContent = el.textContent.replace(/^Ctrl/, mod);
     });
     rootEl?.querySelectorAll('.notepad-tool-btn--primary[title="Save"]').forEach((el) => {
-      el.title = `Save (${mod}+S)`;
+      el.title = `保存（${mod}+S）`;
     });
-    if (undoBtn) undoBtn.title = `Undo (${mod}+Z)`;
-    if (redoBtn) redoBtn.title = `Redo (${mod}+Shift+Z)`;
+    if (undoBtn) undoBtn.title = `撤销（${mod}+Z）`;
+    if (redoBtn) redoBtn.title = `重做（${mod}+Shift+Z）`;
   }
 
   function setLoading(visible) {
@@ -266,7 +266,7 @@ const Notepad = (() => {
     fixStandaloneNotepadLocation();
     Dialog.init();
     init({
-      showError: (msg) => Dialog.alert(msg, { title: 'Notepad' }),
+      showError: (msg) => Dialog.alert(msg, { title: '记事本' }),
       showStatus: (msg) => {
         if (!statusEl) return;
         statusEl.textContent = msg;
@@ -285,21 +285,21 @@ const Notepad = (() => {
     const fileParam = params.get('file');
 
     if (!fileParam) {
-      app.showError('Missing file path in URL.');
+      app.showError('URL 中缺少文件路径。');
       return;
     }
 
     const legacyUserId = params.get('user');
     if (legacyUserId && !fileParam.includes('/')) {
       if (!Auth.getUsers().find((u) => u.id === legacyUserId)) {
-        app.showError(`User not signed in. Open ${typeof SITE !== 'undefined' ? SITE.name : 'GitFiles'} and sign in first.`);
+        app.showError(`用户尚未登录。请先打开 ${typeof SITE !== 'undefined' ? SITE.name : 'GitFiles'} 并登录。`);
         return;
       }
       try {
         const token = await Auth.ensureValidToken(legacyUserId);
         const meta = await Drive.getFileMeta(token, fileParam);
         if (!Drive.isNotepadFile(meta)) {
-          app.showError('Only .txt and .json files can be opened in Notepad.');
+          app.showError('记事本只能打开 .txt 和 .json 文件。');
           return;
         }
         await open(meta, legacyUserId);
@@ -317,7 +317,7 @@ const Notepad = (() => {
       const handoff = peekNotepadHandoff(state.filePath);
       if (handoff?.userId === localDisk.id) {
         if (!LocalDisk.isNotepadFile(handoff.file)) {
-          app.showError('Only .txt and .json files can be opened in Notepad.');
+          app.showError('记事本只能打开 .txt 和 .json 文件。');
           return;
         }
         takeNotepadHandoff(state.filePath);
@@ -327,7 +327,7 @@ const Notepad = (() => {
       try {
         const { diskId, file } = await LocalDisk.resolveFileByPath(segments);
         if (!LocalDisk.isNotepadFile(file)) {
-          app.showError('Only .txt and .json files can be opened in Notepad.');
+          app.showError('记事本只能打开 .txt 和 .json 文件。');
           return;
         }
         syncBrowserUrl();
@@ -344,7 +344,7 @@ const Notepad = (() => {
       const handoff = peekNotepadHandoff(state.filePath);
       if (handoff?.userId === githubDisk.id) {
         if (!GithubDisk.isNotepadFile(handoff.file)) {
-          app.showError('Only .txt and .json files can be opened in Notepad.');
+          app.showError('记事本只能打开 .txt 和 .json 文件。');
           return;
         }
         takeNotepadHandoff(state.filePath);
@@ -354,13 +354,13 @@ const Notepad = (() => {
       try {
         const { diskId, file } = await GithubDisk.resolveFileByPath(segments);
         if (!GithubDisk.isNotepadFile(file)) {
-          app.showError('Only .txt and .json files can be opened in Notepad.');
+          app.showError('记事本只能打开 .txt 和 .json 文件。');
           return;
         }
         syncBrowserUrl();
         await open(file, diskId);
       } catch (err) {
-        app.showError(`Opened as a draft instead — could not load this file from ${segments[0]} (${githubDisk.accountLogin || 'GitHub'}): ${err.message}. Re-add the GitHub storage if its token has expired.`);
+        app.showError(`已作为草稿打开，但无法从 ${segments[0]}（${githubDisk.accountLogin || 'GitHub'}）加载文件：${err.message}。如果 GitHub 会话已过期，请重新添加该存储。`);
         await openDraftFromPath(segments, githubDisk.id, err.message);
       }
       return;
@@ -368,7 +368,7 @@ const Notepad = (() => {
 
     const user = Auth.getUsers().find((u) => Auth.formatDisplayEmail(u.email) === segments[0]);
     if (!user) {
-      app.showError(`Drive not found. Open ${typeof SITE !== 'undefined' ? SITE.name : 'GitFiles'} and sign in or add local/GitHub storage first.`);
+      app.showError(`找不到存储空间。请先打开 ${typeof SITE !== 'undefined' ? SITE.name : 'GitFiles'}，登录或添加本地/GitHub 存储。`);
       return;
     }
 
@@ -377,7 +377,7 @@ const Notepad = (() => {
       const token = await Auth.ensureValidToken(user.id);
       const meta = await Drive.resolveFileByPath(token, segments);
       if (!Drive.isNotepadFile(meta)) {
-        app.showError('Only .txt and .json files can be opened in Notepad.');
+        app.showError('记事本只能打开 .txt 和 .json 文件。');
         return;
       }
       syncBrowserUrl();
@@ -414,8 +414,8 @@ const Notepad = (() => {
     editorEl.disabled = false;
     setLoading(false);
     setWordWrap(state.wordWrap);
-    showBanner(`${errorMessage} — you can edit and use Save or Save As.`, true);
-    app.showStatus('Opened as new draft');
+    showBanner(`${errorMessage} — 你可以编辑内容，然后使用“保存”或“另存为”。`, true);
+    app.showStatus('已作为新草稿打开');
     editorEl.focus();
   }
 
@@ -434,7 +434,7 @@ const Notepad = (() => {
     if (err.code === 'NO_WRITE_ACCESS') return true;
     if (err.status === 403 || err.status === 404) return true;
     const msg = (err.message || '').toLowerCase();
-    return /permission|forbidden|not found|insufficient|read-only|access denied|writer/.test(msg);
+    return /permission|forbidden|not found|insufficient|read-only|access denied|writer|权限|禁止|找不到|只读/.test(msg);
   }
 
   async function canSaveToCurrentFile() {
@@ -452,23 +452,23 @@ const Notepad = (() => {
   async function pickSaveDestination() {
     const options = [];
     LocalDisk.getDisks().forEach((disk) => {
-      options.push({ kind: 'local', id: disk.id, label: `${disk.name} (Local Storage)` });
+      options.push({ kind: 'local', id: disk.id, label: `${disk.name}（本地存储）` });
     });
     GithubDisk.getDisks().forEach((disk) => {
-      options.push({ kind: 'github', id: disk.id, label: `${disk.name} (GitHub repo)` });
+      options.push({ kind: 'github', id: disk.id, label: `${disk.name}（GitHub 仓库）` });
     });
     Auth.getUsers().forEach((user) => {
       options.push({
         kind: 'google',
         id: user.id,
-        label: `${Auth.formatDisplayEmail(user.email)} (Google Drive)`,
+        label: `${Auth.formatDisplayEmail(user.email)}（Google Drive）`,
       });
     });
 
     if (!options.length) {
       await Dialog.alert(
-        'No storage is available. Open GitFiles and sign in or create local storage.',
-        { title: 'Save elsewhere' }
+        '没有可用的存储空间。请打开 GitFiles 登录，或创建本地存储。',
+        { title: '另存到其他位置' }
       );
       return null;
     }
@@ -476,10 +476,10 @@ const Notepad = (() => {
     if (options.length === 1) return options[0];
 
     const buttons = options.map((opt, index) => ({ id: String(index), label: opt.label }));
-    buttons.push({ id: 'cancel', label: 'Cancel' });
+    buttons.push({ id: 'cancel', label: '取消' });
     const pick = await Dialog.choose({
-      title: 'Save to storage',
-      message: 'Choose where to save this file:',
+      title: '保存到存储空间',
+      message: '请选择文件保存位置：',
       buttons,
     });
     if (pick == null || pick === 'cancel') return null;
@@ -567,7 +567,7 @@ const Notepad = (() => {
       state.dirty = false;
       updateStatus();
       syncBrowserUrl();
-      app.showStatus(`Saved "${name}"`);
+      app.showStatus(`已保存“${name}”`);
       app.clearTreeCache?.(state.userId);
       return true;
     } catch (err) {
@@ -582,22 +582,22 @@ const Notepad = (() => {
 
   async function promptSaveElsewhere(reason) {
     const detail = reason
-      ? `${reason}\n\nChoose another location to save your changes.`
-      : `You can't save changes to "${state.fileName}" in its current location. Choose another place to save.`;
+      ? `${reason}\n\n请选择其他位置保存更改。`
+      : `无法在“${state.fileName}”的当前位置保存更改，请选择其他位置。`;
     const action = await Dialog.choose({
-      title: 'Save elsewhere',
+      title: '保存到其他位置',
       message: detail,
       buttons: [
-        { id: 'elsewhere', label: 'Choose location…', primary: true },
-        { id: 'download', label: 'Download copy' },
-        { id: 'cancel', label: 'Cancel' },
+        { id: 'elsewhere', label: '选择位置…', primary: true },
+        { id: 'download', label: '下载副本' },
+        { id: 'cancel', label: '取消' },
       ],
     });
     if (action === 'elsewhere') {
       await saveToAlternateLocation({ forceNew: true });
     } else if (action === 'download') {
       downloadDocument();
-      app.showStatus('Download started');
+      app.showStatus('下载已开始');
     }
   }
 
@@ -607,20 +607,20 @@ const Notepad = (() => {
       return;
     }
     const action = await Dialog.choose({
-      title: 'Save failed',
+      title: '保存失败',
       message: err.message,
       buttons: [
-        { id: 'retry', label: 'Try again', primary: true },
-        { id: 'elsewhere', label: 'Save elsewhere…' },
-        { id: 'download', label: 'Download copy' },
-        { id: 'cancel', label: 'Cancel' },
+        { id: 'retry', label: '重试', primary: true },
+        { id: 'elsewhere', label: '另存到其他位置…' },
+        { id: 'download', label: '下载副本' },
+        { id: 'cancel', label: '取消' },
       ],
     });
     if (action === 'retry') {
       await save();
     } else if (action === 'download') {
       downloadDocument();
-      app.showStatus('Download started');
+      app.showStatus('下载已开始');
     } else if (action === 'elsewhere') {
       await saveToAlternateLocation({ forceNew: true });
     }
@@ -902,7 +902,7 @@ const Notepad = (() => {
     }
     const matches = getMatchPositions(editorEl.value, query);
     if (!matches.length) {
-      findStatusEl.textContent = 'No matches';
+      findStatusEl.textContent = '没有匹配项';
       return;
     }
     const idx = findState.matchIndex >= 0 ? findState.matchIndex + 1 : 0;
@@ -1004,16 +1004,16 @@ const Notepad = (() => {
     updateStatus();
     findState.matchIndex = -1;
     updateFindStatus();
-    app.showStatus?.('Replaced all matches');
+    app.showStatus?.('已替换全部匹配项');
   }
 
   function getGithubSaveStatusText() {
     if (!GithubDisk.isGithubId(state.userId) || !state.fileId) return '';
     const saveState = GithubDisk.getFileSaveState(state.userId, state.fileId);
     if (!saveState) return '';
-    if (saveState.status === 'saving') return 'Saving…';
-    if (saveState.status === 'pending') return 'Pending save…';
-    if (saveState.status === 'error') return saveState.error || 'Save failed';
+    if (saveState.status === 'saving') return '正在保存…';
+    if (saveState.status === 'pending') return '等待保存…';
+    if (saveState.status === 'error') return saveState.error || '保存失败';
     return '';
   }
 
@@ -1022,7 +1022,7 @@ const Notepad = (() => {
     const saveText = getGithubSaveStatusText();
     if (statusEl) statusEl.textContent = saveText;
     const suffix = state.dirty ? '*' : '';
-    const title = `${state.fileName}${suffix} - Notepad`;
+    const title = `${state.fileName}${suffix} - 记事本`;
     titleEl.textContent = title;
     document.title = title;
     updateCaretStatus();
@@ -1036,7 +1036,7 @@ const Notepad = (() => {
     const lines = before.split('\n');
     const line = lines.length;
     const col = lines[lines.length - 1].length + 1;
-    positionEl.textContent = `Ln ${line}, Col ${col}`;
+    positionEl.textContent = `第 ${line} 行，第 ${col} 列`;
   }
 
   const NOTEPAD_HANDOFF_PREFIX = 'storage-hub:notepad-handoff:';
@@ -1126,7 +1126,7 @@ const Notepad = (() => {
     editorEl.value = '';
     setLoading(true);
     modifiedEl.textContent = '';
-    positionEl.textContent = 'Ln 1, Col 1';
+    positionEl.textContent = '第 1 行，第 1 列';
     if (!isStandalone) rootEl.classList.remove('hidden');
     setWordWrap(state.wordWrap);
 
@@ -1143,7 +1143,7 @@ const Notepad = (() => {
       editorEl.value = '';
       state.dirty = false;
       updateStatus();
-      showBanner(`Could not load file: ${err.message}`, true);
+      showBanner(`无法加载文件：${err.message}`, true);
     } finally {
       editorEl.disabled = false;
       setLoading(false);
@@ -1164,7 +1164,7 @@ const Notepad = (() => {
 
     if (!(await canSaveToCurrentFile())) {
       await promptSaveElsewhere(
-        `You don't have permission to overwrite "${state.fileName}" in its current location.`
+        `你没有权限覆盖当前位置的“${state.fileName}”。`
       );
       return;
     }
@@ -1183,7 +1183,7 @@ const Notepad = (() => {
       updateStatus();
       if (!state.filePath) await updateFilePathInUrl();
       else syncBrowserUrl();
-      app.showStatus(`Saved "${state.fileName}"`);
+      app.showStatus(`已保存“${state.fileName}”`);
       app.clearTreeCache?.(state.userId);
     } catch (err) {
       await handleSaveFailure(err);
@@ -1191,7 +1191,7 @@ const Notepad = (() => {
   }
 
   async function saveAs() {
-    const name = await Dialog.prompt('Save as:', state.fileName, { title: 'Save As' });
+    const name = await Dialog.prompt('另存为：', state.fileName, { title: '另存为' });
     if (!name?.trim()) return;
 
     const trimmed = name.trim();
@@ -1206,7 +1206,7 @@ const Notepad = (() => {
 
     if (!(await canSaveToCurrentFile())) {
       await promptSaveElsewhere(
-        `You don't have permission to save changes to "${prevName}" in its current location.`
+        `你没有权限在当前位置保存对“${prevName}”的更改。`
       );
       state.fileName = prevName;
       return;
@@ -1245,7 +1245,7 @@ const Notepad = (() => {
       state.dirty = false;
       updateStatus();
       syncBrowserUrl();
-      app.showStatus(`Saved as "${trimmed}"`);
+      app.showStatus(`已另存为“${trimmed}”`);
       app.clearTreeCache?.(state.userId);
       await app.refresh?.();
     } catch (err) {
@@ -1294,12 +1294,12 @@ const Notepad = (() => {
   async function close(force = false) {
     if (!force && state.dirty) {
       const action = await Dialog.choose({
-        title: 'Notepad',
-        message: `Save changes to ${state.fileName}?`,
+        title: '记事本',
+        message: `保存对“${state.fileName}”的更改吗？`,
         buttons: [
-          { id: 'save', label: 'Save', primary: true },
-          { id: 'discard', label: "Don't save" },
-          { id: 'cancel', label: 'Cancel' },
+          { id: 'save', label: '保存', primary: true },
+          { id: 'discard', label: '不保存' },
+          { id: 'cancel', label: '取消' },
         ],
       });
       if (action === 'save') {
@@ -1366,8 +1366,8 @@ const Notepad = (() => {
         break;
       case 'about':
         await Dialog.alert(
-          'A simple text editor for .txt and .json files on Google Drive, local storage, and GitHub repos.',
-          { title: `${typeof SITE !== 'undefined' ? SITE.name : 'GitFiles'} Notepad` }
+          '适用于 Google Drive、本地存储和 GitHub 仓库中 .txt 与 .json 文件的简易文本编辑器。',
+          { title: `${typeof SITE !== 'undefined' ? SITE.name : 'GitFiles'} 记事本` }
         );
         break;
     }

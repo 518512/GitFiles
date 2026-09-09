@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0078d4">
   <script src="js/site-config.js"></script>
-  <title>Terms of Service — GitFiles</title>
+  <title>服务条款 — GitFiles</title>
   <link rel="icon" href="assets/favicon-32.png" sizes="32x32" type="image/png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="css/style.css">
@@ -18,116 +18,107 @@
         <span>GitFiles</span>
       </a>
       <nav class="legal-nav">
-        <a href="./">Home</a>
-        <a href="privacy.html">Privacy</a>
-        <a href="terms.html" aria-current="page">Terms</a>
+        <a href="./">首页</a>
+        <a href="privacy.html">隐私政策</a>
+        <a href="terms.html" aria-current="page">服务条款</a>
       </nav>
     </header>
 
     <article class="legal-card">
-      <h1>Terms of Service</h1>
-      <p class="legal-meta">Last updated: June 6, 2026</p>
+      <h1>服务条款</h1>
+      <p class="legal-meta">最后更新：2026 年 6 月 6 日</p>
 
       <p>
-        These Terms of Service (“Terms”) govern your use of GitFiles
-        (<a href="https://mbaigc.github.io/GitFiles/">https://mbaigc.github.io/GitFiles/</a>),
-        a browser-based client for managing cloud and local file storage, maintained as a fork of Storage Hub by Mykhailo Mikus.
-        By accessing or using the app, you agree to these Terms.
+        本服务条款（以下简称“条款”）适用于你对 GitFiles（<a href="https://mbaigc.github.io/GitFiles/">https://mbaigc.github.io/GitFiles/</a>）的使用。
+        GitFiles 是一个用于管理云端和本地文件存储的浏览器客户端，由 MbAIGC 维护，是基于 Mykhailo Mikus 的 Storage Hub 修改的分支项目。
+        访问或使用应用，即表示你同意本条款。
       </p>
 
-      <h2>1. The service</h2>
+      <h2>1. 服务说明</h2>
       <p>
-        GitFiles is a client-side web application that connects to Google services using OAuth 2.0. The app helps you
-        browse, organize, and perform file operations in Google Drive through a file-manager interface. The service is
-        provided on an “as is” basis without guaranteed uptime or support levels. GitFiles is not affiliated with Google LLC.
+        GitFiles 是一个客户端优先的 Web 应用，通过 OAuth 2.0 连接 Google 服务，并通过 Cloudflare Worker 连接已授权的 GitHub 仓库。
+        应用帮助你使用文件管理器界面浏览、整理和操作 Google Drive、本地存储与 GitHub 文件。服务按“现状”和“可用”状态提供，不保证持续在线、无错误或提供特定级别的技术支持。GitFiles 不隶属于 Google LLC 或 GitHub。
       </p>
 
-      <h2>2. Eligibility</h2>
+      <h2>2. 使用资格</h2>
       <p>
-        You must have a valid Google account and be legally able to agree to these Terms. You must comply with
-        <a href="https://policies.google.com/terms" rel="noopener noreferrer">Google’s Terms of Service</a> and
-        <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener noreferrer">Google API Services User Data Policy</a>
-        when using this app.
+        你必须拥有有效的 Google 或 GitHub 账号，并具备依法同意本条款的资格。使用本应用时，你还必须遵守
+        <a href="https://policies.google.com/terms" rel="noopener noreferrer">Google 服务条款</a>、
+        <a href="https://developers.google.com/terms/api-services-user-data-policy" rel="noopener noreferrer">Google API 服务用户数据政策</a>、
+        <a href="https://docs.github.com/en/site-policy/github-terms/github-terms-of-service" rel="noopener noreferrer">GitHub 服务条款</a>以及适用法律。
       </p>
 
-      <h2>3. Your Google account</h2>
-      <p>
-        You sign in directly with Google. We do not create separate user accounts. You are responsible for:
-      </p>
+      <h2>3. 你的账号和设备</h2>
+      <p>你通过 Google 或 GitHub 直接登录，应用不会为你创建独立的第三方账号。你负责：</p>
       <ul>
-        <li>Maintaining the security of your Google account and device</li>
-        <li>Reviewing and approving OAuth permissions requested by the app</li>
-        <li>All actions taken in Google Drive through the app while you are signed in</li>
+        <li>保护 Google/GitHub 账号、设备和浏览器的安全；</li>
+        <li>审查并批准应用请求的 OAuth 权限；</li>
+        <li>对你登录期间通过应用执行的文件和仓库操作负责；</li>
+        <li>确保你对访问、编辑、移动、复制或删除的文件拥有相应权限。</li>
       </ul>
 
-      <h2>4. Acceptable use</h2>
-      <p>You agree not to:</p>
+      <h2>4. 合理使用</h2>
+      <p>你同意不会：</p>
       <ul>
-        <li>Use the app in violation of applicable law or third-party rights</li>
-        <li>Attempt to interfere with, reverse engineer, or misuse Google APIs or the app</li>
-        <li>Use the app to distribute malware or access data you are not authorized to access</li>
-        <li>Misrepresent your identity or impersonate another person</li>
+        <li>违反适用法律或第三方权利使用应用；</li>
+        <li>干扰、逆向工程、攻击或滥用 Google、GitHub、Cloudflare API 或应用；</li>
+        <li>使用应用传播恶意软件，或访问你无权访问的数据；</li>
+        <li>冒充他人或虚假描述身份；</li>
+        <li>规避应用的权限检查、并发冲突保护或安全限制。</li>
       </ul>
 
-      <h2>5. Google Drive access</h2>
+      <h2>5. Google Drive 与 GitHub 数据</h2>
       <p>
-        The app requests permission to access Google Drive on your behalf. File creation, modification, deletion,
-        copying, and sharing performed in the app affect your Google Drive data. Review operations carefully,
-        especially when using features that act across multiple signed-in accounts.
+        应用代表你请求访问 Google Drive 和 GitHub 仓库。通过应用创建、修改、删除、复制、移动或共享的内容会影响你的 Google Drive 或 GitHub 数据。
+        GitHub 删除不会进入 GitHub 回收站，而是通过 Git 提交从分支当前树中永久移除对应路径；请在确认删除前仔细检查操作。
+        特别是在跨账号、跨存储或多设备操作时，应确认目标位置和权限。
       </p>
 
-      <h2>6. No warranty</h2>
+      <h2>6. 无担保</h2>
       <p>
-        The app is provided “as is” and “as available” without warranties of any kind, whether express or implied,
-        including merchantability, fitness for a particular purpose, and non-infringement. We do not warrant that the
-        app will be uninterrupted, error-free, or free of data loss.
+        在法律允许的最大范围内，应用按“现状”和“可用”状态提供，不作任何明示或默示担保，包括适销性、特定用途适用性和不侵权担保。
+        我们不保证应用始终不中断、无错误、及时、安全或不会发生数据丢失。涉及重要数据时，你应自行保留备份。
       </p>
 
-      <h2>7. Limitation of liability</h2>
+      <h2>7. 责任限制</h2>
       <p>
-        To the fullest extent permitted by law, The GitFiles maintainers and contributors are not liable for any
-        indirect, incidental, special, consequential, or punitive damages, or for loss of data, profits, or goodwill,
-        arising from your use of the app or inability to use it, even if advised of the possibility of such damages.
+        在法律允许的最大范围内，GitFiles 维护者和贡献者不对因使用或无法使用应用而产生的任何间接、附带、特殊、后果性或惩罚性损害负责，
+        也不对数据、利润或商誉损失负责，即使已被告知可能发生此类损害。
       </p>
 
-      <h2>8. Open-source software</h2>
+      <h2>8. 开源软件</h2>
       <p>
-        The app’s source code may be available in its public repository. Use, modification, and distribution of the
-        source code may be subject to the license included in that repository in addition to these Terms for the
-        hosted service.
+        应用源代码可能公开在项目仓库中。源代码的使用、修改和分发可能受仓库中包含的许可证约束；该许可证与本托管服务条款分别适用。
       </p>
 
-      <h2>9. Changes to the service or Terms</h2>
+      <h2>9. 服务或条款变更</h2>
       <p>
-        We may modify the app or these Terms at any time. Material changes will be reflected by updating the
-        “Last updated” date. Your continued use after changes become effective constitutes acceptance of the revised Terms.
+        我们可以随时修改应用或本条款。重大变更会通过更新“最后更新”日期体现。变更生效后继续使用应用，即表示你接受修订后的条款。
       </p>
 
-      <h2>10. Termination</h2>
+      <h2>10. 终止使用</h2>
       <p>
-        You may stop using the app at any time by signing out and revoking access in your Google Account settings.
-        We may discontinue or restrict the hosted app at any time without notice.
+        你可以随时退出应用，并在 Google 账号或 GitHub 账号设置中撤销授权。我们也可以在任何时候停止、限制或调整托管应用，恕不另行通知。
       </p>
 
-      <h2>11. Privacy</h2>
+      <h2>11. 隐私</h2>
       <p>
-        Your use of the app is also governed by our
-        <a href="privacy.html">Privacy Policy</a>, which explains how information is handled.
+        你对应用的使用还受我们的<a href="privacy.html">隐私政策</a>约束，隐私政策说明应用如何处理信息。
       </p>
 
-      <h2>12. Contact</h2>
+      <h2>12. 联系方式</h2>
       <p>
-        Questions about these Terms can be sent via the project repository:
-        <a href="https://github.com/MbAIGC/GitFiles/issues" rel="noopener noreferrer">github.com/MbAIGC/GitFiles/issues</a>.
+        关于本条款的问题，可以通过项目仓库提交 Issue：
+        <a href="https://github.com/MbAIGC/GitFiles/issues" rel="noopener noreferrer">github.com/MbAIGC/GitFiles/issues</a>。
       </p>
     </article>
 
     <footer class="legal-footer">
-      <a href="./">Home</a>
+      <a href="./">首页</a>
       <span aria-hidden="true">·</span>
-      <a href="privacy.html">Privacy Policy</a>
+      <a href="privacy.html">隐私政策</a>
       <span aria-hidden="true">·</span>
-      <a href="terms.html">Terms of Service</a>
+      <a href="terms.html">服务条款</a>
     </footer>
   </main>
 </body>

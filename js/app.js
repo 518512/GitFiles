@@ -30,27 +30,27 @@ const App = (() => {
   let progressTimer = null;
 
   const USER_SECTIONS = [
-    { id: 'my-drive', icon: '📁', label: 'My Drive' },
-    { id: 'recent', icon: '🕐', label: 'Recent' },
-    { id: 'shared', icon: '👥', label: 'Shared with me' },
-    { id: 'starred', icon: '⭐', label: 'Starred' },
-    { id: 'trash', icon: '🗑️', label: 'Recycle Bin' },
+    { id: 'my-drive', icon: '📁', label: '我的云端硬盘' },
+    { id: 'recent', icon: '🕐', label: '最近使用' },
+    { id: 'shared', icon: '👥', label: '与我共享' },
+    { id: 'starred', icon: '⭐', label: '已加星标' },
+    { id: 'trash', icon: '🗑️', label: '回收站' },
   ];
 
   const LOCAL_DISK_SECTIONS = [
-    { id: 'my-drive', icon: '📁', label: 'My Drive' },
-    { id: 'trash', icon: '🗑️', label: 'Recycle Bin' },
+    { id: 'my-drive', icon: '📁', label: '文件' },
+    { id: 'trash', icon: '🗑️', label: '回收站' },
   ];
 
   const GITHUB_DISK_SECTIONS = [
-    { id: 'my-drive', icon: '📁', label: 'My Drive' },
+    { id: 'my-drive', icon: '📁', label: '文件' },
   ];
 
   const SECTION_LABELS = {
-    shared: 'Shared with me',
-    starred: 'Starred',
-    recent: 'Recent',
-    trash: 'Recycle Bin',
+    shared: '与我共享',
+    starred: '已加星标',
+    recent: '最近使用',
+    trash: '回收站',
   };
 
   const SECTION_BY_LABEL = Object.fromEntries(
@@ -84,10 +84,10 @@ const App = (() => {
     const el = $('#worker-session-state');
     if (!el) return;
     const labels = {
-      checking: 'GitHub session: checking',
-      connected: 'GitHub session: active',
-      expired: 'GitHub session: sign in required',
-      unavailable: 'GitHub API: unavailable',
+      checking: 'GitHub 会话：检查中',
+      connected: 'GitHub 会话：已连接',
+      expired: 'GitHub 会话：需要登录',
+      unavailable: 'GitHub API：不可用',
     };
     el.textContent = labels[state.githubSession] || labels.checking;
     el.dataset.state = state.githubSession;
@@ -114,43 +114,43 @@ const App = (() => {
     state.conflicts.push(conflict);
     $('#btn-conflict-center')?.classList.remove('hidden');
     showStatus(record.kind === 'transfer'
-      ? 'Repository transfer needs recovery. Review Conflict Center.'
-      : 'Remote update detected. Review Conflict Center.');
+      ? '仓库转移需要恢复，请查看冲突中心。'
+      : '检测到远端更新，请查看冲突中心。');
     return conflict;
   }
 
   async function openConflictCenter() {
     const conflicts = state.conflicts.slice().reverse();
     if (!conflicts.length) {
-      await Dialog.alert('No unresolved repository conflicts.', { title: 'Conflict Center' });
+      await Dialog.alert('暂无未解决的仓库冲突。', { title: '冲突中心' });
       return;
     }
     const selected = await Dialog.form({
-      title: `Conflict Center (${conflicts.length})`,
-      message: 'Select a repository conflict to inspect. No remote changes are overwritten automatically.',
+      title: `冲突中心（${conflicts.length}）`,
+      message: '请选择一个仓库冲突进行查看。远端更改不会被自动覆盖。',
       fields: [{
-        id: 'conflict', label: 'Unresolved conflict', type: 'select',
+        id: 'conflict', label: '未解决的冲突', type: 'select',
         options: conflicts.map((item) => ({
           value: item.id,
           label: item.kind === 'transfer'
             ? `${item.sourceRepository} → ${item.destinationRepository}`
-            : `${item.repository} | ${String(item.remoteHead || 'unknown').slice(0, 12)}`,
+            : `${item.repository} | ${String(item.remoteHead || '未知').slice(0, 12)}`,
         })),
       }],
-      submitLabel: 'Inspect',
+      submitLabel: '查看',
     });
     if (!selected) return;
     const current = state.conflicts.find((item) => item.id === selected.conflict);
     if (!current) return;
     const choice = await Dialog.choose({
-      title: 'Conflict details',
+      title: '冲突详情',
       message: current.kind === 'transfer'
-        ? `${current.sourceRepository} → ${current.destinationRepository}\n\nStage: ${current.stage}\nPaths: ${(current.paths || []).join(', ') || 'unknown'}\n\n${current.message}`
-        : `${current.repository}\n\nYour base: ${current.expectedHead || 'unknown'}\nRemote HEAD: ${current.remoteHead || 'unknown'}\n\n${current.message}`,
+        ? `${current.sourceRepository} → ${current.destinationRepository}\n\n阶段：${current.stage}\n路径：${(current.paths || []).join(', ') || '未知'}\n\n${current.message}`
+        : `${current.repository}\n\n本地基线：${current.expectedHead || '未知'}\n远端 HEAD：${current.remoteHead || '未知'}\n\n${current.message}`,
       buttons: [
-        { id: 'reload', label: 'Reload remote state', primary: true },
-        { id: 'dismiss', label: 'Dismiss record' },
-        { id: 'keep', label: 'Keep open' },
+        { id: 'reload', label: '重新加载远端状态', primary: true },
+        { id: 'dismiss', label: '忽略记录' },
+        { id: 'keep', label: '保持打开' },
       ],
     });
     if (choice === 'reload') {
@@ -165,7 +165,7 @@ const App = (() => {
           GithubDisk.invalidateRepoTree(current.destDiskId);
         } catch (error) {
           current.error = error.message;
-          current.message = 'Source deletion is still pending. Review the source repository state before retrying.';
+          current.message = '源仓库删除仍在等待中。请检查源仓库状态后再重试。';
           showStatus(current.message);
           return;
         }
@@ -411,7 +411,7 @@ const App = (() => {
     for (const name of folderNames) {
       const items = await listFn(token, parentId);
       const folder = items.find((f) => f.isFolder && f.name === name);
-      if (!folder) throw new Error(`Folder not found: ${name}`);
+      if (!folder) throw new Error(`找不到文件夹：${name}`);
       parentId = folder.id;
     }
     return parentId;
@@ -682,14 +682,14 @@ const App = (() => {
       ...users.map(async (user) => {
         try {
           if (user.scopes && user.scopes !== CONFIG.SCOPES) {
-            throw Object.assign(new Error('Scopes outdated'), { code: 'INSUFFICIENT_SCOPES' });
+            throw Object.assign(new Error('Google 授权范围已过期'), { code: 'INSUFFICIENT_SCOPES' });
           }
           const token = preloadedTokens[user.id] || await Auth.tryGetValidToken(user.id);
           if (!token) {
             const needsReauth = !Auth.isTokenFresh(user)
               || (user.scopes && user.scopes !== CONFIG.SCOPES);
             state.userQuotas[user.id] = {
-              label: needsReauth ? 'Re-login for storage' : 'Storage unavailable',
+              label: needsReauth ? '重新登录存储' : '存储不可用',
               shortLabel: '—',
               needsReauth,
             };
@@ -699,13 +699,13 @@ const App = (() => {
         } catch (err) {
           if (err.code === 'INSUFFICIENT_SCOPES' || isScopeError(err.message)) {
             state.userQuotas[user.id] = {
-              label: 'Re-login for storage',
+              label: '重新登录存储',
               shortLabel: '—',
               needsReauth: true,
             };
           } else {
             state.userQuotas[user.id] = {
-              label: 'Storage unavailable',
+              label: '存储不可用',
               shortLabel: '—',
             };
           }
@@ -716,7 +716,7 @@ const App = (() => {
           state.userQuotas[disk.id] = await LocalDisk.getStorageQuota(disk.id);
         } catch {
           state.userQuotas[disk.id] = {
-            label: 'Storage unavailable',
+            label: '存储不可用',
             shortLabel: '—',
           };
         }
@@ -726,7 +726,7 @@ const App = (() => {
           state.userQuotas[disk.id] = await GithubDisk.getStorageQuota(disk.id);
         } catch {
           state.userQuotas[disk.id] = {
-            label: 'Storage unavailable',
+            label: '存储不可用',
             shortLabel: '—',
           };
         }
@@ -980,7 +980,7 @@ const App = (() => {
       if (track) {
         track.setAttribute('aria-valuenow', String(snap.percent));
         const eta = OperationProgress.formatEta(snap.remainingMs);
-        if (eta) track.title = `~${eta} left`;
+        if (eta) track.title = `预计还需 ${eta}`;
       }
     });
 
@@ -1053,22 +1053,22 @@ const App = (() => {
 
   function getPendingStatusText(file) {
     if (file.pendingKind === 'delete') {
-      if (file.pendingStatus === 'pending') return 'Finishing delete…';
-      if (file.pendingStatus === 'error') return file.pendingError || 'Delete failed';
-      return 'Deleting…';
+      if (file.pendingStatus === 'pending') return '正在完成删除…';
+      if (file.pendingStatus === 'error') return file.pendingError || '删除失败';
+      return '正在删除…';
     }
-    if (state.processingItemIds.has(file.id)) return 'Deleting…';
-    if (file.pendingStatus === 'error') return file.pendingError || 'Failed';
+    if (state.processingItemIds.has(file.id)) return '正在删除…';
+    if (file.pendingStatus === 'error') return file.pendingError || '操作失败';
     if (file.pending && file.dateFormatted && !file.dateFormatted.includes('~')) return file.dateFormatted;
-    if (file.pendingStatus === 'saving') return 'Saving…';
-    if (file.pendingStatus === 'moving') return 'Moving…';
+    if (file.pendingStatus === 'saving') return '正在保存…';
+    if (file.pendingStatus === 'moving') return '正在移动…';
     if (file.pendingStatus === 'pending') {
-      if (file.pendingKind === 'save') return 'Pending save…';
-      if (file.pendingKind === 'move') return 'Pending movement…';
-      return 'Pending on GitHub…';
+      if (file.pendingKind === 'save') return '等待保存…';
+      if (file.pendingKind === 'move') return '等待移动…';
+      return '等待 GitHub 完成…';
     }
-    if (file.pendingStatus === 'syncing') return 'Uploading…';
-    return 'Syncing…';
+    if (file.pendingStatus === 'syncing') return '正在上传…';
+    return '正在同步…';
   }
 
   function renderFileStatusBadge(file) {
@@ -1094,7 +1094,7 @@ const App = (() => {
       item.dataset.id = file.id;
       const statusHtml = renderFileStatusBadge(file);
       item.innerHTML = `
-        <button type="button" class="item-more-btn" aria-label="Actions for ${escapeHtml(file.name)}">
+        <button type="button" class="item-more-btn" aria-label="${escapeHtml(file.name)} 的操作">
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
         </button>
         <div class="file-icon">${renderFileIcon(file)}</div>
@@ -1130,7 +1130,7 @@ const App = (() => {
         <span class="col-modified">${escapeHtml(modifiedLabel)}</span>
         <span class="col-size">${file.sizeFormatted}</span>
         <span class="col-type">${file.typeName}</span>
-        <button type="button" class="item-more-btn" aria-label="Actions for ${escapeHtml(file.name)}">
+        <button type="button" class="item-more-btn" aria-label="${escapeHtml(file.name)} 的操作">
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
         </button>
       `;
@@ -1164,7 +1164,7 @@ const App = (() => {
     a.download = file.name;
     a.click();
     URL.revokeObjectURL(url);
-    showStatus(`Downloading "${file.name}"`);
+    showStatus(`正在下载“${file.name}”`);
   }
 
   function openFile(file, userId = state.currentUserId, options = {}) {
@@ -1244,7 +1244,7 @@ const App = (() => {
     }
 
     const count = state.files.length;
-    $('#status-count').textContent = `${count} item${count !== 1 ? 's' : ''}`;
+    $('#status-count').textContent = `${count} 个项目`;
     syncProgressLoop();
   }
 
@@ -1339,7 +1339,7 @@ const App = (() => {
     if (userId) toggle.dataset.userId = userId;
     if (folderId) toggle.dataset.folderId = folderId;
     toggle.setAttribute('aria-expanded', String(expanded));
-    toggle.setAttribute('aria-label', expanded ? 'Collapse' : 'Expand');
+    toggle.setAttribute('aria-label', expanded ? '折叠' : '展开');
     toggle.innerHTML = '<span class="tree-chevron" aria-hidden="true"></span>';
     return toggle;
   }
@@ -1451,7 +1451,7 @@ const App = (() => {
     btn.dataset.treeMore = key;
     const remaining = total - limit;
     btn.textContent = '…';
-    btn.title = `Show more (${remaining} item${remaining !== 1 ? 's' : ''})`;
+    btn.title = `显示更多（剩余 ${remaining} 项）`;
     row.appendChild(btn);
     li.appendChild(row);
     container.appendChild(li);
@@ -1931,7 +1931,7 @@ const App = (() => {
           await loadTreeChildren(userId, null, folderId);
         } else {
           const token = await Auth.tryGetValidToken(userId);
-          if (!token) throw new Error('Google sign-in required — right-click the Google drive in the sidebar and choose Re-login');
+          if (!token) throw new Error('需要登录 Google：请右键点击侧栏中的 Google 云端硬盘并选择“重新登录”。');
           await loadTreeChildren(userId, token, folderId);
         }
         renderSidebarTree();
@@ -2045,11 +2045,11 @@ const App = (() => {
         refreshUserQuotas();
       } else {
         const userId = state.currentUserId || Auth.getActiveUser()?.id;
-        if (!userId) throw new Error('No drive selected');
+        if (!userId) throw new Error('未选择存储空间');
 
         if (LocalDisk.isLocalId(userId)) {
           const disk = LocalDisk.getDisk(userId);
-          if (!disk) throw new Error('Local storage not found');
+          if (!disk) throw new Error('找不到本地存储');
           state.currentUserId = userId;
 
           let files;
@@ -2066,7 +2066,7 @@ const App = (() => {
           refreshUserQuotas();
         } else if (GithubDisk.isGithubId(userId)) {
           const disk = GithubDisk.getDisk(userId);
-          if (!disk) throw new Error('GitHub storage not found');
+          if (!disk) throw new Error('找不到 GitHub 存储');
           state.currentUserId = userId;
           state.files = await GithubDisk.listFiles(userId, state.currentFolderId);
           state.breadcrumbs = await buildBreadcrumbs(null, state.currentFolderId, disk);
@@ -2076,7 +2076,7 @@ const App = (() => {
         } else {
           const token = await Auth.tryGetValidToken(userId);
           if (!token) {
-            throw new Error('Google sign-in required — right-click the Google drive in the sidebar and choose Re-login');
+            throw new Error('需要登录 Google：请右键点击侧栏中的 Google 云端硬盘并选择“重新登录”。');
           }
           const user = Auth.getUsers().find((u) => u.id === userId);
           Auth.setActiveUser(userId);
@@ -2343,6 +2343,10 @@ const App = (() => {
     const btn = $('#btn-sign-in-github');
     if (!btn || btn.disabled) return;
     btn.disabled = true;
+    const label = btn.querySelector('.btn-label');
+    const originalLabel = label?.textContent || '使用 GitHub 登录';
+    if (label) label.textContent = '正在连接 GitHub…';
+    btn.setAttribute('aria-busy', 'true');
     showLoginError('');
     try {
       // OAuth popup 优先；代理不可达时 acquireAccessToken 内部降级为 PAT 对话框。
@@ -2354,14 +2358,16 @@ const App = (() => {
     } catch (err) {
       const message = err?.message || String(err);
       if (!/sign-in cancelled|popup closed/i.test(message)) {
-        showLoginError(`GitHub sign-in failed: ${message}`);
+        showLoginError(`GitHub 登录失败：${message}`);
       }
     } finally {
+      if (label) label.textContent = originalLabel;
+      btn.removeAttribute('aria-busy');
       btn.disabled = false;
     }
   }
 
-  // 欢迎空态的 Add Repository 入口：点击后才发起 Mount（连接已有 ∥ 创建新仓库）
+  // 欢迎空态的添加仓库入口：点击后才发起 Mount（连接已有 ∥ 创建新仓库）
   async function addRepositoryFromWelcome() {
     const btn = $('#btn-add-repository');
     if (!btn || btn.disabled) return;
@@ -2373,7 +2379,7 @@ const App = (() => {
     } catch (err) {
       const message = err?.message || String(err);
       if (!/sign-in cancelled|popup closed/i.test(message)) {
-        showError(`Could not add repository: ${message}`);
+        showError(`添加仓库失败：${message}`);
       }
     } finally {
       btn.disabled = false;
@@ -2482,7 +2488,7 @@ const App = (() => {
 
   async function handleItemDrop(payload, target) {
     if (state.level !== 'home' && state.section !== 'my-drive') {
-      showError('Drag and drop is only available in My Drive.');
+      showError('拖放仅适用于文件区域。');
       return;
     }
     const { userId: sourceUserId, parentId: sourceParentId, item } = payload;
@@ -2496,7 +2502,7 @@ const App = (() => {
         target.destParentId,
         'cut'
       );
-      showStatus(`Moved "${item.name}"`);
+      showStatus(`已移动“${item.name}”`);
     } catch (err) {
       showError(err.message);
     } finally {
@@ -2599,9 +2605,9 @@ const App = (() => {
       try {
         const url = Router.getShareableUrl(getUrlSegments());
         await navigator.clipboard.writeText(url);
-        showStatus('Link copied to clipboard');
+        showStatus('链接已复制到剪贴板');
       } catch {
-        showError('Failed to copy link');
+        showError('复制链接失败');
       }
     });
 
@@ -2730,7 +2736,7 @@ const App = (() => {
           .then(() => {
             refreshUserQuotas();
             const user = Auth.getUsers().find((u) => u.id === userId);
-            showStatus(`Signed in as ${userLabel(user)}`);
+            showStatus(`已登录：${userLabel(user)}`);
           })
           .catch((err) => showError(err.message));
         return;
@@ -2865,7 +2871,7 @@ const App = (() => {
       const hint = document.querySelector('.login-hint');
       if (hint) {
         hint.textContent =
-          'Google sign-in is not configured (set the CONFIG_GOOGLE_CLIENT_ID build variable — see README "Configuring Client IDs").';
+          'Google 登录尚未配置（请设置 CONFIG_GOOGLE_CLIENT_ID 构建变量，参阅 README 的“配置客户端 ID”）。';
       }
     }
 
@@ -2893,7 +2899,7 @@ const App = (() => {
           showExplorer();
           const silentErrors = ['popup_closed_by_user', 'access_denied', 'interaction_required'];
           if (!silentErrors.includes(result.error)) {
-            showError(`Sign-in failed: ${result.error}`);
+            showError(`登录失败：${result.error}`);
           }
         }
         return;
@@ -2915,7 +2921,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const message = err?.message || String(err);
     const errorEl = document.querySelector('#login-error');
     if (errorEl) {
-      errorEl.textContent = `Application initialization failed: ${message}`;
+      errorEl.textContent = `应用初始化失败：${message}`;
       errorEl.classList.remove('hidden');
     }
   });

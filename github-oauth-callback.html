@@ -1,13 +1,13 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GitHub Sign-in</title>
+  <title>GitHub 登录</title>
   <script src="js/github-oauth-deliver.js"></script>
 </head>
-<body>
-  <p id="status">Completing GitHub sign-in…</p>
+<body class="oauth-callback-page">
+  <p id="status">正在完成 GitHub 登录…</p>
   <script>
     (function () {
       const statusEl = document.getElementById('status');
@@ -15,21 +15,21 @@
       GithubOAuthDeliver.deliverFromSearchParams();
 
       if (!params.get('state')) {
-        statusEl.textContent = 'Missing OAuth state. You can close this window.';
+        statusEl.textContent = '缺少 OAuth 状态参数，可以关闭此窗口。';
         return;
       }
 
       if (params.has('error')) {
-        statusEl.textContent = params.get('error_description') || params.get('error') || 'GitHub authorization failed.';
+        statusEl.textContent = params.get('error_description') || params.get('error') || 'GitHub 授权失败。';
         return;
       }
 
       if (!params.has('code')) {
-        statusEl.textContent = 'GitHub did not return an authorization code. You can close this window.';
+        statusEl.textContent = 'GitHub 未返回授权码，可以关闭此窗口。';
         return;
       }
 
-      statusEl.textContent = 'Signed in. This window will close automatically…';
+      statusEl.textContent = '登录成功，此窗口将自动关闭…';
       setTimeout(() => window.close(), 500);
     })();
   </script>

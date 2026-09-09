@@ -98,7 +98,7 @@ const GithubOAuthDeliver = (() => {
       style.textContent =
         'html.github-oauth-popup-callback body > * { visibility: hidden !important; }' +
         'html.github-oauth-popup-callback body::before {' +
-        'content: "Completing GitHub sign-in…"; display: block; padding: 2rem;' +
+        'content: "正在完成 GitHub 登录…"; display: block; padding: 2rem;' +
         'font: 16px system-ui, sans-serif; visibility: visible; position: fixed; inset: 0; background: #fff; }';
       document.head.appendChild(style);
       setTimeout(() => window.close(), 500);

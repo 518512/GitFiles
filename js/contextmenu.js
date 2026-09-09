@@ -1,16 +1,16 @@
 const ContextMenu = (() => {
   const NEW_FILE_TYPES = [
-    { type: 'txt', label: 'Text document (.txt)', icon: '📝', ext: '.txt', mimeType: 'text/plain', content: '', defaultName: 'New Text Document.txt' },
-    { type: 'json', label: 'JSON (.json)', icon: '{ }', ext: '.json', mimeType: 'application/json', content: '{\n  \n}\n', defaultName: 'New JSON.json' },
+    { type: 'txt', label: '文本文件（.txt）', icon: '📝', ext: '.txt', mimeType: 'text/plain', content: '', defaultName: '新建文本文档.txt' },
+    { type: 'json', label: 'JSON 文件（.json）', icon: '{ }', ext: '.json', mimeType: 'application/json', content: '{\n  \n}\n', defaultName: '新建 JSON 文件.json' },
   ];
 
   const NEW_GOOGLE_TYPES = [
-    { type: 'gdoc', label: 'Google Docs', icon: '📄', mimeType: 'application/vnd.google-apps.document', defaultName: 'Untitled document' },
-    { type: 'gsheet', label: 'Google Sheets', icon: '📊', mimeType: 'application/vnd.google-apps.spreadsheet', defaultName: 'Untitled spreadsheet' },
-    { type: 'gslides', label: 'Google Slides', icon: '📽️', mimeType: 'application/vnd.google-apps.presentation', defaultName: 'Untitled presentation' },
-    { type: 'gform', label: 'Google Form', icon: '📋', mimeType: 'application/vnd.google-apps.form', defaultName: 'Untitled form' },
-    { type: 'gdrawing', label: 'Google Drawing', icon: '🎨', mimeType: 'application/vnd.google-apps.drawing', defaultName: 'Untitled drawing' },
-    { type: 'gsite', label: 'Google Site', icon: '🌐', mimeType: 'application/vnd.google-apps.site', defaultName: 'Untitled site' },
+    { type: 'gdoc', label: 'Google Docs', icon: '📄', mimeType: 'application/vnd.google-apps.document', defaultName: '未命名文档' },
+    { type: 'gsheet', label: 'Google Sheets', icon: '📊', mimeType: 'application/vnd.google-apps.spreadsheet', defaultName: '未命名表格' },
+    { type: 'gslides', label: 'Google Slides', icon: '📽️', mimeType: 'application/vnd.google-apps.presentation', defaultName: '未命名演示文稿' },
+    { type: 'gform', label: 'Google Form', icon: '📋', mimeType: 'application/vnd.google-apps.form', defaultName: '未命名表单' },
+    { type: 'gdrawing', label: 'Google Drawing', icon: '🎨', mimeType: 'application/vnd.google-apps.drawing', defaultName: '未命名绘图' },
+    { type: 'gsite', label: 'Google Site', icon: '🌐', mimeType: 'application/vnd.google-apps.site', defaultName: '未命名网站' },
   ];
 
   function getFileTypeDef(fileType) {
@@ -21,10 +21,10 @@ const ContextMenu = (() => {
   function getClipboardSourceLabel() {
     if (!clipboard?.userId) return null;
     if (LocalDisk.isLocalId(clipboard.userId)) {
-      return LocalDisk.getDisk(clipboard.userId)?.name || 'Local storage';
+      return LocalDisk.getDisk(clipboard.userId)?.name || '本地存储';
     }
     if (GithubDisk.isGithubId(clipboard.userId)) {
-      return GithubDisk.getDisk(clipboard.userId)?.name || 'GitHub storage';
+      return GithubDisk.getDisk(clipboard.userId)?.name || 'GitHub 存储';
     }
     const user = Auth.getUsers().find((u) => u.id === clipboard.userId);
     return user ? Auth.formatDisplayEmail(user.email) : null;
@@ -162,8 +162,8 @@ const ContextMenu = (() => {
   function buildAddDiskMenuItems() {
     return [
       { action: 'add-google-drive', label: 'Google Drive', icon: '☁️' },
-      { action: 'add-local-disk', label: 'Local Storage', icon: '🗄️' },
-      { action: 'add-github-repo', label: 'GitHub repo', icon: '🐙' },
+      { action: 'add-local-disk', label: '本地存储', icon: '🗄️' },
+      { action: 'add-github-repo', label: 'GitHub 仓库', icon: '🐙' },
     ];
   }
 
@@ -172,63 +172,63 @@ const ContextMenu = (() => {
     const localCount = LocalDisk.getDisks().length;
     const githubCount = GithubDisk.getDisks().length;
     return [
-      { action: 'open', label: `Open ${typeof SITE !== 'undefined' ? SITE.name : 'GitFiles'}`, icon: '🏠' },
+      { action: 'open', label: `打开 ${typeof SITE !== 'undefined' ? SITE.name : 'GitFiles'}`, icon: '🏠' },
       { sep: true },
-      { header: 'Add storage' },
+      { header: '添加存储' },
       ...buildAddDiskMenuItems(),
       {
         action: 'eject-all',
-        label: 'Eject all drives',
+        label: '移除所有存储',
         icon: '⏏️',
         disabled: userCount === 0 && localCount === 0 && githubCount === 0,
       },
       { sep: true },
-      { action: 'root-info', label: 'Information', icon: 'ℹ️' },
+      { action: 'root-info', label: '属性', icon: 'ℹ️' },
       { sep: true },
-      { action: 'clear-app-cache', label: 'Clear app cache', icon: '🧹' },
+      { action: 'clear-app-cache', label: '清理应用缓存', icon: '🧹' },
       { sep: true },
-      { action: 'refresh', label: 'Refresh', icon: '🔄' },
+      { action: 'refresh', label: '刷新', icon: '🔄' },
     ];
   }
 
   function buildLocalDiskMenuItems() {
     return [
-      { action: 'open', label: 'Open My Drive', icon: '📂' },
+      { action: 'open', label: '打开我的云端硬盘', icon: '📂' },
       { sep: true },
-      { action: 'local-disk-info', label: 'Information', icon: 'ℹ️' },
+      { action: 'local-disk-info', label: '属性', icon: 'ℹ️' },
       { sep: true },
-      { action: 'rename-local-disk', label: 'Rename', icon: '✏️' },
+      { action: 'rename-local-disk', label: '重命名', icon: '✏️' },
       { sep: true },
-      { action: 'eject-local-disk', label: 'Eject (Remove)', icon: '🗑️' },
+      { action: 'eject-local-disk', label: '移除本地存储', icon: '🗑️' },
       { sep: true },
-      { action: 'refresh', label: 'Refresh', icon: '🔄' },
+      { action: 'refresh', label: '刷新', icon: '🔄' },
     ];
   }
 
   function buildGithubDiskMenuItems(disk) {
     const repoUrl = disk?.repoHtmlUrl || (disk ? `https://github.com/${disk.owner}/${disk.repo}` : '');
     return [
-      { action: 'open', label: 'Open My Drive', icon: '📂' },
+      { action: 'open', label: '打开我的云端硬盘', icon: '📂' },
       { sep: true },
-      { action: 'open-github', label: 'Open on GitHub', icon: '🌐', url: repoUrl },
-      { action: 'copy-link', label: 'Copy repository link', icon: '🔗', url: repoUrl },
+      { action: 'open-github', label: '在 GitHub 上打开', icon: '🌐', url: repoUrl },
+      { action: 'copy-link', label: '复制仓库链接', icon: '🔗', url: repoUrl },
       { sep: true },
-      { action: 'github-disk-info', label: 'Information', icon: 'ℹ️' },
+      { action: 'github-disk-info', label: '属性', icon: 'ℹ️' },
       { sep: true },
-      { action: 'reauth-github-disk', label: 'Re-authorize', icon: '🔁' },
-      { action: 'eject-github-disk', label: 'Eject', icon: '⏏️' },
+      { action: 'reauth-github-disk', label: '重新授权', icon: '🔁' },
+      { action: 'eject-github-disk', label: '移除', icon: '⏏️' },
       { sep: true },
-      { action: 'refresh', label: 'Refresh', icon: '🔄' },
+      { action: 'refresh', label: '刷新', icon: '🔄' },
     ];
   }
 
   function buildUserMenuItems(user) {
     const items = [
-      { action: 'open', label: 'Open My Drive', icon: '📂' },
+      { action: 'open', label: '打开我的云端硬盘', icon: '📂' },
       { sep: true },
-      { action: 'user-info', label: 'Information', icon: 'ℹ️' },
+      { action: 'user-info', label: '属性', icon: 'ℹ️' },
       { sep: true },
-      { header: 'Google services' },
+      { header: 'Google 服务' },
       ...USER_SERVICE_LINKS.map((svc) => ({
         action: 'open-service',
         label: svc.label,
@@ -236,12 +236,12 @@ const ContextMenu = (() => {
         url: svc.url(user.email),
       })),
       { sep: true },
-      { action: 'copy-email', label: 'Copy email', icon: '📎' },
+      { action: 'copy-email', label: '复制邮箱', icon: '📎' },
       { sep: true },
-      { action: 'reauth-user', label: 'Re-login', icon: '🔑' },
-      { action: 'sign-out-user', label: 'Eject (Log Out)', icon: '⏏️' },
+      { action: 'reauth-user', label: '重新登录', icon: '🔑' },
+      { action: 'sign-out-user', label: '退出并移除', icon: '⏏️' },
       { sep: true },
-      { action: 'refresh', label: 'Refresh', icon: '🔄' },
+      { action: 'refresh', label: '刷新', icon: '🔄' },
     ];
     return items;
   }
@@ -264,30 +264,30 @@ const ContextMenu = (() => {
 
     if (isLocalDisk) {
       const disk = getContextLocalDisk();
-      return disk ? buildLocalDiskMenuItems(disk) : [{ action: 'open', label: 'Open', icon: '📂' }];
+      return disk ? buildLocalDiskMenuItems(disk) : [{ action: 'open', label: '打开', icon: '📂' }];
     }
 
     if (isGithubDisk) {
       const disk = getContextGithubDisk();
-      return disk ? buildGithubDiskMenuItems(disk) : [{ action: 'open', label: 'Open', icon: '📂' }];
+      return disk ? buildGithubDiskMenuItems(disk) : [{ action: 'open', label: '打开', icon: '📂' }];
     }
 
     if (isUser) {
       const user = getContextUser();
-      return user ? buildUserMenuItems(user) : [{ action: 'open', label: 'Open', icon: '📂' }];
+      return user ? buildUserMenuItems(user) : [{ action: 'open', label: '打开', icon: '📂' }];
     }
 
     if (!isEmpty && file) {
-      items.push({ action: 'open', label: 'Open', icon: '📂' });
+      items.push({ action: 'open', label: '打开', icon: '📂' });
       if (!file.isFolder) {
-        items.push({ action: 'open-tab', label: 'Open in new tab', icon: '🔗' });
+        items.push({ action: 'open-tab', label: '在新标签页打开', icon: '🔗' });
       }
       items.push({ sep: true });
     }
 
     if (canEditDrive() && !isEmpty) {
-      items.push({ action: 'cut', label: 'Cut', icon: '✂️', shortcut: 'Ctrl+X' });
-      items.push({ action: 'copy', label: 'Copy', icon: '📋', shortcut: 'Ctrl+C' });
+      items.push({ action: 'cut', label: '剪切', icon: '✂️', shortcut: 'Ctrl+X' });
+      items.push({ action: 'copy', label: '复制', icon: '📋', shortcut: 'Ctrl+C' });
     }
 
     if (canEditDrive() && (isEmpty || file?.isFolder)) {
@@ -296,7 +296,7 @@ const ContextMenu = (() => {
       const crossUser = canPaste && clipboard.userId !== context.userId;
       items.push({
         action: 'paste',
-        label: crossUser ? `Paste from ${sourceLabel}` : 'Paste',
+        label: crossUser ? `从 ${sourceLabel} 粘贴` : '粘贴',
         icon: '📥',
         shortcut: 'Ctrl+V',
         disabled: !canPaste,
@@ -306,9 +306,9 @@ const ContextMenu = (() => {
     if (canEditDrive()) {
       if (!isEmpty) items.push({ sep: true });
       if (isEmpty || file?.isFolder) {
-        items.push({ action: 'new-folder', label: 'New folder', icon: '📁+' });
+        items.push({ action: 'new-folder', label: '新建文件夹', icon: '📁+' });
         items.push({ sep: true });
-        items.push({ header: 'New file' });
+        items.push({ header: '新建文件' });
         NEW_FILE_TYPES.forEach((type) => {
           items.push({
             action: 'new-file',
@@ -319,7 +319,7 @@ const ContextMenu = (() => {
         });
         if (!isLocalCtx() && !isGithubCtx()) {
           items.push({ sep: true });
-          items.push({ header: 'Google Workspace' });
+          items.push({ header: 'Google Workspace 文件' });
           NEW_GOOGLE_TYPES.forEach((type) => {
             items.push({
               action: 'new-file',
@@ -331,48 +331,53 @@ const ContextMenu = (() => {
         }
       }
       if (!isEmpty) {
-        items.push({ action: 'rename', label: 'Rename', icon: '✏️', shortcut: 'F2' });
-        items.push({ action: 'delete', label: 'Move to Recycle Bin', icon: '🗑️', shortcut: 'Del' });
+        items.push({ action: 'rename', label: '重命名', icon: '✏️', shortcut: 'F2' });
+        items.push({
+          action: 'delete',
+          label: isGithubCtx() ? '永久删除' : '移至回收站',
+          icon: '🗑️',
+          shortcut: 'Del',
+        });
       }
     }
 
     if (canEditTrash() && !isEmpty) {
       items.push({ sep: true });
-      items.push({ action: 'restore', label: 'Restore', icon: '♻️' });
-      items.push({ action: 'delete-forever', label: 'Delete permanently', icon: '🗑️', shortcut: 'Del' });
+      items.push({ action: 'restore', label: '恢复', icon: '♻️' });
+      items.push({ action: 'delete-forever', label: '永久删除', icon: '🗑️', shortcut: 'Del' });
     }
 
     if (!isEmpty && file && !file.isFolder) {
       items.push({ sep: true });
-      items.push({ action: 'download', label: 'Download', icon: '⬇️' });
+      items.push({ action: 'download', label: '下载', icon: '⬇️' });
     }
 
     if (!isEmpty && file?.webViewLink && isGithubCtx()) {
       items.push({ sep: true });
-      items.push({ action: 'open-github', label: 'Open on GitHub', icon: '🌐', url: file.webViewLink });
+      items.push({ action: 'open-github', label: '在 GitHub 上打开', icon: '🌐', url: file.webViewLink });
     }
 
     if (!isEmpty && file?.webViewLink) {
-      items.push({ action: 'copy-link', label: 'Copy link', icon: '🔗', url: file.webViewLink });
+      items.push({ action: 'copy-link', label: '复制链接', icon: '🔗', url: file.webViewLink });
     }
 
     if (isEmpty && isGithubCtx()) {
       const folderUrl = getGithubFolderWebUrl(context);
       if (folderUrl) {
         items.push({ sep: true });
-        items.push({ action: 'open-github', label: 'Open on GitHub', icon: '🌐', url: folderUrl });
-        items.push({ action: 'copy-link', label: 'Copy link', icon: '🔗', url: folderUrl });
+        items.push({ action: 'open-github', label: '在 GitHub 上打开', icon: '🌐', url: folderUrl });
+        items.push({ action: 'copy-link', label: '复制链接', icon: '🔗', url: folderUrl });
       }
     }
 
     if (!isEmpty && file) {
       items.push({ sep: true });
-      items.push({ action: 'properties', label: 'Properties', icon: 'ℹ️' });
+      items.push({ action: 'properties', label: '属性', icon: 'ℹ️' });
     }
 
     if (isEmpty || file) {
       items.push({ sep: true });
-      items.push({ action: 'refresh', label: 'Refresh', icon: '🔄' });
+      items.push({ action: 'refresh', label: '刷新', icon: '🔄' });
     }
 
     return items;
@@ -383,10 +388,10 @@ const ContextMenu = (() => {
   }
 
   function getMenuTitle(ctx = context) {
-    if (!ctx) return 'Actions';
-    if (ctx.type === 'add-disk') return 'Add storage';
+    if (!ctx) return '操作';
+    if (ctx.type === 'add-disk') return '添加存储';
     if (ctx.type === 'root') return typeof SITE !== 'undefined' ? SITE.name : 'GitFiles';
-    if (ctx.type === 'empty') return 'Folder actions';
+    if (ctx.type === 'empty') return '文件夹操作';
     if ((ctx.type === 'local-disk' || ctx.file?.isLocalDisk) && (ctx.disk || getContextLocalDisk(ctx))) {
       return (ctx.disk || getContextLocalDisk(ctx)).name;
     }
@@ -423,7 +428,7 @@ const ContextMenu = (() => {
       menuEl.innerHTML = `
         <div class="ctx-sheet-header">
           <span class="ctx-sheet-title">${escapeHtml(title)}</span>
-          <button type="button" class="ctx-sheet-close" data-action="close-sheet" aria-label="Close">✕</button>
+          <button type="button" class="ctx-sheet-close" data-action="close-sheet" aria-label="关闭">✕</button>
         </div>
         <div class="ctx-sheet-body">${renderMenuItemsHtml(items)}</div>
       `;
@@ -484,12 +489,12 @@ const ContextMenu = (() => {
   function buildGeneralUserRows(user) {
     const active = Auth.getActiveUser();
     return [
-      { section: 'Account' },
-      ['Display name', user.name],
+      { section: '账号' },
+      ['显示名称', user.name],
       ['Email', user.email],
-      ['Label', Auth.formatDisplayEmail(user.email)],
-      ['Active in app', active?.id === user.id ? 'Yes' : 'No'],
-      { section: 'Profile' },
+      ['标签', Auth.formatDisplayEmail(user.email)],
+      ['在应用中启用', active?.id === user.id ? '是' : '否'],
+      { section: '个人资料' },
       ['Photo', user.picture || '—'],
     ];
   }
@@ -499,12 +504,12 @@ const ContextMenu = (() => {
     const quota = await resolveUserQuota(user.id);
 
     rows.push(
-      { section: 'Session' },
+      { section: '会话' },
       ['User ID', user.id],
-      ['Token expires', formatDateTime(user.expiresAt)],
-      ['Token status', user.expiresAt > Date.now() ? 'Valid' : 'Expired'],
+      ['令牌过期时间', formatDateTime(user.expiresAt)],
+      ['令牌状态', user.expiresAt > Date.now() ? '有效' : '已过期'],
       ['Scopes', user.scopes || CONFIG.SCOPES],
-      { section: 'Storage' },
+      { section: '存储' },
       ['Used', quota?.usageFormatted || '—'],
       ['Limit', quota?.limitFormatted || '—'],
       ['Available', quota?.availableFormatted || '—'],
@@ -548,16 +553,16 @@ const ContextMenu = (() => {
     const localProfile = LocalUser.getProfile();
     const rows = [
       { section: typeof SITE !== 'undefined' ? SITE.name : 'GitFiles' },
-      ['Location', 'Root'],
-      ['Mounted drives', String(users.length + localDisks.length + githubDisks.length)],
-      ['Google drives', String(users.length)],
-      ['Local storage volumes', String(localDisks.length)],
-      ['GitHub storage repos', String(githubDisks.length)],
-      ['Active drive', active ? Auth.formatDisplayEmail(active.email) : '—'],
-      { section: 'Local profile' },
-      ['Name', localProfile.name],
-      ['Local storage owned', String(localDisks.length + githubDisks.length)],
-      { section: 'Google drives' },
+      ['位置', '根目录'],
+      ['已挂载存储', String(users.length + localDisks.length + githubDisks.length)],
+      ['Google 存储', String(users.length)],
+      ['本地存储卷', String(localDisks.length)],
+      ['GitHub 存储仓库', String(githubDisks.length)],
+      ['当前存储', active ? Auth.formatDisplayEmail(active.email) : '—'],
+      { section: '本地资料' },
+      ['名称', localProfile.name],
+      ['自有本地存储', String(localDisks.length + githubDisks.length)],
+      { section: 'Google 存储' },
     ];
 
     let totalUsage = 0;
@@ -689,7 +694,7 @@ const ContextMenu = (() => {
           if (!name?.trim() || name.trim() === disk.name) break;
           await LocalDisk.renameDisk(disk.id, name.trim());
           app.refresh?.();
-          app.showStatus(`Renamed to "${name.trim()}"`);
+          app.showStatus(`已重命名为“${name.trim()}”`);
           break;
         }
         case 'eject-local-disk': {
@@ -764,7 +769,7 @@ const ContextMenu = (() => {
         case 'copy-email':
           if (user?.email) {
             await navigator.clipboard.writeText(user.email);
-            app.showStatus('Email copied');
+            app.showStatus('邮箱已复制');
           }
           break;
         case 'reauth-user':
@@ -772,7 +777,7 @@ const ContextMenu = (() => {
             Auth.setActiveUser(user.id);
             await Auth.refreshTokenInteractive(user.id);
             app.refreshUserQuotas?.();
-            app.showStatus(`Signed in as ${Auth.formatDisplayEmail(user.email)}`);
+            app.showStatus(`已登录：${Auth.formatDisplayEmail(user.email)}`);
           }
           break;
         case 'sign-out-user':
@@ -799,19 +804,19 @@ const ContextMenu = (() => {
           break;
         case 'cut':
           if (file?.pending) {
-            app.showStatus('This item is still syncing with GitHub');
+            app.showStatus('此项目仍在与 GitHub 同步');
             break;
           }
           clipboard = { mode: 'cut', userId: ctx.userId, items: [file], parentId: file.parents?.[0] || ctx.folderId };
-          app.showStatus(`Cut "${file.name}" — paste into any user folder`);
+          app.showStatus(`已剪切“${file.name}”，可粘贴到任意用户文件夹`);
           break;
         case 'copy':
           if (file?.pending) {
-            app.showStatus('This item is still syncing with GitHub');
+            app.showStatus('此项目仍在与 GitHub 同步');
             break;
           }
           clipboard = { mode: 'copy', userId: ctx.userId, items: [file] };
-          app.showStatus(`Copied "${file.name}" — paste into any user folder`);
+          app.showStatus(`已复制“${file.name}”，可粘贴到任意用户文件夹`);
           break;
         case 'paste':
           await pasteItems(ctx);
@@ -846,7 +851,7 @@ const ContextMenu = (() => {
           const linkToCopy = actionUrl || file?.webViewLink;
           if (linkToCopy) {
             await navigator.clipboard.writeText(linkToCopy);
-            app.showStatus('Link copied');
+            app.showStatus('链接已复制');
           }
           break;
         }
@@ -887,13 +892,13 @@ const ContextMenu = (() => {
         ].join('\n');
 
     const values = await Dialog.form({
-      title: 'Create local storage',
+      title: '创建本地存储',
       message: storageMessage,
       fields: [
-        { id: 'name', label: 'Storage name', value: 'Local Storage' },
+        { id: 'name', label: '存储名称', value: '本地存储' },
         {
           id: 'sizeMb',
-          label: 'Storage size',
+          label: '存储大小',
           type: 'range',
           min: 0,
           max: maxMb,
@@ -918,30 +923,30 @@ const ContextMenu = (() => {
     const disk = await LocalDisk.createDisk(name, sizeLimit);
     app.refresh?.();
     const sizeLabel = sizeLimit ? LocalDisk.formatSize(sizeLimit) : 'no limit';
-    app.showStatus(`Created local storage "${disk.name}" (${sizeLabel})`);
+    app.showStatus(`已创建本地存储“${disk.name}”（${sizeLabel}）`);
   }
 
   async function createGithubDisk() {
     try {
       const disk = await GithubDisk.ensureGithubStorage();
       app.refresh?.();
-      app.showStatus(`Connected GitHub storage "${disk.name}"`);
+      app.showStatus(`已连接 GitHub 存储“${disk.name}”`);
     } catch (err) {
       const message = err.message || '';
       if (/sign-in cancelled/i.test(message)) return;
       if (/invalid github token|write access|could not access|already connected|repository name cannot be empty|repository creation failed|could not create a drive repository/i.test(message)) {
-        await Dialog.alert(message, { title: 'GitHub sign-in failed' });
+        await Dialog.alert(message, { title: 'GitHub 登录失败' });
         return;
       }
       if (/popup closed|63342|python3 serve\.py|failed to fetch|token proxy|token exchange|GITHUB_TOKEN_EXCHANGE_URL|static hosting|not reachable|IntelliJ|WebStorm preview/i.test(message)) {
-        await Dialog.alert(message, { title: 'GitHub sign-in failed' });
+        await Dialog.alert(message, { title: 'GitHub 登录失败' });
         return;
       }
       if (/redirect_uri|misconfigured/i.test(message)) {
-        await Dialog.alert(message, { title: 'GitHub OAuth callback mismatch' });
+        await Dialog.alert(message, { title: 'GitHub OAuth 回调地址不匹配' });
         return;
       }
-      await Dialog.alert(message || 'GitHub sign-in could not be started.', { title: 'GitHub sign-in failed' });
+      await Dialog.alert(message || '无法开始 GitHub 登录。', { title: 'GitHub 登录失败' });
     }
   }
 
@@ -1019,7 +1024,7 @@ const ContextMenu = (() => {
       ['Repository', `${disk.owner}/${disk.repo}`],
       ['Branch', disk.branch || 'main'],
       ['Created', formatDateTime(disk.createdAt)],
-      { section: 'Account' },
+      { section: '账号' },
       ['Login', disk.accountLogin || '—'],
       ['Display name', disk.accountName || disk.accountLogin || '—'],
       { section: 'Usage' },
@@ -1328,7 +1333,7 @@ const ContextMenu = (() => {
     );
 
     if (clipboard.mode === 'cut') clipboard = null;
-    app.showStatus(crossDrive ? 'Pasted from another drive' : 'Paste complete');
+    app.showStatus(crossDrive ? '已从其他存储粘贴' : '粘贴完成');
   }
 
   async function copyLocalItemToDisk(sourceDiskId, destDiskId, item, parentId) {
@@ -1458,14 +1463,14 @@ const ContextMenu = (() => {
 
   async function createFolder(ctx) {
     const driveId = getDriveId(ctx);
-    const name = await Dialog.prompt('New folder name:', '', { title: 'New folder' });
+    const name = await Dialog.prompt('新建文件夹名称：', '', { title: '新建文件夹' });
     if (!name?.trim()) return;
 
     const resolved = await resolveCreateName(ctx, name.trim(), true);
     if (!resolved) return;
 
     if (resolved.mode === 'replace') {
-      app.showStatus(`Folder "${resolved.name}" already exists`);
+      app.showStatus(`文件夹“${resolved.name}”已经存在`);
       await app.refresh();
       return;
     }
@@ -1482,14 +1487,14 @@ const ContextMenu = (() => {
       }
     } catch (err) {
       if (isGithubCtx(ctx) && GithubDisk.isDuplicateNameError(err)) {
-        app.showError(`A folder named "${resolved.name}" already exists in this location.`);
+        app.showError(`文件夹“${resolved.name}”在此位置已经存在。`);
         return;
       }
       throw err;
     }
     app.clearTreeCache?.(driveId);
     await app.refresh();
-    app.showStatus(`Created folder "${resolved.name}"`);
+    app.showStatus(`已创建文件夹“${resolved.name}”`);
   }
 
   async function createNewFile(fileType, ctx) {
@@ -1497,7 +1502,7 @@ const ContextMenu = (() => {
     const type = getFileTypeDef(fileType);
     if (!type) return;
 
-    let name = await Dialog.prompt('Name:', type.defaultName, { title: 'New file' });
+    let name = await Dialog.prompt('名称：', type.defaultName, { title: '新建文件' });
     if (!name?.trim()) return;
     name = name.trim();
 
@@ -1517,13 +1522,13 @@ const ContextMenu = (() => {
       }
       app.clearTreeCache?.(driveId);
       await app.refresh();
-      app.showStatus(resolved.mode === 'replace' ? `Replaced "${name}"` : `Created "${name}"`);
+      app.showStatus(resolved.mode === 'replace' ? `已替换“${name}”` : `已创建“${name}”`);
       return;
     }
 
     if (isGithubCtx(ctx)) {
       if (type.mimeType.startsWith('application/vnd.google-apps.')) {
-        throw new Error('Google Workspace files are not supported in GitHub storage');
+        throw new Error('GitHub 存储不支持 Google Workspace 文件');
       }
       try {
         if (resolved.mode === 'replace') {
@@ -1533,14 +1538,14 @@ const ContextMenu = (() => {
         }
       } catch (err) {
         if (GithubDisk.isDuplicateNameError(err)) {
-          app.showError(`A file named "${name}" already exists in this location.`);
+          app.showError(`文件“${name}”在此位置已经存在。`);
           return;
         }
         throw err;
       }
       app.clearTreeCache?.(driveId);
       await app.refresh();
-      app.showStatus(resolved.mode === 'replace' ? `Replaced "${name}"` : `Created "${name}"`);
+      app.showStatus(resolved.mode === 'replace' ? `已替换“${name}”` : `已创建“${name}”`);
       return;
     }
 
@@ -1549,7 +1554,7 @@ const ContextMenu = (() => {
       const created = await Drive.createGoogleApp(token, parentId, name, type.mimeType);
       app.clearTreeCache?.(driveId);
       await app.refresh();
-      app.showStatus(`Created "${name}"`);
+      app.showStatus(`已创建“${name}”`);
       if (created.webViewLink) window.open(created.webViewLink, '_blank');
       return;
     }
@@ -1557,13 +1562,13 @@ const ContextMenu = (() => {
     await Drive.createFile(token, parentId, name, type.mimeType, type.content);
     app.clearTreeCache?.(driveId);
     await app.refresh();
-    app.showStatus(`Created "${name}"`);
+    app.showStatus(`已创建“${name}”`);
   }
 
   async function renameItem(ctx) {
     const driveId = getDriveId(ctx);
     const file = ctx.file;
-    const name = await Dialog.prompt('Rename:', file.name, { title: 'Rename' });
+    const name = await Dialog.prompt('重命名：', file.name, { title: '重命名' });
     if (!name?.trim() || name.trim() === file.name) return;
     if (isLocalCtx(ctx)) {
       await LocalDisk.renameFile(driveId, file.id, name.trim());
@@ -1575,7 +1580,7 @@ const ContextMenu = (() => {
     }
     app.clearTreeCache?.(driveId);
     await app.refresh();
-    app.showStatus(`Renamed to "${name.trim()}"`);
+    app.showStatus(`已重命名为“${name.trim()}”`);
   }
 
   function beginDeleteProgress(file) {
@@ -1593,23 +1598,33 @@ const ContextMenu = (() => {
   async function trashItem(ctx) {
     const driveId = getDriveId(ctx);
     const file = ctx.file;
+    const githubDelete = isGithubCtx(ctx);
+    const confirmMessage = githubDelete
+      ? `永久删除“${file.name}”？这会创建 Git 提交，且无法撤销。`
+      : `将“${file.name}”移至回收站？`;
     if (!await Dialog.confirm(
-      `Move "${file.name}" to Recycle Bin?`,
-      { title: 'Move to Recycle Bin', confirmLabel: 'Move to Recycle Bin', danger: true }
+      confirmMessage,
+      {
+        title: githubDelete ? '永久删除' : '移至回收站',
+        confirmLabel: githubDelete ? '删除' : '移至回收站',
+        danger: true,
+      }
     )) return;
     if (isGithubCtx(ctx)) beginDeleteProgress(file);
     try {
       if (isLocalCtx(ctx)) {
         await LocalDisk.trashFile(driveId, file.id);
       } else if (isGithubCtx(ctx)) {
-        await GithubDisk.trashFile(driveId, file.id);
+        await GithubDisk.deleteFile(driveId, file.id);
       } else {
         const token = await getToken(ctx);
         await Drive.trashFile(token, file.id);
       }
       app.clearTreeCache?.(driveId);
       await app.refresh();
-      app.showStatus(`Moved "${file.name}" to Recycle Bin`);
+      app.showStatus(githubDelete
+        ? `已从 GitHub 仓库永久删除“${file.name}”`
+        : `已将“${file.name}”移至回收站`);
     } catch (err) {
       app.showError(err.message);
     } finally {
@@ -1629,15 +1644,15 @@ const ContextMenu = (() => {
       await Drive.restoreFile(token, file.id);
     }
     await app.refresh();
-    app.showStatus(`Restored "${file.name}"`);
+    app.showStatus(`已恢复“${file.name}”`);
   }
 
   async function deleteForever(ctx) {
     const driveId = getDriveId(ctx);
     const file = ctx.file;
     if (!await Dialog.confirm(
-      `Permanently delete "${file.name}"? This cannot be undone.`,
-      { title: 'Delete permanently', confirmLabel: 'Delete', danger: true }
+      `永久删除“${file.name}”？此操作无法撤销。`,
+      { title: '永久删除', confirmLabel: '删除', danger: true }
     )) return;
     if (isGithubCtx(ctx)) beginDeleteProgress(file);
     try {
@@ -1650,7 +1665,7 @@ const ContextMenu = (() => {
         await Drive.deleteFile(token, file.id);
       }
       await app.refresh();
-      app.showStatus(`Deleted "${file.name}" permanently`);
+      app.showStatus(`已永久删除“${file.name}”`);
     } catch (err) {
       app.showError(err.message);
     } finally {

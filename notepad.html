@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
@@ -93,78 +93,78 @@
           <svg class="notepad-app-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
             <path fill="currentColor" d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4zM8 13h8v2H8v-2zm0 4h5v2H8v-2z"/>
           </svg>
-          <span id="notepad-title" class="notepad-title">Untitled - Notepad</span>
+          <span id="notepad-title" class="notepad-title">未命名 - 记事本</span>
         </div>
         <div class="title-bar-controls">
-          <button type="button" class="title-btn" aria-label="Minimize" disabled>─</button>
-          <button type="button" class="title-btn" aria-label="Maximize" disabled>□</button>
-          <button type="button" class="title-btn close notepad-close" aria-label="Close">✕</button>
+          <button type="button" class="title-btn" aria-label="最小化" disabled>─</button>
+          <button type="button" class="title-btn" aria-label="最大化" disabled>□</button>
+          <button type="button" class="title-btn close notepad-close" aria-label="关闭">✕</button>
         </div>
       </div>
       <div class="notepad-menubar">
         <div class="notepad-menu">
-          <span class="notepad-menu-label">File</span>
+          <span class="notepad-menu-label">文件</span>
           <div class="notepad-menu-dropdown">
-            <button type="button" data-notepad-action="save">Save <span class="notepad-kbd">Ctrl+S</span></button>
-            <button type="button" data-notepad-action="save-as">Save As…</button>
+            <button type="button" data-notepad-action="save">保存 <span class="notepad-kbd">Ctrl+S</span></button>
+            <button type="button" data-notepad-action="save-as">另存为…</button>
             <div class="notepad-menu-sep"></div>
-            <button type="button" data-notepad-action="print">Print…</button>
+            <button type="button" data-notepad-action="print">打印…</button>
             <div class="notepad-menu-sep"></div>
-            <button type="button" data-notepad-action="close">Exit <span class="notepad-kbd">Ctrl+W</span></button>
+            <button type="button" data-notepad-action="close">退出 <span class="notepad-kbd">Ctrl+W</span></button>
           </div>
         </div>
         <div class="notepad-menu">
-          <span class="notepad-menu-label">Edit</span>
+          <span class="notepad-menu-label">编辑</span>
           <div class="notepad-menu-dropdown">
-            <button type="button" data-notepad-action="find">Find… <span class="notepad-kbd">Ctrl+F</span></button>
-            <button type="button" data-notepad-action="replace">Replace… <span class="notepad-kbd">Ctrl+H</span></button>
+            <button type="button" data-notepad-action="find">查找… <span class="notepad-kbd">Ctrl+F</span></button>
+            <button type="button" data-notepad-action="replace">替换… <span class="notepad-kbd">Ctrl+H</span></button>
             <div class="notepad-menu-sep"></div>
-            <button type="button" data-notepad-action="select-all">Select All</button>
-            <button type="button" data-notepad-action="time-date">Time/Date</button>
+            <button type="button" data-notepad-action="select-all">全选</button>
+            <button type="button" data-notepad-action="time-date">时间/日期</button>
           </div>
         </div>
         <div class="notepad-menu">
-          <span class="notepad-menu-label">Format</span>
+          <span class="notepad-menu-label">格式</span>
           <div class="notepad-menu-dropdown">
-            <button type="button" id="notepad-wrap-toggle" data-notepad-action="wrap" class="active" aria-pressed="true">Word Wrap</button>
+            <button type="button" id="notepad-wrap-toggle" data-notepad-action="wrap" class="active" aria-pressed="true">自动换行</button>
           </div>
         </div>
         <div class="notepad-menu">
-          <span class="notepad-menu-label">Help</span>
+          <span class="notepad-menu-label">帮助</span>
           <div class="notepad-menu-dropdown">
-            <button type="button" data-notepad-action="about">About Notepad</button>
+            <button type="button" data-notepad-action="about">关于记事本</button>
           </div>
         </div>
       </div>
       <div class="notepad-toolbar">
-        <button type="button" class="notepad-tool-btn notepad-tool-btn--primary" data-notepad-action="save" title="Save">
+        <button type="button" class="notepad-tool-btn notepad-tool-btn--primary" data-notepad-action="save" title="保存">
           <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M17 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7l-4-4zm-5 16a3 3 0 1 1 0-6 3 3 0 0 1 0 6zm3-9H5V5h10v5z"/></svg>
-          Save
+          保存
         </button>
         <span class="notepad-toolbar-sep" aria-hidden="true"></span>
-        <button type="button" class="notepad-tool-btn" id="notepad-undo-btn" data-notepad-action="undo" title="Undo" disabled>Undo</button>
-        <button type="button" class="notepad-tool-btn" id="notepad-redo-btn" data-notepad-action="redo" title="Redo" disabled>Redo</button>
+        <button type="button" class="notepad-tool-btn" id="notepad-undo-btn" data-notepad-action="undo" title="撤销" disabled>撤销</button>
+        <button type="button" class="notepad-tool-btn" id="notepad-redo-btn" data-notepad-action="redo" title="重做" disabled>重做</button>
         <span class="notepad-toolbar-sep" aria-hidden="true"></span>
-        <button type="button" class="notepad-tool-btn" data-notepad-action="find" title="Find">Find</button>
-        <button type="button" class="notepad-tool-btn" data-notepad-action="find-replace" title="Find and replace">Find &amp; Replace</button>
+        <button type="button" class="notepad-tool-btn" data-notepad-action="find" title="查找">查找</button>
+        <button type="button" class="notepad-tool-btn" data-notepad-action="find-replace" title="查找和替换">查找和替换</button>
       </div>
-      <div id="notepad-find-bar" class="notepad-find-bar hidden" role="search" aria-label="Find and replace">
+      <div id="notepad-find-bar" class="notepad-find-bar hidden" role="search" aria-label="查找和替换">
         <div class="notepad-find-row">
           <label class="notepad-find-field">
-            <span class="notepad-find-label">Find</span>
-            <input type="text" id="notepad-find-input" class="notepad-find-input" autocomplete="off" spellcheck="false" aria-label="Find">
+            <span class="notepad-find-label">查找</span>
+            <input type="text" id="notepad-find-input" class="notepad-find-input" autocomplete="off" spellcheck="false" aria-label="查找">
           </label>
           <label class="notepad-find-field notepad-find-field--replace">
-            <span class="notepad-find-label">Replace</span>
-            <input type="text" id="notepad-find-replace" class="notepad-find-input" autocomplete="off" spellcheck="false" aria-label="Replace with">
+            <span class="notepad-find-label">替换</span>
+            <input type="text" id="notepad-find-replace" class="notepad-find-input" autocomplete="off" spellcheck="false" aria-label="替换为">
           </label>
         </div>
         <div class="notepad-find-actions">
-          <button type="button" class="notepad-find-btn" data-find-action="prev" title="Find previous">◀</button>
-          <button type="button" class="notepad-find-btn" data-find-action="next" title="Find next">▶</button>
-          <button type="button" class="notepad-find-btn notepad-find-btn--replace" data-find-action="replace">Replace</button>
-          <button type="button" class="notepad-find-btn notepad-find-btn--replace" data-find-action="replace-all">Replace all</button>
-          <button type="button" class="notepad-find-btn notepad-find-btn--close" data-find-action="close" aria-label="Close find bar">✕</button>
+          <button type="button" class="notepad-find-btn" data-find-action="prev" title="查找上一个">◀</button>
+          <button type="button" class="notepad-find-btn" data-find-action="next" title="查找下一个">▶</button>
+          <button type="button" class="notepad-find-btn notepad-find-btn--replace" data-find-action="replace">替换</button>
+          <button type="button" class="notepad-find-btn notepad-find-btn--replace" data-find-action="replace-all">全部替换</button>
+          <button type="button" class="notepad-find-btn notepad-find-btn--close" data-find-action="close" aria-label="关闭查找栏">✕</button>
         </div>
         <span id="notepad-find-status" class="notepad-find-status" aria-live="polite"></span>
       </div>
@@ -172,14 +172,14 @@
       <div class="notepad-editor-area">
         <div id="notepad-loading" class="notepad-loading hidden" aria-live="polite">
           <div class="notepad-loading-spinner" aria-hidden="true"></div>
-          <span>Loading…</span>
+          <span>加载中…</span>
         </div>
-        <textarea id="notepad-editor" class="notepad-editor notepad-editor--wrap" spellcheck="false" wrap="soft" autocomplete="off" autocorrect="off" autocapitalize="off" aria-label="Document editor"></textarea>
+        <textarea id="notepad-editor" class="notepad-editor notepad-editor--wrap" spellcheck="false" wrap="soft" autocomplete="off" autocorrect="off" autocapitalize="off" aria-label="文档编辑器"></textarea>
       </div>
       <div class="notepad-statusbar">
         <span id="notepad-modified"></span>
         <span id="notepad-status"></span>
-        <span id="notepad-position">Ln 1, Col 1</span>
+        <span id="notepad-position">第 1 行，第 1 列</span>
       </div>
     </div>
   </div>
