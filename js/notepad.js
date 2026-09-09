@@ -461,7 +461,7 @@ const Notepad = (() => {
       options.push({
         kind: 'google',
         id: user.id,
-        label: `${Auth.formatDisplayEmail(user.email)}（Google Drive）`,
+        label: `${Auth.formatDisplayEmail(user.email)}（已移除）`,
       });
     });
 
@@ -1366,7 +1366,7 @@ const Notepad = (() => {
         break;
       case 'about':
         await Dialog.alert(
-          '适用于 Google Drive、本地存储和 GitHub 仓库中 .txt 与 .json 文件的简易文本编辑器。',
+          '适用于本地存储和 GitHub 仓库中 .txt 与 .json 文件的简易文本编辑器。',
           { title: `${typeof SITE !== 'undefined' ? SITE.name : 'GitFiles'} 记事本` }
         );
         break;

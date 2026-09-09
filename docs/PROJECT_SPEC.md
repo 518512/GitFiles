@@ -257,7 +257,7 @@ Move: destination commit → recorded transfer state → source delete commit
 3. 创建 D1 数据库，将 database id 作为 `DB` binding 配到 Worker。
 4. 执行 `workers/schema.sql`。
 5. 配置 runtime secret `GITHUB_CLIENT_SECRET`。
-6. 配置 build text variable `CONFIG_GITHUB_CLIENT_ID`，可选 `CONFIG_GOOGLE_CLIENT_ID` 与 `CONFIG_BASE_PATH`。
+6. 配置 build text variable `CONFIG_GITHUB_CLIENT_ID`，可选 `CONFIG_BASE_PATH`。
 7. 在 GitHub OAuth App 注册 Worker 的 `/github-oauth-callback.html`。
 8. 用 HTTPS Worker 域名验证 Cookie 与 `/api/me`。
 

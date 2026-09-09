@@ -4,18 +4,8 @@ const ContextMenu = (() => {
     { type: 'json', label: 'JSON 文件（.json）', icon: '{ }', ext: '.json', mimeType: 'application/json', content: '{\n  \n}\n', defaultName: '新建 JSON 文件.json' },
   ];
 
-  const NEW_GOOGLE_TYPES = [
-    { type: 'gdoc', label: 'Google Docs', icon: '📄', mimeType: 'application/vnd.google-apps.document', defaultName: '未命名文档' },
-    { type: 'gsheet', label: 'Google Sheets', icon: '📊', mimeType: 'application/vnd.google-apps.spreadsheet', defaultName: '未命名表格' },
-    { type: 'gslides', label: 'Google Slides', icon: '📽️', mimeType: 'application/vnd.google-apps.presentation', defaultName: '未命名演示文稿' },
-    { type: 'gform', label: 'Google Form', icon: '📋', mimeType: 'application/vnd.google-apps.form', defaultName: '未命名表单' },
-    { type: 'gdrawing', label: 'Google Drawing', icon: '🎨', mimeType: 'application/vnd.google-apps.drawing', defaultName: '未命名绘图' },
-    { type: 'gsite', label: 'Google Site', icon: '🌐', mimeType: 'application/vnd.google-apps.site', defaultName: '未命名网站' },
-  ];
-
   function getFileTypeDef(fileType) {
-    return NEW_FILE_TYPES.find((t) => t.type === fileType)
-      || NEW_GOOGLE_TYPES.find((t) => t.type === fileType);
+    return NEW_FILE_TYPES.find((t) => t.type === fileType);
   }
 
   function getClipboardSourceLabel() {
@@ -26,21 +16,8 @@ const ContextMenu = (() => {
     if (GithubDisk.isGithubId(clipboard.userId)) {
       return GithubDisk.getDisk(clipboard.userId)?.name || 'GitHub 存储';
     }
-    const user = Auth.getUsers().find((u) => u.id === clipboard.userId);
-    return user ? Auth.formatDisplayEmail(user.email) : null;
+    return null;
   }
-
-  const USER_SERVICE_LINKS = [
-    { label: 'Gmail', icon: '📧', url: (email) => `https://mail.google.com/mail/?authuser=${encodeURIComponent(email)}` },
-    { label: 'Contacts', icon: '👤', url: (email) => `https://contacts.google.com/?authuser=${encodeURIComponent(email)}` },
-    { label: 'Calendar', icon: '📅', url: (email) => `https://calendar.google.com/calendar/?authuser=${encodeURIComponent(email)}` },
-    { label: 'Google Drive', icon: '📁', url: (email) => `https://drive.google.com/?authuser=${encodeURIComponent(email)}` },
-    { label: 'Photos', icon: '🖼️', url: (email) => `https://photos.google.com/?authuser=${encodeURIComponent(email)}` },
-    { label: 'Keep', icon: '📝', url: (email) => `https://keep.google.com/?authuser=${encodeURIComponent(email)}` },
-    { label: 'Meet', icon: '🎥', url: (email) => `https://meet.google.com/?authuser=${encodeURIComponent(email)}` },
-    { label: 'Chat', icon: '💬', url: (email) => `https://chat.google.com/?authuser=${encodeURIComponent(email)}` },
-    { label: 'Google Account', icon: '⚙️', url: (email) => `https://myaccount.google.com/?authuser=${encodeURIComponent(email)}` },
-  ];
 
   let menuEl = null;
   let backdropEl = null;
@@ -161,7 +138,6 @@ const ContextMenu = (() => {
 
   function buildAddDiskMenuItems() {
     return [
-      { action: 'add-google-drive', label: 'Google Drive', icon: '☁️' },
       { action: 'add-local-disk', label: '本地存储', icon: '🗄️' },
       { action: 'add-github-repo', label: 'GitHub 仓库', icon: '🐙' },
     ];
@@ -222,28 +198,8 @@ const ContextMenu = (() => {
     ];
   }
 
-  function buildUserMenuItems(user) {
-    const items = [
-      { action: 'open', label: '打开我的云端硬盘', icon: '📂' },
-      { sep: true },
-      { action: 'user-info', label: '属性', icon: 'ℹ️' },
-      { sep: true },
-      { header: 'Google 服务' },
-      ...USER_SERVICE_LINKS.map((svc) => ({
-        action: 'open-service',
-        label: svc.label,
-        icon: svc.icon,
-        url: svc.url(user.email),
-      })),
-      { sep: true },
-      { action: 'copy-email', label: '复制邮箱', icon: '📎' },
-      { sep: true },
-      { action: 'reauth-user', label: '重新登录', icon: '🔑' },
-      { action: 'sign-out-user', label: '退出并移除', icon: '⏏️' },
-      { sep: true },
-      { action: 'refresh', label: '刷新', icon: '🔄' },
-    ];
-    return items;
+  function buildUserMenuItems() {
+    return [{ action: 'open', label: '打开', icon: '📂' }];
   }
 
   function buildItems() {
@@ -317,18 +273,6 @@ const ContextMenu = (() => {
             fileType: type.type,
           });
         });
-        if (!isLocalCtx() && !isGithubCtx()) {
-          items.push({ sep: true });
-          items.push({ header: 'Google Workspace 文件' });
-          NEW_GOOGLE_TYPES.forEach((type) => {
-            items.push({
-              action: 'new-file',
-              label: type.label,
-              icon: type.icon,
-              fileType: type.type,
-            });
-          });
-        }
       }
       if (!isEmpty) {
         items.push({ action: 'rename', label: '重命名', icon: '✏️', shortcut: 'F2' });
@@ -398,7 +342,7 @@ const ContextMenu = (() => {
     if ((ctx.type === 'github-disk' || ctx.file?.isGithubDisk) && (ctx.disk || getContextGithubDisk(ctx))) {
       return (ctx.disk || getContextGithubDisk(ctx)).name;
     }
-    if (ctx.type === 'user' && ctx.user) return Auth.formatDisplayEmail(ctx.user.email);
+    if (ctx.type === 'user' && ctx.user) return '已移除的云端存储';
     if (ctx.file?.name) return ctx.file.name;
     return 'Actions';
   }
@@ -546,23 +490,18 @@ const ContextMenu = (() => {
   }
 
   async function buildRootMetricsRows() {
-    const users = Auth.getUsers();
     const localDisks = LocalDisk.getDisks();
     const githubDisks = GithubDisk.getDisks();
-    const active = Auth.getActiveUser();
     const localProfile = LocalUser.getProfile();
     const rows = [
       { section: typeof SITE !== 'undefined' ? SITE.name : 'GitFiles' },
       ['位置', '根目录'],
-      ['已挂载存储', String(users.length + localDisks.length + githubDisks.length)],
-      ['Google 存储', String(users.length)],
+      ['已挂载存储', String(localDisks.length + githubDisks.length)],
       ['本地存储卷', String(localDisks.length)],
       ['GitHub 存储仓库', String(githubDisks.length)],
-      ['当前存储', active ? Auth.formatDisplayEmail(active.email) : '—'],
       { section: '本地资料' },
       ['名称', localProfile.name],
-      ['自有本地存储', String(localDisks.length + githubDisks.length)],
-      { section: 'Google 存储' },
+      { section: '存储' },
     ];
 
     let totalUsage = 0;
@@ -570,25 +509,11 @@ const ContextMenu = (() => {
     let limitCount = 0;
     let usageCount = 0;
 
-    for (const user of users) {
-      const quota = await resolveUserQuota(user.id);
-      const label = Auth.formatDisplayEmail(user.email);
-      rows.push([label, quota?.label || '—']);
-      if (quota?.usage != null) {
-        totalUsage += quota.usage;
-        usageCount += 1;
-      }
-      if (quota?.limit > 0) {
-        totalLimit += quota.limit;
-        limitCount += 1;
-      }
-    }
-
-    rows.push({ section: 'Combined storage' });
-    rows.push(['Drives reporting usage', `${usageCount} / ${users.length}`]);
+    rows.push({ section: '存储统计' });
+    rows.push(['报告使用量的存储', `${usageCount} / ${localDisks.length + githubDisks.length}`]);
     rows.push(['Total used', usageCount ? formatBytes(totalUsage) : '—']);
 
-    if (limitCount > 0 && limitCount === users.length) {
+    if (limitCount > 0 && limitCount === localDisks.length + githubDisks.length) {
       const totalFree = Math.max(0, totalLimit - totalUsage);
       rows.push(['Total capacity', formatBytes(totalLimit)]);
       rows.push(['Total free', formatBytes(totalFree)]);
@@ -660,7 +585,7 @@ const ContextMenu = (() => {
       switch (action) {
         case 'open':
           if (ctx.type === 'root') {
-            app.navigateToMyGoogle?.();
+            app.navigateToHome?.();
           } else if (ctx.type === 'local-disk' || file?.isLocalDisk) {
             app.navigateToLocalDisk?.(getDriveId(ctx));
           } else if (ctx.type === 'github-disk' || file?.isGithubDisk) {
@@ -674,10 +599,8 @@ const ContextMenu = (() => {
         case 'add-local-disk':
           await createLocalDisk();
           break;
-        case 'add-google-drive':
         case 'add-user':
-          Auth.addUser();
-          break;
+          throw new Error('该登录方式已移除，请使用 GitHub 或本地存储。');
         case 'add-github-repo':
           await createGithubDisk();
           break;
@@ -1139,7 +1062,7 @@ const ContextMenu = (() => {
   function storageKind(userId) {
     if (GithubDisk.isGithubId(userId)) return 'github';
     if (LocalDisk.isLocalId(userId)) return 'local';
-    return 'google';
+    return null;
   }
 
   async function transferItems(items, sourceUserId, sourceParentId, destUserId, destParentId, mode = 'cut') {
@@ -1150,8 +1073,11 @@ const ContextMenu = (() => {
     const destGithub = GithubDisk.isGithubId(destUserId);
     const transferIds = items.map((item) => item.id);
     const progressIds = items.map((item) => `transfer:${item.id}`);
+    const sourceKind = storageKind(sourceUserId);
+    const destKind = storageKind(destUserId);
+    if (!sourceKind || !destKind) throw new Error('该存储类型已移除，请重新选择本地存储或 GitHub 仓库。');
     const operationKey = typeof OperationProgress !== 'undefined'
-      ? OperationProgress.crossKey(storageKind(sourceUserId), storageKind(destUserId), mode)
+      ? OperationProgress.crossKey(sourceKind, destKind, mode)
       : null;
 
     if (operationKey) {
@@ -1206,16 +1132,13 @@ const ContextMenu = (() => {
         return;
       }
 
-      if (destGithub && crossDrive) {
-        // local/Google → GitHub：先只读收集，目标仓库单 commit（AGENTS §3 Batch）
+      if (destGithub && sourceLocal && crossDrive) {
+        // 本地 → GitHub：先只读收集，目标仓库单 commit（AGENTS §3 Batch）
         const files = [];
         const emptyDirs = [];
         for (const item of items) {
           if (sourceLocal) {
             await collectLocalIntoBatch(sourceUserId, item, '', files, emptyDirs);
-          } else if (!sourceGithub) {
-            const sourceToken = await Auth.ensureValidToken(sourceUserId);
-            await collectGoogleIntoBatch(sourceToken, item, '', files, emptyDirs);
           }
         }
         await GithubDisk.createBatchFromCollected(
@@ -1228,9 +1151,6 @@ const ContextMenu = (() => {
           for (const item of items) {
             if (sourceLocal) {
               await LocalDisk.deleteFile(sourceUserId, item.id);
-            } else if (!sourceGithub) {
-              const sourceToken = await Auth.ensureValidToken(sourceUserId);
-              await Drive.trashFile(sourceToken, item.id);
             }
           }
         }
@@ -1240,14 +1160,9 @@ const ContextMenu = (() => {
         return;
       }
 
-      if (sourceGithub && crossDrive) {
+      if (sourceGithub && destLocal && crossDrive) {
         for (const item of items) {
-          if (destLocal) {
-            await copyGithubItemToLocal(sourceUserId, destUserId, item, destParentId);
-          } else if (!destGithub) {
-            const destToken = await Auth.ensureValidToken(destUserId);
-            await copyGithubItemToGoogle(sourceUserId, destToken, item, destParentId);
-          }
+          await copyGithubItemToLocal(sourceUserId, destUserId, item, destParentId);
           if (mode === 'cut') {
             await GithubDisk.deleteFile(sourceUserId, item.id);
           }
@@ -1271,32 +1186,8 @@ const ContextMenu = (() => {
             const fromParent = sourceParentId || item.parents?.[0] || item.parentId;
             await LocalDisk.moveFile(destUserId, item.id, fromParent, destParentId);
           }
-        } else if (!sourceLocal && !destLocal) {
-          const destToken = await Auth.ensureValidToken(destUserId);
-          const sourceToken = crossDrive ? await Auth.ensureValidToken(sourceUserId) : destToken;
-          if (crossDrive) {
-            await Drive.copyItemToUser(sourceToken, destToken, item.id, destParentId, item);
-            if (mode === 'cut') {
-              await Drive.trashFile(sourceToken, item.id);
-            }
-          } else if (mode === 'copy') {
-            await Drive.copyFile(destToken, item.id, destParentId);
-          } else {
-            const fromParent = sourceParentId || item.parents?.[0];
-            await Drive.moveFile(destToken, item.id, fromParent, destParentId);
-          }
-        } else if (!sourceLocal && destLocal) {
-          const sourceToken = await Auth.ensureValidToken(sourceUserId);
-          await copyGoogleItemToLocal(sourceToken, destUserId, item, destParentId);
-          if (mode === 'cut') {
-            await Drive.trashFile(sourceToken, item.id);
-          }
         } else {
-          const destToken = await Auth.ensureValidToken(destUserId);
-          await copyLocalItemToGoogle(sourceUserId, destToken, item, destParentId);
-          if (mode === 'cut') {
-            await LocalDisk.deleteFile(sourceUserId, item.id);
-          }
+          throw new Error('不支持已移除的存储类型。');
         }
       }
 

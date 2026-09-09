@@ -11,7 +11,7 @@
 // 部署后配置 secrets（Dashboard → Workers → gitfiles → Settings → Variables and Secrets）：
 //   GITHUB_CLIENT_SECRET   GitHub OAuth App 的 client secret（网页登录用）
 // 可选构建环境变量（CONFIG_* 用「变量/Text」类型；Secret 对构建不可见）：
-//   CONFIG_GOOGLE_CLIENT_ID / CONFIG_GITHUB_CLIENT_ID / CONFIG_BASE_PATH
+//   CONFIG_GITHUB_CLIENT_ID / CONFIG_BASE_PATH
 //
 // Worker 名即默认域名：https://<name>.<你的子域>.workers.dev
 // 项目名/域名变更后，记得同步更新 GitHub OAuth App 的 callback URL。
