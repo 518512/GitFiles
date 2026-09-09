@@ -135,20 +135,6 @@
   <div id="explorer" class="explorer hidden">
     <div class="window">
       <!-- Title bar -->
-      <div class="title-bar">
-        <div class="title-bar-left">
-          <img src="assets/logo.svg" class="window-logo" width="18" height="18" alt="">
-          <span class="window-title">GitFiles</span>
-        </div>
-        <div class="title-bar-controls">
-          <span id="worker-session-state" class="worker-session-state" role="status">GitHub 会话：检查中</span>
-          <button id="btn-conflict-center" class="title-btn title-btn--conflicts hidden" type="button" aria-label="打开冲突中心" title="打开冲突中心">!</button>
-          <button class="title-btn" aria-label="最小化">─</button>
-          <button class="title-btn" aria-label="最大化">□</button>
-          <button class="title-btn close" id="btn-sign-out" aria-label="退出登录" title="退出登录">✕</button>
-        </div>
-      </div>
-
       <!-- Ribbon / toolbar -->
       <div class="ribbon">
         <div class="nav-buttons">
@@ -241,6 +227,9 @@
       <!-- Status bar -->
       <div class="status-bar">
         <span id="status-count">0 个项目</span>
+        <span id="worker-session-state" class="worker-session-state" role="status">GitHub 会话：检查中</span>
+        <button id="btn-conflict-center" class="title-btn title-btn--conflicts hidden" type="button" aria-label="打开冲突中心" title="打开冲突中心">冲突</button>
+        <button class="title-btn close" id="btn-sign-out" aria-label="退出登录" title="退出登录">退出 GitHub</button>
         <span id="status-selected"></span>
       </div>
     </div>

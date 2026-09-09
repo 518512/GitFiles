@@ -41,7 +41,9 @@ export async function handleRepositoryApi(request, env, url) {
     const state = await branchState(session, owner, repo, branch);
     if (!state) return json({ head: null, treeSha: null, tree: [] });
     const { payload } = await githubRequest(session, `${repoPrefix(owner, repo)}/git/trees/${encodeURIComponent(state.head)}?recursive=1`);
-    return json({ head: state.head, treeSha: payload.sha || state.treeSha, tree: payload.tree || [] });
+    const { payload: commit } = await githubRequest(session, `${repoPrefix(owner, repo)}/git/commits/${encodeURIComponent(state.head)}`);
+    const updatedAt = commit?.committer?.date || commit?.author?.date || null;
+    return json({ head: state.head, treeSha: payload.sha || state.treeSha, updatedAt, tree: payload.tree || [] });
   }
 
   if (request.method === 'GET' && action === 'file') {

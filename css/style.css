@@ -569,9 +569,15 @@ body {
 }
 
 .tree-folder-item {
-  padding-left: 4px !important;
+  padding-left: 8px !important;
   font-size: 0.78rem !important;
   gap: 6px !important;
+}
+
+/* 左侧树以紧凑文字导航为主，避免与右侧文件图标重复。 */
+.tree-folder-item .sidebar-icon,
+.tree-file-item .sidebar-icon {
+  display: none;
 }
 
 .tree-folder-label,
@@ -1168,6 +1174,12 @@ body {
   white-space: nowrap;
 }
 
+.status-bar .worker-session-state {
+  margin-left: auto;
+  padding: 1px 7px;
+  font-size: 0.7rem;
+}
+
 .worker-session-state[data-state="connected"] {
   color: #1a6b3c;
   border-color: #79b88b;
@@ -1190,7 +1202,8 @@ body {
 /* Status bar */
 .status-bar {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
   padding: 4px 12px;
   font-size: 0.75rem;
   color: var(--win-text-muted);
