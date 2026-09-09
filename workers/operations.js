@@ -126,8 +126,12 @@ export async function executeOperations(session, owner, repo, { branch, expected
   if (state && sameTree(current.entries, entries)) {
     return { head: state.head, treeSha: current.treeSha || state.treeSha, blobsCreated: 0, skipped: true };
   }
+  // `entries` is the complete post-operation snapshot. Do not attach
+  // `base_tree`: GitHub treats a tree with base_tree as a patch, so omitted
+  // paths are retained. That made delete a no-op and rename/move keep the old
+  // path. Creating a root tree from the complete snapshot gives deletions the
+  // intended semantics while still reusing every unchanged Blob SHA.
   const treeBody = { tree: entries };
-  if (current.treeSha || state?.treeSha) treeBody.base_tree = current.treeSha || state.treeSha;
   const { payload: tree } = await githubRequest(session, `${repoPrefix(owner, repo)}/git/trees`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(treeBody),
   });

@@ -159,10 +159,42 @@ test('Worker mutation reuses a Blob SHA for rename and performs one CAS ref upda
     assert.equal(calls.filter((call) => call.path.endsWith('/git/blobs')).length, 0);
     const tree = calls.find((call) => call.path.endsWith('/git/trees') && call.method === 'POST');
     assert.ok(tree);
-    assert.deepEqual(JSON.parse(tree.body).tree, [{ path: 'b.md', mode: '100644', type: 'blob', sha: 'blob-A' }]);
+    const treeBody = JSON.parse(tree.body);
+    assert.deepEqual(treeBody.tree, [{ path: 'b.md', mode: '100644', type: 'blob', sha: 'blob-A' }]);
+    assert.equal(Object.hasOwn(treeBody, 'base_tree'), false);
     const ref = calls.find((call) => call.path.endsWith('/git/refs/heads/main'));
     assert.equal(ref.method, 'PATCH');
     assert.deepEqual(JSON.parse(ref.body), { sha: 'head-B', force: false });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Worker delete sends a complete tree without the deleted path', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, options = {}) => {
+    const path = new URL(url).pathname;
+    calls.push({ path, method: options.method || 'GET', body: options.body });
+    const payload = path.endsWith('/branches/main') ? { commit: { sha: 'head-A', commit: { tree: { sha: 'tree-A' } } } }
+      : path.endsWith('/git/trees/head-A') ? { sha: 'tree-A', tree: [
+        { path: 'delete.md', mode: '100644', type: 'blob', sha: 'blob-delete' },
+        { path: 'keep.md', mode: '100644', type: 'blob', sha: 'blob-keep' },
+      ] }
+      : path.endsWith('/git/trees') ? { sha: 'tree-B' }
+      : path.endsWith('/git/commits') ? { sha: 'head-B' }
+      : {};
+    return new Response(JSON.stringify(payload), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  try {
+    const result = await executeOperations({ access_token: 'secret' }, 'octo', 'repo', {
+      branch: 'main', expectedHead: 'head-A', operations: [{ type: 'delete', path: 'delete.md' }],
+    });
+    assert.equal(result.head, 'head-B');
+    const tree = calls.find((call) => call.path.endsWith('/git/trees') && call.method === 'POST');
+    const body = JSON.parse(tree.body);
+    assert.deepEqual(body.tree, [{ path: 'keep.md', mode: '100644', type: 'blob', sha: 'blob-keep' }]);
+    assert.equal(Object.hasOwn(body, 'base_tree'), false);
   } finally {
     globalThis.fetch = originalFetch;
   }
