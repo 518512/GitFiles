@@ -4,6 +4,7 @@
   "description": "GitFiles — local storage and GitHub repositories in one file manager.",
   "start_url": "./",
   "scope": "./",
+  "id": "./",
   "display": "standalone",
   "background_color": "#0d2137",
   "theme_color": "#0078d4",
