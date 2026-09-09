@@ -263,7 +263,15 @@ Move: destination commit → recorded transfer state → source delete commit
 
 GitHub Pages、独立 token proxy、PAT 浏览器 fallback 不属于受支持的安全部署模式。
 
-## 11. 测试要求
+## 11. PWA 验收要求
+
+- HTTPS 或 localhost 环境下可安装为独立应用。
+- 首次联网打开后，断网仍可加载应用壳并使用本地存储。
+- Service Worker 更新后自动清理旧缓存并刷新页面。
+- `/api/*`、GitHub OAuth 和文件请求不进入缓存；离线时不得显示虚假的 GitHub 操作成功。
+- Android Chrome 的添加到主屏幕流程、图标、主题色和安全区域适配应可用。
+
+## 12. 测试要求
 
 必须覆盖：
 

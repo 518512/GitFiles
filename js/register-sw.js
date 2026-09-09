@@ -77,6 +77,7 @@ const GitFilesCache = (() => {
 
   async function register() {
     if (!('serviceWorker' in navigator)) return;
+    window.dispatchEvent(new CustomEvent('gitfiles:pwa-status', { detail: { state: 'registering' } }));
 
     if (await handleVersionChange()) return;
 
@@ -109,7 +110,9 @@ const GitFilesCache = (() => {
       }
 
       registration.update();
-    } catch {
+      window.dispatchEvent(new CustomEvent('gitfiles:pwa-status', { detail: { state: 'ready', registration } }));
+    } catch (error) {
+      window.dispatchEvent(new CustomEvent('gitfiles:pwa-status', { detail: { state: 'error', error } }));
       // Service worker optional (e.g. file:// or blocked context)
     }
   }
@@ -124,7 +127,7 @@ const GitFilesCache = (() => {
 })();
 
 window.StorageHub = window.StorageHub || {};
-window.StorageHub.clearCache = () => StorageHubCache.invalidateAppCaches().then(() => location.reload());
+window.StorageHub.clearCache = () => GitFilesCache.invalidateAppCaches().then(() => location.reload());
 window.MikusDrive = window.StorageHub;
 
 window.addEventListener('load', () => {
