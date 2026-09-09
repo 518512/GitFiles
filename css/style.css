@@ -1183,11 +1183,11 @@ body {
 .sidebar-install-btn {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 8px 12px 0 32px;
-  width: calc(100% - 44px);
-  min-height: 36px;
-  padding: 6px 10px;
+  gap: 10px;
+  margin: 4px 12px 8px;
+  width: calc(100% - 24px);
+  min-height: 35px;
+  padding: 8px 12px;
   border: 1px solid #9db7cc;
   border-radius: 5px;
   color: #174a6e;
@@ -1197,7 +1197,7 @@ body {
 }
 .sidebar-install-btn:hover { border-color: #4e9bc7; background: #e8f5fc; }
 .sidebar-install-hint {
-  margin: 4px 12px 8px 32px;
+  margin: -2px 12px 8px 12px;
   color: var(--win-text-muted);
   font-size: 0.68rem;
   line-height: 1.35;
