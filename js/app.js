@@ -101,10 +101,14 @@ const App = (() => {
     try {
       await GithubApi.request('/api/me');
       state.githubSession = 'connected';
+      return true;
     } catch (err) {
       state.githubSession = err?.status === 401 ? 'expired' : 'unavailable';
+      showLogin();
+      return false;
+    } finally {
+      renderGithubSessionState();
     }
-    renderGithubSessionState();
   }
 
   function addConflictRecord(record) {
@@ -2247,6 +2251,7 @@ const App = (() => {
   }
 
   async function showExplorer() {
+    hide($('#app-boot'));
     hide($('#login-screen'));
     show($('#explorer'));
 
@@ -2265,6 +2270,7 @@ const App = (() => {
   }
 
   function showLogin() {
+    hide($('#app-boot'));
     show($('#login-screen'));
     hide($('#explorer'));
   }
@@ -2825,7 +2831,7 @@ const App = (() => {
     });
     GithubDisk.setConflictListener?.((conflict) => addConflictRecord(conflict));
     GithubDisk.setTransferListener?.((transfer) => addConflictRecord(transfer));
-    refreshGithubSessionState();
+    const authenticated = await refreshGithubSessionState();
 
     ContextMenu.init({
       openFile,
@@ -2864,8 +2870,8 @@ const App = (() => {
 
     if (isMobileLayout()) state.view = 'list';
 
-    // 本地存储可直接使用，GitHub 在添加仓库时按需 OAuth。
-    showExplorer();
+    if (authenticated) showExplorer();
+    else showLogin();
   }
 
   return { init };

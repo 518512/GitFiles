@@ -38,6 +38,19 @@ body {
 
 /* ── Login screen ── */
 
+.app-boot {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  background: #f6f8fa;
+  color: #57606a;
+  font: 14px system-ui, sans-serif;
+}
+
+.app-boot.hidden { display: none !important; }
+
 .login-screen {
   display: flex;
   align-items: center;
