@@ -496,12 +496,11 @@ const GithubDisk = (() => {
 
     try {
       await action();
-      const moveState = moveStateByPath.get(key);
-      if (moveState) moveState.status = 'pending';
+      // The Worker returns only after the Git commit and CAS ref update have
+      // succeeded. Do not wait for a second tree listing to finish the UI;
+      // GitHub's listing can lag and otherwise leaves items stuck as pending.
+      resolveMove(diskId, sourcePath);
       invalidateRepoTree(diskId);
-      markPendingAwaitingConfirmation(destPendingId, meta.destPath, meta.isFolder);
-      scheduleMoveConfirmation(diskId, sourcePath);
-      confirmMoveOnServer(diskId, sourcePath);
       notifyListChange(diskId);
       return { id: meta.destPath, name: meta.name, isFolder: !!meta.isFolder };
     } catch (err) {
@@ -699,10 +698,12 @@ const GithubDisk = (() => {
         progressStartedAt: existing?.progressStartedAt || startedAt,
         kind: 'delete',
       });
+      // A successful operations response means the delete commit is complete.
+      // Clear the optimistic state immediately instead of waiting for a delayed
+      // GitHub tree read that can keep showing “正在完成删除…” indefinitely.
+      resolveDeleteState(diskId, path);
       invalidateRepoTree(diskId);
       notifyListChange(diskId);
-      scheduleDeleteConfirmation(diskId, path, isFolder);
-      confirmDeleteOnServer(diskId, path, isFolder);
     } catch (err) {
       deleteStateByPath.set(key, {
         status: isConflictError(err) ? 'conflict' : 'error',
@@ -831,7 +832,10 @@ const GithubDisk = (() => {
 
     try {
       const result = await action();
-      markFileSavePending(diskId, path, result?.expectedSha || null);
+      // The mutation request is acknowledged only after the Worker commits and
+      // updates the branch ref. Finish the visible save state immediately.
+      resolveFileSave(diskId, path);
+      invalidateRepoTree(diskId);
       return result;
     } catch (err) {
       saveStateByPath.set(key, {
@@ -969,8 +973,10 @@ const GithubDisk = (() => {
       const expectedPath = result?.id
         ? normalizePath(result.id)
         : buildExpectedPath(parentId, meta.name);
+      // The action resolves after the server-side commit succeeds. Clear the
+      // temporary entry now; a delayed tree listing must not block completion.
+      resolvePending(tempId);
       invalidateRepoTree(diskId);
-      markPendingAwaitingConfirmation(tempId, expectedPath, meta.isFolder);
       notifyListChange(diskId);
       return result;
     } catch (err) {
