@@ -1,7 +1,7 @@
 {
   "name": "GitFiles",
   "short_name": "GitFiles",
-  "description": "GitFiles — Google Drive, local storage, and GitHub repositories in one file manager.",
+  "description": "GitFiles — local storage and GitHub repositories in one file manager.",
   "start_url": "./index.html",
   "display": "standalone",
   "background_color": "#0d2137",

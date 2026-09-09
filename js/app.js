@@ -1,12 +1,13 @@
 const App = (() => {
   const ROOT_ID = 'home';
   const ROOT_NAME = typeof SITE !== 'undefined' ? SITE.name : 'GitFiles';
+  const DRIVE_ROOT_ID = 'root';
   const TREE_PAGE_SIZE = 10;
 
   const state = {
     level: 'home',
     currentUserId: null,
-    currentFolderId: Drive.ROOT_ID,
+    currentFolderId: DRIVE_ROOT_ID,
     view: 'grid',
     section: 'my-drive',
     files: [],
@@ -622,21 +623,6 @@ const App = (() => {
     return state.userQuotas[userId]?.shortLabel || '…';
   }
 
-  function usersAsFileItems() {
-    return Auth.getUsers().map((u) => ({
-      id: `user:${u.id}`,
-      name: userLabel(u),
-      isFolder: true,
-      isUserDrive: true,
-      userId: u.id,
-      picture: u.picture,
-      quotaLabel: getQuotaShort(u.id),
-      typeName: 'User Drive',
-      sizeFormatted: getQuotaShort(u.id),
-      dateFormatted: '—',
-    }));
-  }
-
   function localDisksAsFileItems() {
     return LocalDisk.getDisks().map((disk) => ({
       id: `local:${disk.id}`,
@@ -667,50 +653,13 @@ const App = (() => {
   }
 
   function homeDriveItems() {
-    return [...usersAsFileItems(), ...localDisksAsFileItems(), ...githubDisksAsFileItems()];
+    return [...localDisksAsFileItems(), ...githubDisksAsFileItems()];
   }
 
-  function isScopeError(message) {
-    return /insufficient.*scope/i.test(message || '');
-  }
-
-  async function refreshUserQuotas(preloadedTokens = {}) {
-    const users = Auth.getUsers();
+  async function refreshUserQuotas() {
     const localDisks = LocalDisk.getDisks();
     const githubDisks = GithubDisk.getDisks();
     await Promise.all([
-      ...users.map(async (user) => {
-        try {
-          if (user.scopes && user.scopes !== CONFIG.SCOPES) {
-            throw Object.assign(new Error('Google 授权范围已过期'), { code: 'INSUFFICIENT_SCOPES' });
-          }
-          const token = preloadedTokens[user.id] || await Auth.tryGetValidToken(user.id);
-          if (!token) {
-            const needsReauth = !Auth.isTokenFresh(user)
-              || (user.scopes && user.scopes !== CONFIG.SCOPES);
-            state.userQuotas[user.id] = {
-              label: needsReauth ? '重新登录存储' : '存储不可用',
-              shortLabel: '—',
-              needsReauth,
-            };
-            return;
-          }
-          state.userQuotas[user.id] = await Drive.getStorageQuota(token);
-        } catch (err) {
-          if (err.code === 'INSUFFICIENT_SCOPES' || isScopeError(err.message)) {
-            state.userQuotas[user.id] = {
-              label: '重新登录存储',
-              shortLabel: '—',
-              needsReauth: true,
-            };
-          } else {
-            state.userQuotas[user.id] = {
-              label: '存储不可用',
-              shortLabel: '—',
-            };
-          }
-        }
-      }),
       ...localDisks.map(async (disk) => {
         try {
           state.userQuotas[disk.id] = await LocalDisk.getStorageQuota(disk.id);
@@ -754,7 +703,7 @@ const App = (() => {
 
     if (state.currentUserId === diskId) {
       state.currentUserId = null;
-      navigateToMyGoogle();
+      navigateToHome();
       showExplorer();
       return;
     }
@@ -774,7 +723,7 @@ const App = (() => {
 
     if (state.currentUserId === diskId) {
       state.currentUserId = null;
-      navigateToMyGoogle();
+      navigateToHome();
       showExplorer();
       return;
     }
@@ -800,7 +749,7 @@ const App = (() => {
       clearTreeCache(diskId);
     }
     Auth.signOutAll();
-    navigateToMyGoogle();
+    navigateToHome();
     showExplorer();
   }
 
@@ -812,7 +761,7 @@ const App = (() => {
 
     if (state.currentUserId === userId) {
       state.currentUserId = null;
-      navigateToMyGoogle();
+      navigateToHome();
       showExplorer();
       return;
     }
@@ -870,7 +819,7 @@ const App = (() => {
 
   function navigateToCrumb(crumb) {
     if (crumb.id === ROOT_ID) {
-      navigateToMyGoogle();
+      navigateToHome();
     } else if (LocalDisk.getDisk(crumb.id)) {
       navigateToLocalDisk(crumb.id, LocalDisk.ROOT_ID);
     } else if (GithubDisk.getDisk(crumb.id)) {
@@ -1552,9 +1501,9 @@ const App = (() => {
     const list = $('#sidebar-tree-users');
     list.innerHTML = '';
 
-    const users = Auth.getUsers();
+    const users = [];
 
-    users.forEach((user) => {
+    if (false) users.forEach((user) => {
       const expanded = isUserExpanded(user.id);
       const userNav = `user:${user.id}`;
 
@@ -2122,26 +2071,23 @@ const App = (() => {
     }
   }
 
-  function navigateToMyGoogle() {
+  function navigateToHome() {
     state.level = 'home';
     state.currentUserId = null;
-    state.currentFolderId = Drive.ROOT_ID;
+    state.currentFolderId = DRIVE_ROOT_ID;
     state.section = 'my-drive';
     state.expandedUsers.clear();
     pushHistory();
     loadCurrentLocation();
   }
 
-  function navigateToUser(userId, folderId = Drive.ROOT_ID) {
-    state.level = 'drive';
-    state.currentUserId = userId;
-    state.currentFolderId = folderId;
-    state.section = 'my-drive';
-    state.expandedUsers.clear();
-    state.expandedUsers.add(userId);
-    Auth.setActiveUser(userId);
-    pushHistory();
-    loadCurrentLocation();
+  function navigateToUser(userId, folderId = DRIVE_ROOT_ID) {
+    if (!LocalDisk.isLocalId(userId) && !GithubDisk.isGithubId(userId)) {
+      navigateToHome();
+      return;
+    }
+    if (LocalDisk.isLocalId(userId)) return navigateToLocalDisk(userId, folderId);
+    return navigateToGithubDisk(userId, folderId);
   }
 
   function navigateToLocalDisk(diskId, folderId = LocalDisk.ROOT_ID) {
@@ -2203,7 +2149,7 @@ const App = (() => {
     if (state.currentFolderId !== rootId) {
       const parent = state.breadcrumbs[state.breadcrumbs.length - 2];
       if (!parent?.id) {
-        navigateToMyGoogle();
+        navigateToHome();
         return;
       }
       if (parent.id.startsWith('user:')) {
@@ -2218,7 +2164,7 @@ const App = (() => {
       return;
     }
 
-    navigateToMyGoogle();
+    navigateToHome();
   }
 
   function switchUserSection(userId, section) {
@@ -2238,7 +2184,7 @@ const App = (() => {
   function handleTreeNav(nav) {
     ContextMenu.hide();
     if (nav === 'home') {
-      navigateToMyGoogle();
+      navigateToHome();
       return;
     }
 
@@ -2320,7 +2266,7 @@ const App = (() => {
   }
 
   function hasMountedDrives() {
-    return Auth.hasUsers() || LocalDisk.getDisks().length > 0 || GithubDisk.getDisks().length > 0;
+    return LocalDisk.getDisks().length > 0 || GithubDisk.getDisks().length > 0;
   }
 
   function showLogin() {
@@ -2566,7 +2512,6 @@ const App = (() => {
     $('#btn-sidebar-toggle')?.addEventListener('click', toggleSidebar);
     $('#sidebar-overlay')?.addEventListener('click', closeSidebar);
 
-    $('#btn-sign-in').addEventListener('click', () => Auth.signIn());
     $('#btn-sign-in-github')?.addEventListener('click', () => signInWithGithub());
     $('#btn-add-repository')?.addEventListener('click', () => addRepositoryFromWelcome());
     $('#btn-add-user')?.addEventListener('click', (e) => {
@@ -2834,7 +2779,7 @@ const App = (() => {
       navigateToUser,
       navigateToLocalDisk,
       navigateToGithubDisk,
-      navigateToMyGoogle,
+      navigateToHome: () => navigateToHome(),
       refresh: () => refreshCurrentDrive({ reloadTree: true }),
       refreshGithubFolder: () => refreshGithubFolderView({ reloadTree: true }),
       refreshUserQuotas,
@@ -2866,50 +2811,8 @@ const App = (() => {
 
     if (isMobileLayout()) state.view = 'list';
 
-    if (!CONFIG.CLIENT_ID || /^YOUR_/.test(CONFIG.CLIENT_ID)) {
-      $('#btn-sign-in').disabled = true;
-      const hint = document.querySelector('.login-hint');
-      if (hint) {
-        hint.textContent =
-          'Google 登录尚未配置（请设置 CONFIG_GOOGLE_CLIENT_ID 构建变量，参阅 README 的“配置客户端 ID”）。';
-      }
-    }
-
-    Auth.init((result) => {
-      if (result.initialized === false) {
-        // GSI 未初始化（缺 CONFIG_GOOGLE_CLIENT_ID）：提示但不中断后续初始化
-        return;
-      }
-
-      if (result.success) {
-        cancelFallbackLogin();
-        showLoginError(null);
-        LocalUser.seedFromGoogleIfNeeded();
-        showExplorer();
-        renderSidebarTree();
-        refreshUserQuotas();
-        return;
-      }
-
-      if (result.error) {
-        cancelFallbackLogin();
-        if (hasMountedDrives()) {
-          showExplorer();
-        } else {
-          showExplorer();
-          const silentErrors = ['popup_closed_by_user', 'access_denied', 'interaction_required'];
-          if (!silentErrors.includes(result.error)) {
-            showError(`登录失败：${result.error}`);
-          }
-        }
-        return;
-      }
-
-      if (result.initialized) {
-        LocalUser.seedFromGoogleIfNeeded();
-        showExplorer();
-      }
-    });
+    // 本地存储可直接使用，GitHub 在添加仓库时按需 OAuth。
+    showExplorer();
   }
 
   return { init };

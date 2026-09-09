@@ -2,11 +2,8 @@ const GitFilesCache = (() => {
   const VERSION_KEY = 'storage_hub_app_version';
   const LEGACY_VERSION_KEY = 'mikus_drive_app_version';
 
-  // App shell cache only — never clear Google sessions, local storage volumes, or profiles.
+  // App shell cache only — preserve local volumes and app profile.
   const PRESERVED_LOCAL_STORAGE_KEYS = [
-    'storage_hub_users',
-    'mikus_drive_users',
-    'my_google_users',
     'storage_hub_local_disks',
     'mikus_drive_local_disks',
     'storage_hub_local_user',

@@ -1,6 +1,6 @@
 importScripts('./js/app-version.js');
 
-const CACHE_NAME = `gitfiles-${APP_VERSION}`;
+const CACHE_NAME = `gitfiles-${APP_VERSION}-github-local`;
 
 const SHELL_ASSETS = [
   './',
@@ -17,8 +17,6 @@ const SHELL_ASSETS = [
   './js/config.runtime.js',
   './js/site-config.js',
   './js/storage-migrate.js',
-  './js/auth.js',
-  './js/drive.js',
   './js/localdisk.js',
   './js/github-api.js',
   './js/github-paths.js',
@@ -49,11 +47,7 @@ const NETWORK_FIRST_PATHS = /\.(html?|css|js|webmanifest)$|\/$/;
 
 function isApiRequest(url) {
   if (url.pathname.startsWith('/api/')) return true; // never cache app API (PROJECT_SPEC §15)
-  return (
-    url.hostname.endsWith('googleapis.com') ||
-    url.hostname.endsWith('google.com') ||
-    url.hostname.endsWith('gstatic.com')
-  );
+  return false;
 }
 
 function shellPath(pathname) {

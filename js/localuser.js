@@ -33,23 +33,8 @@ const LocalUser = (() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));
   }
 
-  function getFirstGoogleUser() {
-    return typeof Auth !== 'undefined' ? Auth.getUsers()[0] : null;
-  }
-
-  function seedFromGoogleIfNeeded() {
-    if (profile.customized) return;
-    const google = getFirstGoogleUser();
-    if (!google) return;
-
-    profile.name = google.name || google.email || DEFAULT_NAME;
-    if (google.picture) profile.picture = google.picture;
-    save();
-  }
-
   function init() {
     load();
-    seedFromGoogleIfNeeded();
   }
 
   function getProfile() {
@@ -61,20 +46,7 @@ const LocalUser = (() => {
   }
 
   function getAvatarUrl() {
-    if (profile?.picture) {
-      return typeof Auth !== 'undefined'
-        ? Auth.getAvatarUrl(profile.picture)
-        : profile.picture;
-    }
-    const google = getFirstGoogleUser();
-    if (google?.picture) {
-      return typeof Auth !== 'undefined'
-        ? Auth.getAvatarUrl(google.picture)
-        : google.picture;
-    }
-    return typeof Auth !== 'undefined'
-      ? Auth.getDefaultAvatarUrl()
-      : DEFAULT_AVATAR;
+    return profile?.picture || DEFAULT_AVATAR;
   }
 
   function applyAvatarFallback(img) {
@@ -150,7 +122,6 @@ const LocalUser = (() => {
     getAvatarUrl,
     applyAvatarFallback,
     updateProfile,
-    seedFromGoogleIfNeeded,
     showEditDialog,
     DEFAULT_NAME,
     DEFAULT_AVATAR,

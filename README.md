@@ -75,7 +75,6 @@ Cloudflare Worker + Static Assets
    | 变量 | 用途 |
    |---|---|
    | `CONFIG_GITHUB_CLIENT_ID` | GitHub OAuth App Client ID |
-   | `CONFIG_GOOGLE_CLIENT_ID` | 可选 Google Drive Client ID |
    | `CONFIG_BASE_PATH` | 可选站点路径覆盖 |
 
 6. 在 GitHub OAuth App 中登记：

@@ -36,7 +36,6 @@ jobs:
         run: node scripts/build-config.mjs
         env:
           CONFIG_GITHUB_CLIENT_ID: ${{ vars.CONFIG_GITHUB_CLIENT_ID }}
-          CONFIG_GOOGLE_CLIENT_ID: ${{ vars.CONFIG_GOOGLE_CLIENT_ID }}
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3

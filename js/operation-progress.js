@@ -9,26 +9,22 @@ const OperationProgress = (() => {
     'github:delete': { baseMs: 12000, perKbMs: 0 },
     'github:move': { baseMs: 5500, perKbMs: 1.5 },
     'github:save': { baseMs: 4200, perKbMs: 2 },
-    'google:upload': { baseMs: 2200, perKbMs: 1.2 },
-    'google:download': { baseMs: 1800, perKbMs: 1 },
-    'google:delete': { baseMs: 1400, perKbMs: 0 },
-    'google:trash': { baseMs: 1200, perKbMs: 0 },
     'local:write': { baseMs: 350, perKbMs: 0.08 },
     'local:delete': { baseMs: 250, perKbMs: 0 },
     'cross:local->local:copy': { baseMs: 1200, perKbMs: 0.5 },
     'cross:local->local:cut': { baseMs: 1400, perKbMs: 0.5 },
-    'cross:local->google:copy': { baseMs: 5000, perKbMs: 2.5 },
-    'cross:local->google:cut': { baseMs: 5500, perKbMs: 2.5 },
+
+
     'cross:local->github:copy': { baseMs: 7000, perKbMs: 3 },
     'cross:local->github:cut': { baseMs: 7500, perKbMs: 3 },
-    'cross:google->local:copy': { baseMs: 4500, perKbMs: 2 },
-    'cross:google->local:cut': { baseMs: 5000, perKbMs: 2 },
-    'cross:google->github:copy': { baseMs: 8000, perKbMs: 3.5 },
-    'cross:google->github:cut': { baseMs: 8500, perKbMs: 3.5 },
+
+
+
+
     'cross:github->local:copy': { baseMs: 6000, perKbMs: 2.5 },
     'cross:github->local:cut': { baseMs: 6500, perKbMs: 2.5 },
-    'cross:github->google:copy': { baseMs: 7000, perKbMs: 3 },
-    'cross:github->google:cut': { baseMs: 7500, perKbMs: 3 },
+
+
     'cross:github->github:copy': { baseMs: 6500, perKbMs: 2.5 },
     'cross:github->github:cut': { baseMs: 7000, perKbMs: 2.5 },
     _default: { baseMs: 3500, perKbMs: 1.5 },

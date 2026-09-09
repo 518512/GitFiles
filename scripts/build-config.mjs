@@ -93,7 +93,6 @@ if (!fs.existsSync(localConfigOut)) {
 
 // 2) 生成配置覆盖（构建环境变量 → 前端 CONFIG）
 const ENV_MAP = {
-  CONFIG_GOOGLE_CLIENT_ID: 'CLIENT_ID',
   CONFIG_GITHUB_CLIENT_ID: 'GITHUB_CLIENT_ID',
   CONFIG_BASE_PATH: 'BASE_PATH',
   CONFIG_GITHUB_SCOPES: 'GITHUB_SCOPES',

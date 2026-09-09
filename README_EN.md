@@ -75,7 +75,6 @@ The only supported production deployment is **Cloudflare Workers + Static Assets
    | Variable | Purpose |
    |---|---|
    | `CONFIG_GITHUB_CLIENT_ID` | GitHub OAuth App Client ID |
-   | `CONFIG_GOOGLE_CLIENT_ID` | Optional Google Drive Client ID |
    | `CONFIG_BASE_PATH` | Optional site-path override |
 
 6. Register this callback in the GitHub OAuth App:
