@@ -29,7 +29,7 @@ const App = (() => {
   let urlPushPending = false;
   let initialRouteApplied = false;
   let progressTimer = null;
-  let deferredInstallPrompt = null;
+  let deferredInstallPrompt = window.gitFilesInstallPrompt || null;
 
   const USER_SECTIONS = [
     { id: 'my-drive', icon: '📁', label: '我的云端硬盘' },
@@ -2518,16 +2518,20 @@ const App = (() => {
       if (hint) hint.textContent = 'GitFiles 已安装为独立应用。';
       return;
     }
-    if (deferredInstallPrompt) {
-      button.classList.remove('hidden');
-      if (hint) hint.textContent = '可将 GitFiles 安装到设备主屏幕，获得更快的独立应用体验。';
+    button.classList.remove('hidden');
+    if (hint && deferredInstallPrompt) {
+      hint.textContent = '可将 GitFiles 安装到设备主屏幕，获得更快的独立应用体验。';
     }
   }
 
   async function promptInstallPwa() {
-    if (!deferredInstallPrompt) return;
+    if (!deferredInstallPrompt) {
+      showStatus('请使用 Edge 菜单 → 应用 → 将此站点安装为应用');
+      return;
+    }
     const prompt = deferredInstallPrompt;
     deferredInstallPrompt = null;
+    window.gitFilesInstallPrompt = null;
     updateInstallUi();
     await prompt.prompt();
     const result = await prompt.userChoice;
@@ -2538,10 +2542,12 @@ const App = (() => {
     window.addEventListener('beforeinstallprompt', (event) => {
       event.preventDefault();
       deferredInstallPrompt = event;
+      window.gitFilesInstallPrompt = event;
       updateInstallUi();
     });
     window.addEventListener('appinstalled', () => {
       deferredInstallPrompt = null;
+      window.gitFilesInstallPrompt = null;
       updateInstallUi();
       showStatus('GitFiles 已安装');
     });
