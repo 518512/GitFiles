@@ -69,7 +69,7 @@ async function handleTokenExchange(request, env) {
   }
   try {
     const sessionId = await createSession(env, tokenPayload);
-    return json({ ok: true }, 200, { 'Set-Cookie': sessionCookie(sessionId) });
+    return json({ ok: true }, 200, { 'Set-Cookie': sessionCookie(sessionId, undefined, request) });
   } catch (error) {
     return json({ error: 'service_unavailable', message: error.message }, 503);
   }
@@ -84,7 +84,7 @@ async function handleApi(request, env, url) {
   if (url.pathname === '/api/logout') {
     if (request.method !== 'POST') return json({ error: 'method_not_allowed', message: 'Method not allowed' }, 405);
     assertSameOrigin(request);
-    return json({ ok: true }, 200, { 'Set-Cookie': clearSessionCookie() });
+    return json({ ok: true }, 200, { 'Set-Cookie': clearSessionCookie(request) });
   }
   if (url.pathname === '/api/me') {
     const { requireSession } = await import('./session.js');

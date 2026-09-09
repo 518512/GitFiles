@@ -1059,6 +1059,10 @@ const GithubDisk = (() => {
 
   function init() {
     loadDisks();
+    // The Worker session is persisted in an HttpOnly cookie and may survive a
+    // page reload. Avoid forcing OAuth again before the first authenticated API
+    // request has had a chance to verify that cookie.
+    hasWorkerSession = true;
   }
 
   function isGithubId(id) {
