@@ -96,8 +96,9 @@
   <link rel="manifest" href="manifest.webmanifest">
 </head>
 <body>
+  <div id="app-boot" class="app-boot" role="status">正在验证访问权限…</div>
   <!-- 登录界面 -->
-  <div id="login-screen" class="login-screen hidden">
+  <div id="login-screen" class="login-screen">
     <div class="login-card login-card--github-only">
       <div class="login-logo">
         <img src="assets/logo.svg" width="72" height="72" alt="GitFiles 徽标">
@@ -127,7 +128,7 @@
   </div>
 
   <!-- 文件管理器 -->
-  <div id="explorer" class="explorer" data-pwa="enabled">
+  <div id="explorer" class="explorer hidden" data-pwa="enabled">
     <div class="window">
       <!-- 工具栏 -->
       <div class="ribbon">
