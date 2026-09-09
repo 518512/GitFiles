@@ -1238,7 +1238,7 @@ const App = (() => {
   function getDriveRootId() {
     if (isCurrentLocalDrive()) return LocalDisk.ROOT_ID;
     if (isCurrentGithubDrive()) return GithubDisk.ROOT_ID;
-    return Drive.ROOT_ID;
+    return DRIVE_ROOT_ID;
   }
 
   function getActiveNavId() {
@@ -1432,10 +1432,7 @@ const App = (() => {
         btn.type = 'button';
         btn.className = 'sidebar-item tree-folder-item';
         btn.dataset.nav = folderNavId(userId, item.id);
-        btn.innerHTML = `
-          <span class="sidebar-icon">📁</span>
-          <span class="tree-folder-label">${escapeHtml(item.name)}</span>
-        `;
+        btn.innerHTML = `<span class="tree-folder-label">${escapeHtml(item.name)}</span>`;
 
         row.appendChild(toggle);
         row.appendChild(btn);
@@ -1469,10 +1466,7 @@ const App = (() => {
       btn.type = 'button';
       btn.className = 'sidebar-item tree-file-item';
       btn.dataset.nav = `file|${userId}|${item.id}`;
-      btn.innerHTML = `
-        <span class="sidebar-icon">${renderFileIcon(item, 'file-icon-wrap--tiny')}</span>
-        <span class="tree-file-label">${escapeHtml(item.name)}</span>
-      `;
+      btn.innerHTML = `<span class="tree-file-label">${escapeHtml(item.name)}</span>`;
       row.appendChild(btn);
       bindDragDropForTreeItem(btn, item, userId);
       addTreeMoreButton(row, () => ({

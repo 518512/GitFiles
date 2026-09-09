@@ -1786,7 +1786,7 @@ const GithubDisk = (() => {
       `/api/repos/${encodeURIComponent(disk.owner)}/${encodeURIComponent(disk.repo)}/tree?branch=${encodeURIComponent(disk.branch || 'main')}`
     );
     disk.head = data.head;
-    return { head: data.head, treeSha: data.treeSha, tree: data.tree || [] };
+    return { head: data.head, treeSha: data.treeSha, updatedAt: data.updatedAt || null, tree: data.tree || [] };
   }
 
   /**
@@ -1801,8 +1801,10 @@ const GithubDisk = (() => {
   async function listFiles(diskId, parentId = ROOT_ID) {
     const disk = getDisk(diskId);
     if (!disk) throw new Error('找不到 GitHub 存储');
-    const tree = await getRepoTree(disk);
+    const treeState = await getRepoTreeState(disk);
+    const tree = treeState.tree;
     const base = normalizePath(parentId);
+    const dateFormatted = formatDate(treeState.updatedAt);
     const folders = new Map();
     const files = [];
 
@@ -1834,7 +1836,7 @@ const GithubDisk = (() => {
             parentId: base || ROOT_ID,
             size: 0,
             sizeFormatted: '',
-            dateFormatted: '—',
+            dateFormatted,
             typeName: 'Folder',
             webViewLink: getItemWebUrl(diskId, folderPath, true),
           });
@@ -1855,7 +1857,7 @@ const GithubDisk = (() => {
             parentId: base || ROOT_ID,
             size: 0,
             sizeFormatted: '',
-            dateFormatted: '—',
+            dateFormatted,
             typeName: 'Folder',
             webViewLink: getItemWebUrl(diskId, folderPath, true),
           });
@@ -1875,7 +1877,7 @@ const GithubDisk = (() => {
         parentId: base || ROOT_ID,
         size: entry.size || 0,
         sizeFormatted: formatSize(entry.size || 0),
-        dateFormatted: '—',
+        dateFormatted,
         typeName: mimeType === 'application/json' ? 'JSON file' : mimeType.startsWith('image/') ? 'Image' : 'File',
         viewUrl: getFileViewUrl(diskId, filePath),
         webViewLink: getItemWebUrl(diskId, filePath, false),
@@ -1893,7 +1895,8 @@ const GithubDisk = (() => {
   }
 
   async function getFileContentMeta(disk, path) {
-    const tree = await getRepoTree(disk, { force: true });
+    const treeState = await getRepoTreeState(disk, { force: true });
+    const tree = treeState.tree;
     const entry = tree.find((item) => item.type === 'blob' && item.path === path);
     if (!entry) {
       const isDirectory = tree.some((item) => item.path.startsWith(`${path}/`));
@@ -2286,6 +2289,7 @@ const GithubDisk = (() => {
       ['Path', meta.path || path],
       ['Type', isFolder ? 'Folder' : 'File'],
       ['Size', meta.size != null ? formatSize(meta.size) : '—'],
+      ['Modified', formatDate((await getRepoTreeState(disk, { force: true })).updatedAt)],
       ['SHA', meta.sha || '—'],
       ['Storage', `${disk.owner}/${disk.repo}`],
       ['GitHub link', githubLink],
@@ -2355,6 +2359,7 @@ const GithubDisk = (() => {
   }
 
   async function tryResolveFileByDirectPath(disk, diskId, path) {
+    const dateFormatted = formatDate((await getRepoTreeState(disk, { force: true })).updatedAt);
     for (let attempt = 0; attempt < 4; attempt += 1) {
       try {
         const meta = await getFileContentMeta(disk, path);
@@ -2371,7 +2376,7 @@ const GithubDisk = (() => {
           parentId: parentPath || ROOT_ID,
           size: meta.size || 0,
           sizeFormatted: formatSize(meta.size || 0),
-          dateFormatted: '—',
+          dateFormatted,
           typeName: mimeType === 'application/json' ? 'JSON file' : mimeType.startsWith('text/') ? 'Text file' : 'File',
           viewUrl: getFileViewUrl(diskId, path),
           webViewLink: getItemWebUrl(diskId, path, false),
