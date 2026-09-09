@@ -88,6 +88,7 @@
     window.addEventListener('beforeinstallprompt', (event) => {
       event.preventDefault();
       window.gitFilesInstallPrompt = event;
+      window.dispatchEvent(new CustomEvent('gitfiles:install-ready'));
     });
   </script>
   <script>BasePath.bootstrapHeadAssets();</script>

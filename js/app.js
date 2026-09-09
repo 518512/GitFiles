@@ -2522,6 +2522,7 @@ const App = (() => {
   }
 
   function updateInstallUi() {
+    deferredInstallPrompt = deferredInstallPrompt || window.gitFilesInstallPrompt || null;
     const button = $('#btn-install-pwa');
     const hint = $('#pwa-install-hint');
     if (!button) return;
@@ -2546,9 +2547,16 @@ const App = (() => {
     deferredInstallPrompt = null;
     window.gitFilesInstallPrompt = null;
     updateInstallUi();
-    await prompt.prompt();
-    const result = await prompt.userChoice;
-    if (result.outcome === 'accepted') showStatus('GitFiles 正在安装…');
+    try {
+      await prompt.prompt();
+      const result = await prompt.userChoice;
+      if (result.outcome === 'accepted') showStatus('GitFiles 正在安装…');
+      else showStatus('已取消安装，可稍后再次点击。');
+    } catch (error) {
+      showStatus(`安装未完成：${error?.message || '请使用 Edge 菜单安装'}`);
+    } finally {
+      updateInstallUi();
+    }
   }
 
   function bindEvents() {
@@ -2558,6 +2566,7 @@ const App = (() => {
       window.gitFilesInstallPrompt = event;
       updateInstallUi();
     });
+    window.addEventListener('gitfiles:install-ready', updateInstallUi);
     window.addEventListener('appinstalled', () => {
       deferredInstallPrompt = null;
       window.gitFilesInstallPrompt = null;
