@@ -29,6 +29,7 @@ const App = (() => {
   let urlPushPending = false;
   let initialRouteApplied = false;
   let progressTimer = null;
+  let deferredInstallPrompt = null;
 
   const USER_SECTIONS = [
     { id: 'my-drive', icon: '📁', label: '我的云端硬盘' },
@@ -2507,7 +2508,45 @@ const App = (() => {
     }, 4000);
   }
 
+  function updateInstallUi() {
+    const button = $('#btn-install-pwa');
+    const hint = $('#pwa-install-hint');
+    if (!button) return;
+    const standalone = window.matchMedia?.('(display-mode: standalone)').matches || window.navigator.standalone;
+    if (standalone) {
+      button.classList.add('hidden');
+      if (hint) hint.textContent = 'GitFiles 已安装为独立应用。';
+      return;
+    }
+    if (deferredInstallPrompt) {
+      button.classList.remove('hidden');
+      if (hint) hint.textContent = '可将 GitFiles 安装到设备主屏幕，获得更快的独立应用体验。';
+    }
+  }
+
+  async function promptInstallPwa() {
+    if (!deferredInstallPrompt) return;
+    const prompt = deferredInstallPrompt;
+    deferredInstallPrompt = null;
+    updateInstallUi();
+    await prompt.prompt();
+    const result = await prompt.userChoice;
+    if (result.outcome === 'accepted') showStatus('GitFiles 正在安装…');
+  }
+
   function bindEvents() {
+    window.addEventListener('beforeinstallprompt', (event) => {
+      event.preventDefault();
+      deferredInstallPrompt = event;
+      updateInstallUi();
+    });
+    window.addEventListener('appinstalled', () => {
+      deferredInstallPrompt = null;
+      updateInstallUi();
+      showStatus('GitFiles 已安装');
+    });
+    $('#btn-install-pwa')?.addEventListener('click', promptInstallPwa);
+    updateInstallUi();
     $('#btn-sidebar-toggle')?.addEventListener('click', toggleSidebar);
     $('#sidebar-overlay')?.addEventListener('click', closeSidebar);
 
