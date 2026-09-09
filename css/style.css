@@ -1180,6 +1180,11 @@ body {
   font-size: 0.7rem;
 }
 
+.btn-install {
+  width: 100%;
+  margin-top: 10px;
+}
+
 .worker-session-state[data-state="connected"] {
   color: #1a6b3c;
   border-color: #79b88b;
