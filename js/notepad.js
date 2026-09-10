@@ -310,6 +310,20 @@ const Notepad = (() => {
       return;
     }
 
+    const normalizedFilePath = fileParam.startsWith('/') ? fileParam : `/${fileParam}`;
+    const handoff = peekNotepadHandoff(normalizedFilePath);
+    if (handoff?.file && (LocalDisk.isLocalId(handoff.userId) || GithubDisk.isGithubId(handoff.userId))) {
+      if ((LocalDisk.isLocalId(handoff.userId) && !LocalDisk.isNotepadFile(handoff.file))
+        || (GithubDisk.isGithubId(handoff.userId) && !GithubDisk.isNotepadFile(handoff.file))) {
+        app.showError('记事本只能打开文本文件。');
+        return;
+      }
+      state.filePath = normalizedFilePath;
+      takeNotepadHandoff(normalizedFilePath);
+      await openResolvedNotepadFile(handoff.file, handoff.userId);
+      return;
+    }
+
     const segments = Drive.parseNotepadFilePath(fileParam);
     const localDisk = LocalDisk.getDiskByName(segments[0]);
     if (localDisk) {
