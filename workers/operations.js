@@ -2,6 +2,7 @@ import { ApiError } from './http.js';
 import { branchState, githubRequest, repoPrefix } from './github.js';
 
 const EMPTY_BLOB_SHA = 'e69de29bb2d1d6434b8b29ae775ad8c2e48c5391';
+const MAX_BINARY_BYTES = 25 * 1024 * 1024;
 
 function pathOf(value) {
   if (!value || typeof value !== 'string') throw new ApiError(422, 'validation_error', 'A repository path is required');
@@ -37,9 +38,24 @@ function operationOf(raw) {
 }
 
 function encodeContent(content) {
-  if (typeof content === 'string') return btoa(unescape(encodeURIComponent(content)));
-  if (Array.isArray(content)) return btoa(String.fromCharCode(...content));
-  throw new ApiError(422, 'validation_error', 'File content must be a string or byte array');
+  if (typeof content === 'string') {
+    if (new TextEncoder().encode(content).length > MAX_BINARY_BYTES) {
+      throw new ApiError(422, 'validation_error', 'File content must be no larger than 25 MB');
+    }
+    return btoa(unescape(encodeURIComponent(content)));
+  }
+  if (!Array.isArray(content) || content.length > MAX_BINARY_BYTES) {
+    throw new ApiError(422, 'validation_error', 'File content must be a string or byte array up to 25 MB');
+  }
+  let encoded = '';
+  for (let offset = 0; offset < content.length; offset += 0x8000) {
+    const chunk = content.slice(offset, offset + 0x8000);
+    if (chunk.some((value) => !Number.isInteger(value) || value < 0 || value > 255)) {
+      throw new ApiError(422, 'validation_error', 'Byte array must contain integers from 0 to 255');
+    }
+    encoded += String.fromCharCode(...chunk);
+  }
+  return btoa(encoded);
 }
 
 async function createBlob(session, owner, repo, content) {
@@ -53,11 +69,19 @@ async function createBlob(session, owner, repo, content) {
 
 async function treeAt(session, owner, repo, head) {
   const { payload } = await githubRequest(session, `${repoPrefix(owner, repo)}/git/trees/${encodeURIComponent(head)}?recursive=1`);
-  return { treeSha: payload.sha, entries: (payload.tree || []).filter((entry) => entry.type === 'blob') };
+  if (payload?.truncated) {
+    throw new ApiError(422, 'validation_error', 'Repository tree is too large for a safe mutation; no changes were made');
+  }
+  return {
+    treeSha: payload.sha,
+    entries: (payload.tree || [])
+      .filter((entry) => entry.type === 'blob' || entry.type === 'commit')
+      .map((entry) => ({ path: entry.path, mode: entry.mode || (entry.type === 'commit' ? '160000' : '100644'), type: entry.type, sha: entry.sha })),
+  };
 }
 
 async function applyOperations(session, owner, repo, entries, rawOperations) {
-  const index = new Map(entries.map((entry) => [entry.path, { path: entry.path, mode: entry.mode || '100644', type: 'blob', sha: entry.sha }]));
+  const index = new Map(entries.map((entry) => [entry.path, { path: entry.path, mode: entry.mode || (entry.type === 'commit' ? '160000' : '100644'), type: entry.type, sha: entry.sha }]));
   const deferred = new Map();
   const operations = rawOperations.map(operationOf);
   const existsAtOrUnder = (path) => [...index.values()].some((entry) => isUnder(entry.path, path));
@@ -77,7 +101,9 @@ async function applyOperations(session, owner, repo, entries, rawOperations) {
       if (taken(op.path)) throw new ApiError(422, 'validation_error', `Path already exists: ${op.path}`);
       index.set(op.path, { path: op.path, mode: '100644', type: 'blob', deferred: op.content });
     } else if (op.type === 'update' || op.type === 'upload') {
-      if (!index.has(op.path)) throw new ApiError(422, 'validation_error', `File not found: ${op.path}`);
+      if (!index.has(op.path) || index.get(op.path).type !== 'blob') {
+        throw new ApiError(422, 'validation_error', `File not found: ${op.path}`);
+      }
       index.set(op.path, { path: op.path, mode: '100644', type: 'blob', deferred: op.content });
     } else if (op.type === 'mkdir') {
       if (taken(op.path)) throw new ApiError(422, 'validation_error', `Path already exists: ${op.path}`);

@@ -41,6 +41,9 @@ export async function handleRepositoryApi(request, env, url) {
     const state = await branchState(session, owner, repo, branch);
     if (!state) return json({ head: null, treeSha: null, tree: [] });
     const { payload } = await githubRequest(session, `${repoPrefix(owner, repo)}/git/trees/${encodeURIComponent(state.head)}?recursive=1`);
+    if (payload?.truncated) {
+      throw new ApiError(422, 'validation_error', 'Repository tree is too large to load safely');
+    }
     const { payload: commit } = await githubRequest(session, `${repoPrefix(owner, repo)}/git/commits/${encodeURIComponent(state.head)}`);
     const updatedAt = commit?.committer?.date || commit?.author?.date || null;
     return json({ head: state.head, treeSha: payload.sha || state.treeSha, updatedAt, tree: payload.tree || [] });
@@ -62,8 +65,8 @@ export async function handleRepositoryApi(request, env, url) {
     await requireRepositoryAccess(env, session, owner, repo, true);
     const body = await readJson(request);
     const branch = defaultBranch(body.branch);
-    if (!Array.isArray(body.operations) || !body.operations.length) {
-      throw new ApiError(422, 'validation_error', 'operations must be a non-empty array');
+    if (!Array.isArray(body.operations) || !body.operations.length || body.operations.length > 1000) {
+      throw new ApiError(422, 'validation_error', 'operations must contain between 1 and 1000 items');
     }
     if (body.expectedHead !== null && typeof body.expectedHead !== 'string') {
       throw new ApiError(422, 'validation_error', 'expectedHead must be a commit SHA or null for an empty branch');

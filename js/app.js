@@ -15,6 +15,10 @@ const App = (() => {
     history: [{ level: 'home', userId: null, folderId: null, section: 'my-drive' }],
     historyIndex: 0,
     selectedId: null,
+    selectedIds: new Set(),
+    searchQuery: '',
+    sortBy: 'name',
+    sortDirection: 'asc',
     expandedRoot: true,
     expandedUsers: new Set(),
     expandedFolders: new Set(),
@@ -73,13 +77,48 @@ const App = (() => {
     if (msg) {
       el.textContent = msg;
       show(el);
+      showStatus(msg, 'error');
     } else {
       hide(el);
     }
   }
 
-  function showStatus(msg) {
-    $('#status-selected').textContent = msg || '';
+  let statusTimer = null;
+
+  function showStatus(msg, kind = 'info') {
+    const text = msg || '';
+    $('#status-selected').textContent = text;
+    const banner = $('#app-status');
+    if (banner) {
+      banner.textContent = text;
+      banner.dataset.kind = kind;
+      banner.classList.toggle('hidden', !text);
+      if (statusTimer) clearTimeout(statusTimer);
+      if (text && kind === 'success') statusTimer = setTimeout(() => banner.classList.add('hidden'), 4200);
+    }
+  }
+
+  function visibleFiles() {
+    const query = state.searchQuery.trim().toLocaleLowerCase();
+    const files = state.files.filter((file) => !query || String(file.name || '').toLocaleLowerCase().includes(query));
+    const direction = state.sortDirection === 'desc' ? -1 : 1;
+    return files.sort((a, b) => {
+      if (a.isFolder !== b.isFolder) return a.isFolder ? -1 : 1;
+      let left = a.name || '';
+      let right = b.name || '';
+      if (state.sortBy === 'size') { left = Number(a.size || 0); right = Number(b.size || 0); }
+      if (state.sortBy === 'modified') { left = a.dateFormatted || ''; right = b.dateFormatted || ''; }
+      if (state.sortBy === 'type') { left = a.typeName || ''; right = b.typeName || ''; }
+      return (typeof left === 'number' ? left - right : String(left).localeCompare(String(right), 'zh-CN')) * direction;
+    });
+  }
+
+  function updateSelectionBar() {
+    const bar = $('#selection-bar');
+    const count = state.selectedIds.size;
+    if (!bar) return;
+    bar.classList.toggle('hidden', count === 0);
+    $('#selection-count').textContent = `已选择 ${count} 项`;
   }
 
   function renderGithubSessionState() {
@@ -95,20 +134,26 @@ const App = (() => {
     el.dataset.state = state.githubSession;
   }
 
-  async function refreshGithubSessionState() {
+  let sessionCheckPromise = null;
+
+  function refreshGithubSessionState() {
+    if (sessionCheckPromise) return sessionCheckPromise;
     state.githubSession = 'checking';
     renderGithubSessionState();
-    try {
-      await GithubApi.request('/api/me');
-      state.githubSession = 'connected';
-      return true;
-    } catch (err) {
-      state.githubSession = err?.status === 401 ? 'expired' : 'unavailable';
-      showLogin();
-      return false;
-    } finally {
-      renderGithubSessionState();
-    }
+    sessionCheckPromise = GithubApi.request('/api/me')
+      .then(() => {
+        state.githubSession = 'connected';
+        return true;
+      })
+      .catch((err) => {
+        state.githubSession = err?.status === 401 ? 'expired' : 'unavailable';
+        return false;
+      })
+      .finally(() => {
+        renderGithubSessionState();
+        sessionCheckPromise = null;
+      });
+    return sessionCheckPromise;
   }
 
   function addConflictRecord(record) {
@@ -1045,10 +1090,10 @@ const App = (() => {
     const grid = $('#file-grid');
     grid.innerHTML = '';
 
-    state.files.forEach((file) => {
+    visibleFiles().forEach((file) => {
       const item = document.createElement('div');
       const pendingClass = getFilePendingClasses(file);
-      item.className = 'file-item' + (file.id === state.selectedId ? ' selected' : '') + pendingClass;
+      item.className = 'file-item' + (state.selectedIds.has(file.id) ? ' selected' : '') + pendingClass;
       item.dataset.id = file.id;
       const statusHtml = renderFileStatusBadge(file);
       item.innerHTML = `
@@ -1059,7 +1104,7 @@ const App = (() => {
         <span class="file-name">${escapeHtml(file.name)}</span>
         ${statusHtml}
       `;
-      item.addEventListener('click', () => selectFile(file.id));
+      item.addEventListener('click', (event) => selectFile(file.id, event));
       item.addEventListener('dblclick', () => openFile(file));
       attachFileContextMenu(item, file);
       bindDragDropForWorkspaceItem(item, file);
@@ -1072,10 +1117,10 @@ const App = (() => {
     const body = $('#file-list-body');
     body.innerHTML = '';
 
-    state.files.forEach((file) => {
+    visibleFiles().forEach((file) => {
       const row = document.createElement('div');
       const pendingClass = getFilePendingClasses(file);
-      row.className = 'list-row' + (file.id === state.selectedId ? ' selected' : '') + pendingClass;
+      row.className = 'list-row' + (state.selectedIds.has(file.id) ? ' selected' : '') + pendingClass;
       row.dataset.id = file.id;
       const modifiedLabel = (file.pending || state.processingItemIds.has(file.id))
         ? getPendingDisplayLabel(file)
@@ -1092,7 +1137,7 @@ const App = (() => {
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
         </button>
       `;
-      row.addEventListener('click', () => selectFile(file.id));
+      row.addEventListener('click', (event) => selectFile(file.id, event));
       row.addEventListener('dblclick', () => openFile(file));
       attachFileContextMenu(row, file);
       bindDragDropForWorkspaceItem(row, file);
@@ -1107,8 +1152,15 @@ const App = (() => {
     return div.innerHTML;
   }
 
-  function selectFile(id) {
+  function selectFile(id, event = null) {
+    if (event?.ctrlKey || event?.metaKey || event?.shiftKey) {
+      if (state.selectedIds.has(id)) state.selectedIds.delete(id);
+      else state.selectedIds.add(id);
+    } else {
+      state.selectedIds = new Set([id]);
+    }
     state.selectedId = id;
+    updateSelectionBar();
     renderCurrentView();
     const file = state.files.find((f) => f.id === id);
     $('#status-selected').textContent = file ? file.name : '';
@@ -1201,8 +1253,9 @@ const App = (() => {
       }
     }
 
-    const count = state.files.length;
-    $('#status-count').textContent = `${count} 个项目`;
+    const count = visibleFiles().length;
+    $('#status-count').textContent = state.searchQuery ? `${count} / ${state.files.length} 个项目` : `${count} 个项目`;
+    updateSelectionBar();
     syncProgressLoop();
   }
 
@@ -1658,6 +1711,9 @@ const App = (() => {
       const label = document.createElement('span');
       label.className = 'sidebar-user-label';
       label.textContent = disk.name;
+      const repoMeta = document.createElement('span');
+      repoMeta.className = 'tree-repo-meta';
+      repoMeta.textContent = disk.owner && disk.repo ? `${disk.owner}/${disk.repo} · ${disk.branch || 'main'}` : '本地存储';
 
       const quota = document.createElement('span');
       quota.className = 'tree-user-quota';
@@ -1665,6 +1721,7 @@ const App = (() => {
       quota.textContent = getQuotaLabel(disk.id);
 
       info.appendChild(label);
+      info.appendChild(repoMeta);
       info.appendChild(quota);
       diskBtn.appendChild(icon);
       diskBtn.appendChild(info);
@@ -1775,6 +1832,9 @@ const App = (() => {
       const label = document.createElement('span');
       label.className = 'sidebar-user-label';
       label.textContent = disk.name;
+      const repoMeta = document.createElement('span');
+      repoMeta.className = 'tree-repo-meta';
+      repoMeta.textContent = disk.owner && disk.repo ? `${disk.owner}/${disk.repo} · ${disk.branch || 'main'}` : '本地存储';
 
       const quota = document.createElement('span');
       quota.className = 'tree-user-quota';
@@ -1782,6 +1842,7 @@ const App = (() => {
       quota.textContent = getQuotaLabel(disk.id);
 
       info.appendChild(label);
+      info.appendChild(repoMeta);
       info.appendChild(quota);
       diskBtn.appendChild(img);
       diskBtn.appendChild(info);
@@ -1986,6 +2047,11 @@ const App = (() => {
     setLoading(true);
     showError(null);
     state.selectedId = null;
+    state.selectedIds.clear();
+    state.searchQuery = '';
+    const searchInput = $('#file-search');
+    if (searchInput) searchInput.value = '';
+    updateSelectionBar();
     $('#status-selected').textContent = '';
 
     try {
@@ -2619,6 +2685,42 @@ const App = (() => {
 
     $('#btn-view-grid').addEventListener('click', () => setView('grid'));
     $('#btn-view-list').addEventListener('click', () => setView('list'));
+    $('#file-search')?.addEventListener('input', (event) => {
+      state.searchQuery = event.target.value;
+      renderCurrentView();
+    });
+    $('#file-sort')?.addEventListener('change', (event) => {
+      state.sortBy = event.target.value;
+      renderCurrentView();
+    });
+    $('#btn-sort-direction')?.addEventListener('click', (event) => {
+      state.sortDirection = state.sortDirection === 'asc' ? 'desc' : 'asc';
+      event.currentTarget.textContent = state.sortDirection === 'asc' ? '↑' : '↓';
+      renderCurrentView();
+    });
+    $('#selection-bar')?.addEventListener('click', (event) => {
+      const action = event.target.closest('[data-selection-action]')?.dataset.selectionAction;
+      if (!action) return;
+      if (action === 'clear') {
+        state.selectedIds.clear();
+        state.selectedId = null;
+        updateSelectionBar();
+        renderCurrentView();
+      } else {
+        const files = [...state.selectedIds].map((id) => state.files.find((item) => item.id === id)).filter(Boolean);
+        const file = files[0];
+        if (!file) return;
+        if (isCurrentGithubDrive() && files.length > 1 && action === 'delete') {
+          GithubDisk.deleteBatch(state.currentUserId, files, `Delete ${files.length} items`).catch(showError);
+          return;
+        }
+        if (files.length > 1) {
+          showStatus('多选复制和移动请使用右键菜单中的批量操作');
+          return;
+        }
+        ContextMenu.runAction(action, buildFileContext(file));
+      }
+    });
     $('#btn-mobile-menu')?.addEventListener('click', (e) => {
       e.stopPropagation();
       openMobileAreaMenu();

@@ -156,6 +156,36 @@ test('operations require same-origin and reject before GitHub access', async () 
   assert.equal(body.error, 'forbidden');
 });
 
+test('OAuth token exchange allows credentialed same-origin session responses', async () => {
+  const originalFetch = globalThis.fetch;
+  let fetchCount = 0;
+  globalThis.fetch = async () => {
+    fetchCount += 1;
+    const payload = fetchCount === 1 ? { access_token: 'secret', expires_in: 3600 } : { login: 'octo' };
+    return new Response(JSON.stringify(payload), { status: 200 });
+  };
+  try {
+    const env = {
+      GITHUB_CLIENT_SECRET: 'secret',
+      DB: {
+        prepare() {
+          return { bind() { return { async first() { return null; }, async run() { return { success: true }; } }; } };
+        },
+      },
+    };
+    const response = await worker.fetch(request('/api/github/oauth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Origin: 'https://gitfiles.example' },
+      body: JSON.stringify({ client_id: 'client', code: 'code', code_verifier: 'verifier' }),
+    }), env);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('Access-Control-Allow-Credentials'), 'true');
+    assert.match(response.headers.get('Set-Cookie'), /HttpOnly/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('OAuth token exchange never returns an access token', async () => {
   const { response, body } = await responseJson('/api/github/oauth/token', {}, {
     method: 'POST',
@@ -195,6 +225,83 @@ test('Worker mutation reuses a Blob SHA for rename and performs one CAS ref upda
     const ref = calls.find((call) => call.path.endsWith('/git/refs/heads/main'));
     assert.equal(ref.method, 'PATCH');
     assert.deepEqual(JSON.parse(ref.body), { sha: 'head-B', force: false });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Worker rejects truncated trees before creating a new tree', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, options = {}) => {
+    const path = new URL(url).pathname;
+    calls.push({ path, method: options.method || 'GET' });
+    const payload = path.endsWith('/branches/main')
+      ? { commit: { sha: 'head-A', commit: { tree: { sha: 'tree-A' } } } }
+      : path.endsWith('/git/trees/head-A')
+        ? { sha: 'tree-A', truncated: true, tree: [{ path: 'visible.md', type: 'blob', sha: 'blob-A' }] }
+        : {};
+    return new Response(JSON.stringify(payload), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  try {
+    await assert.rejects(
+      () => executeOperations({ access_token: 'secret' }, 'octo', 'repo', {
+        branch: 'main', expectedHead: 'head-A', operations: [{ type: 'create', path: 'new.md', content: 'new' }],
+      }),
+      (error) => error.status === 422 && error.code === 'validation_error'
+    );
+    assert.equal(calls.some((call) => call.method === 'POST'), false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Worker preserves gitlink entries in rewritten trees', async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  globalThis.fetch = async (url, options = {}) => {
+    const path = new URL(url).pathname;
+    calls.push({ path, method: options.method || 'GET', body: options.body });
+    const payload = path.endsWith('/branches/main') ? { commit: { sha: 'head-A', commit: { tree: { sha: 'tree-A' } } } }
+      : path.endsWith('/git/trees/head-A') ? { sha: 'tree-A', tree: [{ path: 'module', mode: '160000', type: 'commit', sha: 'commit-module' }] }
+      : path.endsWith('/git/trees') ? { sha: 'tree-B' }
+      : path.endsWith('/git/commits') ? { sha: 'head-B' }
+      : {};
+    return new Response(JSON.stringify(payload), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  try {
+    await executeOperations({ access_token: 'secret' }, 'octo', 'repo', {
+      branch: 'main', expectedHead: 'head-A', operations: [{ type: 'create', path: 'new.md', content: 'new' }],
+    });
+    const tree = calls.find((call) => call.path.endsWith('/git/trees') && call.method === 'POST');
+    assert.match(tree.body, /commit-module/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Worker encodes large byte arrays in chunks and rejects invalid bytes', async () => {
+  const originalFetch = globalThis.fetch;
+  let blobBody;
+  globalThis.fetch = async (url, options = {}) => {
+    const path = new URL(url).pathname;
+    if (path.endsWith('/branches/main')) return new Response(JSON.stringify({ commit: { sha: 'head-A', commit: { tree: { sha: 'tree-A' } } } }), { status: 200 });
+    if (path.endsWith('/git/trees/head-A')) return new Response(JSON.stringify({ sha: 'tree-A', tree: [] }), { status: 200 });
+    if (path.endsWith('/git/blobs')) { blobBody = JSON.parse(options.body); return new Response(JSON.stringify({ sha: 'blob-A' }), { status: 201 }); }
+    return new Response(JSON.stringify({ sha: 'tree-B' }), { status: 200 });
+  };
+  try {
+    await executeOperations({ access_token: 'secret' }, 'octo', 'repo', {
+      branch: 'main', expectedHead: 'head-A', operations: [{ type: 'create', path: 'image.bin', content: Array(200000).fill(65) }],
+    });
+    assert.equal(blobBody.encoding, 'base64');
+    assert.equal(blobBody.content.length, 266668);
+    await assert.rejects(
+      () => executeOperations({ access_token: 'secret' }, 'octo', 'repo', {
+        branch: 'main', expectedHead: 'head-A', operations: [{ type: 'create', path: 'bad.bin', content: [256] }],
+      }),
+      (error) => error.status === 422
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }

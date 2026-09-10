@@ -24,7 +24,7 @@
 
 body {
   font-family: var(--font);
-  background: linear-gradient(135deg, #1e3a5f 0%, #0d2137 50%, #1a4a6e 100%);
+  background: #eef2f6;
   min-height: 100vh;
   display: flex;
   align-items: center;
@@ -629,6 +629,16 @@ body {
   min-width: 0;
   flex: 1;
   gap: 2px;
+}
+
+.tree-repo-meta {
+  display: block;
+  color: var(--win-text-muted);
+  font-size: 0.68rem;
+  line-height: 1.25;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .tree-user-quota {
@@ -1255,6 +1265,72 @@ body {
   background: #fff1e9;
   border-left: 1px solid #e2a391;
 }
+
+/* File tools and persistent operation status */
+.file-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: #fff;
+  border-bottom: 1px solid var(--win-border);
+}
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 180px;
+  flex: 1;
+  border: 1px solid var(--win-border);
+  border-radius: 4px;
+  padding: 0 8px;
+  color: var(--win-text-muted);
+}
+.search-box input {
+  width: 100%;
+  min-height: 32px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--win-text);
+}
+.sort-select {
+  min-height: 32px;
+  border: 1px solid var(--win-border);
+  border-radius: 4px;
+  background: #fff;
+  padding: 0 6px;
+  color: var(--win-text);
+}
+.app-status {
+  min-height: 0;
+  padding: 0 12px;
+  background: #f6f8fa;
+  color: var(--win-text-muted);
+  font-size: 0.78rem;
+  line-height: 30px;
+  border-top: 1px solid var(--win-border);
+}
+.app-status[data-kind="error"] { color: #9d2b1c; background: #fff2f0; }
+.app-status[data-kind="success"] { color: #1a6b3c; background: #edf8f0; }
+.selection-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: #eaf4ff;
+  border-top: 1px solid #b9d9f7;
+  color: var(--win-text);
+}
+.selection-bar button {
+  min-height: 32px;
+  border: 1px solid #a9c7e2;
+  border-radius: 4px;
+  background: #fff;
+  padding: 0 10px;
+  cursor: pointer;
+}
+.selection-bar button:hover { background: var(--win-hover); }
 
 /* Status bar */
 .status-bar {
@@ -2590,6 +2666,42 @@ body.dialog-open {
     justify-content: center;
     min-width: 40px;
     min-height: 36px;
+  }
+
+  .file-tools {
+    flex-wrap: wrap;
+    padding: 6px 8px;
+  }
+
+  .search-box {
+    min-width: 0;
+    flex: 1 1 100%;
+  }
+
+  .sort-select {
+    flex: 1;
+    min-height: 40px;
+  }
+
+  .file-tools .tool-btn {
+    min-width: 40px;
+    min-height: 40px;
+  }
+
+  .selection-bar {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: env(safe-area-inset-bottom, 0);
+    z-index: 80;
+    overflow-x: auto;
+    min-height: 56px;
+    padding: 8px;
+  }
+
+  .selection-bar button {
+    min-height: 44px;
+    white-space: nowrap;
   }
 
   .address-bar {

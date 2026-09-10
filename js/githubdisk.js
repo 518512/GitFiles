@@ -155,9 +155,19 @@ const GithubDisk = (() => {
    * Run one logical group of operations as ONE tree + ONE commit
    * (Git Data API, CAS-protected).
    */
+  function serializeOperations(operations) {
+    return operations.map((operation) => {
+      if (!operation || !(operation.content instanceof Uint8Array)) return operation;
+      return { ...operation, content: Array.from(operation.content) };
+    });
+  }
+
   async function executeOperations(diskId, operations, message) {
     const disk = getDisk(diskId);
     if (!disk) throw new Error('找不到 GitHub 存储');
+    // JSON has no typed-array representation; normalize binary content before
+    // crossing the Worker API boundary.
+    const serializedOperations = serializeOperations(operations);
     // Read the current server head immediately before mutation. The Worker
     // repeats this comparison before it writes the ref, providing CAS.
     if (!disk.head) await getRepoTreeState(disk, { force: true });
@@ -170,7 +180,7 @@ const GithubDisk = (() => {
             branch: disk.branch || 'main',
             expectedHead: disk.head,
             message,
-            operations,
+            operations: serializedOperations,
           },
         }
       );
@@ -184,6 +194,23 @@ const GithubDisk = (() => {
         conflict.expectedHead = err.payload?.details?.expectedHead ?? disk.head;
         conflict.remoteHead = err.payload?.details?.remoteHead ?? null;
         throw conflict;
+      }
+      if (err?.status === 0) {
+        // A lost response is not proof that the commit failed. Re-read the
+        // authoritative branch before surfacing the result as an error.
+        const expectedHead = disk.head;
+        try {
+          const remote = await getRepoTreeState(disk, { force: true });
+          if (remote.head && remote.head !== expectedHead) {
+            const conflict = new Error('操作结果未能确认：远端分支已发生变化，请检查冲突中心。');
+            conflict.name = 'ConflictError';
+            conflict.expectedHead = expectedHead || null;
+            conflict.remoteHead = remote.head;
+            throw conflict;
+          }
+        } catch (verificationError) {
+          if (isConflictError(verificationError)) throw verificationError;
+        }
       }
       throw err;
     }
@@ -1274,10 +1301,14 @@ const GithubDisk = (() => {
 
   async function exchangeCodeForToken(code, codeVerifier, redirectUri, clientId) {
     const url = getTokenExchangeUrl();
+    if (new URL(url, location.href).origin !== location.origin) {
+      throw new Error('认证服务必须与 GitFiles 使用同一域名，否则 HttpOnly 会话 Cookie 无法建立。');
+    }
     let tokenRes;
     try {
       tokenRes = await fetch(url, {
         method: 'POST',
+        credentials: 'same-origin',
         headers: {
           'Content-Type': 'application/json',
           Accept: 'application/json',
@@ -1333,10 +1364,9 @@ const GithubDisk = (() => {
 
       const handlePayload = (data) => {
         if (!data || data.source !== OAUTH_MESSAGE_SOURCE) return;
-        if (data.state !== state) {
-          finish(() => reject(new Error('GitHub OAuth 状态无效')));
-          return;
-        }
+        // BroadcastChannel/localStorage are shared across tabs. Ignore stale
+        // callbacks from another login attempt instead of aborting this one.
+        if (data.state !== state) return;
         if (data.error) {
           finish(() => reject(new Error(data.error_description || data.error || 'GitHub authorization failed')));
           return;
@@ -1501,7 +1531,9 @@ const GithubDisk = (() => {
 
   let hasWorkerSession = false;
 
-  async function acquireAccessToken() {
+  let accessTokenPromise = null;
+
+  async function acquireAccessTokenInternal() {
     // OAuth exchange creates an HttpOnly Worker session. The browser never
     // receives or stores a GitHub credential.
     if (hasWorkerSession) {
@@ -1523,6 +1555,14 @@ const GithubDisk = (() => {
     }
     hasWorkerSession = true;
     return true;
+  }
+
+  function acquireAccessToken() {
+    if (accessTokenPromise) return accessTokenPromise;
+    accessTokenPromise = acquireAccessTokenInternal().finally(() => {
+      accessTokenPromise = null;
+    });
+    return accessTokenPromise;
   }
 
   function isEmptyGitTreeError(err) {
