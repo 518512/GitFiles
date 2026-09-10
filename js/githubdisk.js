@@ -1513,8 +1513,14 @@ const GithubDisk = (() => {
       }
     }
     await oauthSignIn();
-    // The Worker only returns ok after it has created the HttpOnly session.
-    // Avoid a second /api/me round trip on the login critical path.
+    // Verify that the browser received the HttpOnly session cookie. The OAuth
+    // exchange response alone is not proof that this app can authenticate.
+    try {
+      await GithubApi.request('/api/me');
+    } catch (error) {
+      hasWorkerSession = false;
+      throw new Error(`GitHub 登录已完成，但应用会话未建立：${error?.message || '请重试'}`);
+    }
     hasWorkerSession = true;
     return true;
   }

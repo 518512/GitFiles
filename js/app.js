@@ -709,7 +709,8 @@ const App = (() => {
     if (state.currentUserId === diskId) {
       state.currentUserId = null;
       navigateToHome();
-      showExplorer();
+      if (state.githubSession === 'connected') showExplorer();
+      else showLogin();
       return;
     }
 
@@ -729,7 +730,8 @@ const App = (() => {
     if (state.currentUserId === diskId) {
       state.currentUserId = null;
       navigateToHome();
-      showExplorer();
+      if (state.githubSession === 'connected') showExplorer();
+      else showLogin();
       return;
     }
 
@@ -755,7 +757,8 @@ const App = (() => {
     }
     Auth.signOutAll();
     navigateToHome();
-    showExplorer();
+    if (state.githubSession === 'connected') showExplorer();
+    else showLogin();
   }
 
   function signOutUser(userId) {
@@ -767,7 +770,8 @@ const App = (() => {
     if (state.currentUserId === userId) {
       state.currentUserId = null;
       navigateToHome();
-      showExplorer();
+      if (state.githubSession === 'connected') showExplorer();
+      else showLogin();
       return;
     }
 
@@ -2251,6 +2255,10 @@ const App = (() => {
   }
 
   async function showExplorer() {
+    if (state.githubSession !== 'connected') {
+      showLogin();
+      return false;
+    }
     hide($('#app-boot'));
     hide($('#login-screen'));
     show($('#explorer'));
@@ -2263,6 +2271,7 @@ const App = (() => {
     }
 
     loadCurrentLocation();
+    return true;
   }
 
   function hasMountedDrives() {
@@ -2342,15 +2351,6 @@ const App = (() => {
       }
     } finally {
       btn.disabled = false;
-    }
-  }
-
-  let fallbackLoginTimer = null;
-
-  function cancelFallbackLogin() {
-    if (fallbackLoginTimer) {
-      clearTimeout(fallbackLoginTimer);
-      fallbackLoginTimer = null;
     }
   }
 
@@ -2512,13 +2512,6 @@ const App = (() => {
         destParentId: file.id,
       }));
     }
-  }
-
-  function scheduleFallbackLogin() {
-    cancelFallbackLogin();
-    fallbackLoginTimer = setTimeout(() => {
-      if (!hasMountedDrives()) showExplorer();
-    }, 4000);
   }
 
   function updateInstallUi() {
