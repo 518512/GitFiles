@@ -9,7 +9,7 @@ const TOKEN_PATH = '/api/github/oauth/token';
 function corsHeaders(request) {
   const origin = request.headers.get('Origin');
   return origin && origin === new URL(request.url).origin
-    ? { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Accept', Vary: 'Origin' }
+    ? { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Credentials': 'true', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Accept', Vary: 'Origin' }
     : { Vary: 'Origin' };
 }
 

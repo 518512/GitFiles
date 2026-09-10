@@ -99,7 +99,7 @@
 <body>
   <div id="app-boot" class="app-boot" role="status">正在验证访问权限…</div>
   <!-- 登录界面 -->
-  <div id="login-screen" class="login-screen">
+  <div id="login-screen" class="login-screen hidden">
     <div class="login-card login-card--github-only">
       <div class="login-logo">
         <img src="assets/logo.svg" width="72" height="72" alt="GitFiles 徽标">
@@ -156,7 +156,20 @@
         <div class="address-bar">
           <span class="address-icon">📁</span>
           <div id="breadcrumbs" class="breadcrumbs"></div>
-          <button id="btn-copy-url" class="address-copy-btn" type="button" title="复制当前位置链接">🔗</button>
+          <button id="btn-copy-url" class="address-copy-btn" type="button" title="复制当前位置链接" aria-label="复制当前位置链接">🔗</button>
+        </div>
+        <div class="file-tools" role="toolbar" aria-label="文件视图工具">
+          <label class="search-box" title="搜索当前目录">
+            <span aria-hidden="true">⌕</span>
+            <input id="file-search" type="search" placeholder="搜索当前目录" autocomplete="off">
+          </label>
+          <select id="file-sort" class="sort-select" aria-label="排序方式">
+            <option value="name">名称</option>
+            <option value="modified">修改时间</option>
+            <option value="size">大小</option>
+            <option value="type">类型</option>
+          </select>
+          <button id="btn-sort-direction" class="tool-btn" type="button" title="切换排序方向" aria-label="切换排序方向">↑</button>
         </div>
         <div class="view-toggle">
           <button id="btn-view-grid" class="tool-btn active" title="大图标">
@@ -225,6 +238,14 @@
       </div>
 
       <!-- 状态栏 -->
+      <div id="app-status" class="app-status" role="status" aria-live="polite"></div>
+      <div id="selection-bar" class="selection-bar hidden" role="toolbar" aria-label="已选项目操作">
+        <strong id="selection-count">已选择 0 项</strong>
+        <button type="button" data-selection-action="copy">复制</button>
+        <button type="button" data-selection-action="cut">移动</button>
+        <button type="button" data-selection-action="delete">删除</button>
+        <button type="button" data-selection-action="clear" aria-label="清除选择">取消</button>
+      </div>
       <div class="status-bar">
         <span id="status-count">0 个项目</span>
         <span id="worker-session-state" class="worker-session-state" role="status">GitHub 会话：检查中</span>
