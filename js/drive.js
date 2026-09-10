@@ -10,8 +10,17 @@ const Drive = (() => {
     throw error;
   }
 
-  function isNotepadFile() {
-    return false;
+  function isNotepadFile(file) {
+    const mime = String(file?.mimeType || '').toLowerCase();
+    const name = String(file?.name || '').toLowerCase();
+    return mime.startsWith('text/') || mime === 'application/json'
+      || /\.(txt|md|markdown|csv|log|xml|yml|yaml|html|htm|css|js|ts|tsx|jsx|py|sh|bat|sql|json)$/i.test(name);
+  }
+
+  function parseNotepadFilePath(filePath) {
+    return String(filePath || '').split('/').filter(Boolean).map((segment) => {
+      try { return decodeURIComponent(segment); } catch { return segment; }
+    });
   }
 
   return {

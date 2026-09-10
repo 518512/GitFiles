@@ -742,8 +742,8 @@ const LocalDisk = (() => {
   function isNotepadFile(file) {
     const mime = (file.mimeType || '').toLowerCase();
     const name = (file.name || '').toLowerCase();
-    if (mime === 'text/plain' || mime === 'application/json') return true;
-    return /\.(txt|json)$/i.test(name);
+    if (mime.startsWith('text/') || mime === 'application/json' || mime === 'application/xml') return true;
+    return /\.(txt|md|markdown|csv|log|xml|yml|yaml|html|htm|css|js|ts|tsx|jsx|py|sh|bat|sql|json)$/i.test(name);
   }
 
   async function buildNotepadFilePath(diskId, file) {

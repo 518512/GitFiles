@@ -299,7 +299,7 @@ const Notepad = (() => {
         const token = await Auth.ensureValidToken(legacyUserId);
         const meta = await Drive.getFileMeta(token, fileParam);
         if (!Drive.isNotepadFile(meta)) {
-          app.showError('记事本只能打开 .txt 和 .json 文件。');
+          app.showError('记事本只能打开文本文件。');
           return;
         }
         await open(meta, legacyUserId);
@@ -317,7 +317,7 @@ const Notepad = (() => {
       const handoff = peekNotepadHandoff(state.filePath);
       if (handoff?.userId === localDisk.id) {
         if (!LocalDisk.isNotepadFile(handoff.file)) {
-          app.showError('记事本只能打开 .txt 和 .json 文件。');
+          app.showError('记事本只能打开文本文件。');
           return;
         }
         takeNotepadHandoff(state.filePath);
@@ -327,7 +327,7 @@ const Notepad = (() => {
       try {
         const { diskId, file } = await LocalDisk.resolveFileByPath(segments);
         if (!LocalDisk.isNotepadFile(file)) {
-          app.showError('记事本只能打开 .txt 和 .json 文件。');
+          app.showError('记事本只能打开文本文件。');
           return;
         }
         syncBrowserUrl();
@@ -344,7 +344,7 @@ const Notepad = (() => {
       const handoff = peekNotepadHandoff(state.filePath);
       if (handoff?.userId === githubDisk.id) {
         if (!GithubDisk.isNotepadFile(handoff.file)) {
-          app.showError('记事本只能打开 .txt 和 .json 文件。');
+          app.showError('记事本只能打开文本文件。');
           return;
         }
         takeNotepadHandoff(state.filePath);
@@ -354,7 +354,7 @@ const Notepad = (() => {
       try {
         const { diskId, file } = await GithubDisk.resolveFileByPath(segments);
         if (!GithubDisk.isNotepadFile(file)) {
-          app.showError('记事本只能打开 .txt 和 .json 文件。');
+          app.showError('记事本只能打开文本文件。');
           return;
         }
         syncBrowserUrl();
@@ -377,7 +377,7 @@ const Notepad = (() => {
       const token = await Auth.ensureValidToken(user.id);
       const meta = await Drive.resolveFileByPath(token, segments);
       if (!Drive.isNotepadFile(meta)) {
-        app.showError('记事本只能打开 .txt 和 .json 文件。');
+        app.showError('记事本只能打开文本文件。');
         return;
       }
       syncBrowserUrl();
