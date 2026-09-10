@@ -22,6 +22,17 @@ export function clearSessionCookie(request = null) {
   return `${COOKIE_NAME}=; ${cookieAttributes(request)} Max-Age=0`;
 }
 
+export async function deleteSession(request, env) {
+  if (!env.DB) throw new ApiError(503, 'service_unavailable', 'D1 session storage is not configured');
+  const id = cookieValue(request, COOKIE_NAME);
+  if (!id) return false;
+  // Do not rely on SQLite foreign-key enforcement being enabled in every D1
+  // deployment; explicitly remove ACL rows with the server-side session.
+  await env.DB.prepare('DELETE FROM repository_access WHERE session_id = ?').bind(id).run();
+  await env.DB.prepare('DELETE FROM sessions WHERE id = ?').bind(id).run();
+  return true;
+}
+
 export async function requireSession(request, env) {
   if (!env.DB) throw new ApiError(503, 'service_unavailable', 'D1 session storage is not configured');
   const id = cookieValue(request, COOKIE_NAME);

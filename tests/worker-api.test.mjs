@@ -62,6 +62,36 @@ test('repo list requires a session cookie', async () => {
   assert.equal(body.error, 'unauthorized');
 });
 
+test('logout revokes the D1 session and clears its cookie', async () => {
+  const statements = [];
+  const env = {
+    DB: {
+      prepare(sql) {
+        return {
+          bind(...args) {
+            return {
+              async run() {
+                statements.push({ sql, args });
+                return { success: true };
+              },
+            };
+          },
+        };
+      },
+    },
+  };
+  const { response, body } = await responseJson('/api/logout', env, {
+    method: 'POST',
+    headers: { Cookie: 'gitfiles_session=s1', Origin: 'https://gitfiles.example' },
+  });
+  assert.equal(response.status, 200);
+  assert.deepEqual(body, { ok: true });
+  assert.equal(statements.length, 2);
+  assert.match(statements[0].sql, /DELETE FROM repository_access/);
+  assert.match(statements[1].sql, /DELETE FROM sessions/);
+  assert.match(response.headers.get('Set-Cookie'), /gitfiles_session=;/);
+});
+
 test('repository reads reject an uncached repository without GitHub read permission', async () => {
   const env = {
     DB: dbWith({

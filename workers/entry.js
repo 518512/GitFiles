@@ -1,5 +1,5 @@
 import { apiError, assertSameOrigin, json } from './http.js';
-import { clearSessionCookie, sessionCookie } from './session.js';
+import { clearSessionCookie, deleteSession, sessionCookie } from './session.js';
 import { createRepository, handleRepoList, handleRepositoryApi } from './repos.js';
 import { githubRequest } from './github.js';
 
@@ -84,6 +84,7 @@ async function handleApi(request, env, url) {
   if (url.pathname === '/api/logout') {
     if (request.method !== 'POST') return json({ error: 'method_not_allowed', message: 'Method not allowed' }, 405);
     assertSameOrigin(request);
+    await deleteSession(request, env);
     return json({ ok: true }, 200, { 'Set-Cookie': clearSessionCookie(request) });
   }
   if (url.pathname === '/api/me') {
