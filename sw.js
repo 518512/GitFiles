@@ -17,6 +17,8 @@ const SHELL_ASSETS = [
   './js/config.runtime.js',
   './js/site-config.js',
   './js/storage-migrate.js',
+  './js/auth.js',
+  './js/drive.js',
   './js/localdisk.js',
   './js/github-api.js',
   './js/github-paths.js',
