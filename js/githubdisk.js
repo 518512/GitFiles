@@ -1801,7 +1801,7 @@ const GithubDisk = (() => {
   function inferMimeType(name = '') {
     const lower = name.toLowerCase();
     if (lower.endsWith('.json')) return 'application/json';
-    if (lower.endsWith('.txt') || lower.endsWith('.md') || lower.endsWith('.csv') || lower.endsWith('.log')) {
+    if (/\.(txt|md|markdown|csv|log|xml|yml|yaml|html|htm|css|js|ts|tsx|jsx|py|sh|bat|sql)$/i.test(lower)) {
       return 'text/plain';
     }
     if (lower.endsWith('.png')) return 'image/png';
@@ -2370,8 +2370,8 @@ const GithubDisk = (() => {
   function isNotepadFile(file) {
     const mime = (file.mimeType || '').toLowerCase();
     const name = (file.name || '').toLowerCase();
-    if (mime === 'text/plain' || mime === 'application/json') return true;
-    return /\.(txt|json)$/i.test(name);
+    if (mime.startsWith('text/') || mime === 'application/json' || mime === 'application/xml') return true;
+    return /\.(txt|md|markdown|csv|log|xml|yml|yaml|html|htm|css|js|ts|tsx|jsx|py|sh|bat|sql|json)$/i.test(name);
   }
 
   async function buildNotepadFilePath(diskId, file) {
