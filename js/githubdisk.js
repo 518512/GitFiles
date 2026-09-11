@@ -1619,20 +1619,6 @@ const GithubDisk = (() => {
     return getDisk(id);
   }
 
-  async function syncAvailableRepositories() {
-    const { repositories = [] } = await GithubApi.request('/api/repos');
-    const profile = await GithubApi.request('/api/me');
-    const available = repositories.filter((repo) => repo?.owner && repo?.repo);
-    available.forEach((repo) => upsertDiskFromRepo(profile, {
-      owner: repo.owner,
-      name: repo.repo,
-      default_branch: repo.default_branch,
-      html_url: repo.html_url,
-      private: repo.private,
-    }));
-    return getDisks();
-  }
-
   async function createNewRepository() {
     await acquireAccessToken();
     const name = await Dialog.prompt('Repository name', '', {
@@ -2513,7 +2499,6 @@ const GithubDisk = (() => {
     resolveFileByPath,
     ensureGithubStorage,
     reauthorizeDisk,
-    syncAvailableRepositories,
     collectGithubItems,
     createBatchFromCollected,
     deleteBatch,

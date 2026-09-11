@@ -11,6 +11,7 @@ const SHELL_ASSETS = [
   './privacy.html',
   './terms.html',
   './css/style.css',
+  './css/ui-v2.css',
   './js/app-version.js',
   './js/base-path.js',
   './js/config.js',

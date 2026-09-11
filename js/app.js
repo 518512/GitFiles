@@ -123,6 +123,17 @@ const App = (() => {
 
   function renderGithubSessionState() {
     const el = $('#worker-session-state');
+    const signOut = $('#btn-sign-out');
+    if (signOut) signOut.classList.toggle('hidden', state.githubSession !== 'connected');
+    const headerState = $('#header-repo-state');
+    const activeDisk = state.currentUserId && GithubDisk.isGithubId(state.currentUserId)
+      ? GithubDisk.getDisk(state.currentUserId)
+      : null;
+    if (headerState) {
+      headerState.textContent = activeDisk
+        ? `${activeDisk.owner}/${activeDisk.repo} · ${activeDisk.branch || '默认分支'}`
+        : state.githubSession === 'connected' ? 'GitHub 已连接' : '未连接仓库';
+    }
     if (!el) return;
     const labels = {
       checking: 'GitHub 会话：检查中',
@@ -1230,6 +1241,16 @@ const App = (() => {
   }
 
   function renderCurrentView() {
+    const repoHeader = $('#repository-header');
+    const repoName = $('#repository-name');
+    const repoMeta = $('#repository-meta');
+    const disk = state.currentUserId && GithubDisk.isGithubId(state.currentUserId)
+      ? GithubDisk.getDisk(state.currentUserId)
+      : null;
+    if (repoHeader) repoHeader.classList.toggle('hidden', !disk);
+    if (repoName && disk) repoName.textContent = `${disk.owner}/${disk.repo}`;
+    if (repoMeta && disk) repoMeta.textContent = `${disk.private ? '私有仓库' : '公开仓库'} · 分支 ${disk.branch || '默认分支'}`;
+
     if (state.view === 'grid') {
       show($('#file-grid'));
       hide($('#file-list'));
@@ -2173,6 +2194,7 @@ const App = (() => {
   function navigateToGithubDisk(diskId, folderId = GithubDisk.ROOT_ID) {
     state.level = 'drive';
     state.currentUserId = diskId;
+    renderGithubSessionState();
     state.currentFolderId = folderId;
     state.section = 'my-drive';
     state.expandedUsers.clear();
@@ -2638,9 +2660,32 @@ const App = (() => {
     $('#sidebar-overlay')?.addEventListener('click', closeSidebar);
 
     $('#btn-sign-in-github')?.addEventListener('click', () => signInWithGithub());
+    $('#app-brand')?.addEventListener('click', navigateToHome);
+    $('#btn-header-add')?.addEventListener('click', (event) => {
+      const rect = event.currentTarget.getBoundingClientRect();
+      ContextMenu.showAddDiskMenu(rect.left, rect.bottom + 4);
+    });
+    $('#global-search')?.addEventListener('input', (event) => {
+      const value = event.target.value;
+      const localSearch = $('#file-search');
+      if (localSearch) localSearch.value = value;
+      state.searchQuery = value;
+      renderCurrentView();
+    });
+    $('#btn-header-account')?.addEventListener('click', () => {
+      showStatus(state.githubSession === 'connected'
+        ? 'GitHub 会话已连接，请使用底部“退出 GitHub”结束会话。'
+        : '当前未连接 GitHub');
+    });
     window.addEventListener('online', () => showStatus('网络已恢复'));
     window.addEventListener('offline', () => showStatus('当前离线：本地存储仍可用，GitHub 操作需要联网'));
     $('#btn-add-repository')?.addEventListener('click', () => addRepositoryFromWelcome());
+    document.querySelectorAll('[data-nav="repositories"]').forEach((el) => {
+      el.addEventListener('click', () => {
+        if (GithubDisk.getDisks().length) navigateToGithubDisk(GithubDisk.getDisks()[0].id, GithubDisk.ROOT_ID);
+        else showStatus('尚未挂载 GitHub 仓库');
+      });
+    });
     $('#btn-add-user')?.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -2936,13 +2981,6 @@ const App = (() => {
     GithubDisk.setConflictListener?.((conflict) => addConflictRecord(conflict));
     GithubDisk.setTransferListener?.((transfer) => addConflictRecord(transfer));
     const authenticated = await refreshGithubSessionState();
-    if (authenticated) {
-      try {
-        await GithubDisk.syncAvailableRepositories();
-      } catch (err) {
-        console.warn('同步 GitHub 仓库列表失败：', err);
-      }
-    }
 
     ContextMenu.init({
       openFile,
