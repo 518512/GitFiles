@@ -188,3 +188,71 @@ body {
   .main-area { display: flex; }
   .content { flex: 1; min-width: 0; }
 }
+
+/* Unified toolbar and the real overview workspace. */
+.ribbon {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: 10px;
+  min-height: 56px;
+  padding: 8px 16px;
+  overflow: hidden;
+}
+.ribbon .global-search { flex: 0 1 280px; width: 280px; }
+.ribbon .address-bar { flex: 1 1 260px; min-width: 120px; }
+.ribbon .file-tools { flex: 0 0 auto; margin-left: 0; }
+.ribbon .view-toggle { flex: 0 0 auto; }
+
+.repository-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 24px 0;
+}
+.repository-heading { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.repository-mark { color: var(--color-accent); font-size: 24px; }
+.repository-name { font-size: 20px; font-weight: 700; overflow-wrap: anywhere; }
+.repository-meta { color: var(--color-muted); font-size: 13px; margin-top: 4px; }
+.repository-tabs { display: flex; gap: 4px; align-self: stretch; align-items: end; }
+.repository-tab { min-height: 40px; padding: 0 14px; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--color-muted); }
+.repository-tab.active { color: var(--color-accent); border-bottom-color: var(--color-accent); }
+
+.overview-panel { max-width: 1080px; margin: 0 auto; padding: 40px 32px 64px; }
+.overview-heading { display: flex; align-items: start; justify-content: space-between; gap: 20px; }
+.eyebrow { margin: 0 0 6px; color: var(--color-accent); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+.overview-heading h1 { margin: 0; font-size: 30px; }
+.overview-summary { margin: 8px 0 0; color: var(--color-muted); }
+.overview-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 28px 0 36px; }
+.overview-stat { padding: 18px; border: 1px solid var(--color-border); border-radius: var(--radius-md); background: var(--color-surface); }
+.overview-stat strong { display: block; font-size: 26px; }
+.overview-stat span { color: var(--color-muted); font-size: 13px; }
+.overview-section-heading { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--color-border); }
+.overview-section-heading h2 { font-size: 16px; }
+.link-button { border: 0; background: transparent; color: var(--color-accent); cursor: pointer; }
+.overview-storage-list { display: grid; gap: 8px; padding-top: 12px; }
+.overview-storage-item { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px; padding: 10px 14px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); background: var(--color-surface); color: var(--color-text); text-align: left; cursor: pointer; }
+.overview-storage-item:hover { border-color: var(--color-accent); background: #f6faff; }
+.overview-storage-icon { color: var(--color-accent); font-size: 20px; }
+.overview-storage-copy { display: grid; gap: 3px; min-width: 0; flex: 1; }
+.overview-storage-copy strong { overflow-wrap: anywhere; }
+.overview-storage-copy small { color: var(--color-muted); }
+.overview-empty { padding: 28px 0; color: var(--color-muted); }
+
+@media (max-width: 768px) {
+  .ribbon { flex-wrap: wrap; min-height: 104px; padding: 8px 10px; }
+  .ribbon .app-brand { order: 1; }
+  .ribbon .global-search { order: 2; flex: 1; width: auto; }
+  .ribbon .app-header-actions { order: 3; margin-left: 0; }
+  .ribbon .nav-buttons { order: 4; }
+  .ribbon .address-bar { order: 5; flex-basis: calc(100% - 86px); }
+  .ribbon .file-tools, .ribbon .view-toggle { display: none; }
+  .overview-panel { padding: 28px 16px 48px; }
+  .overview-heading { display: block; }
+  .overview-heading .btn { margin-top: 18px; }
+  .overview-stats { gap: 8px; margin: 24px 0 28px; }
+  .overview-stat { padding: 12px; }
+  .overview-stat strong { font-size: 21px; }
+  .repository-header { padding: 16px 16px 0; }
+}
