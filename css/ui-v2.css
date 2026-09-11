@@ -69,17 +69,16 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  min-width: 92px;
-  min-height: 32px;
-  padding: 0 9px;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   background: var(--color-surface);
   color: var(--color-text);
-  font-size: 13px;
+  font-size: 18px;
   line-height: 1;
-  white-space: nowrap;
   cursor: pointer;
 }
 .header-action--primary { background: var(--color-accent); border-color: var(--color-accent); color: #fff; }
@@ -245,8 +244,7 @@ body.sidebar-collapsed .sidebar { width: 0; flex-basis: 0; border-right: 0; over
   .overview-stat { padding: 12px; }
   .overview-stat strong { font-size: 21px; }
   .repository-header { padding: 16px 16px 0; }
-  .header-action { min-width: 44px; width: 44px; min-height: 40px; padding: 0; }
-  .header-action-label { display: none; }
+  .header-action { min-width: 36px; width: 36px; min-height: 36px; height: 36px; padding: 0; }
 }
 
 /* Dense repository tree: icons clarify type without wasting sidebar height. */
