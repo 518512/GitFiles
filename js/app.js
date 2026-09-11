@@ -666,13 +666,6 @@ const App = (() => {
     state.section = entry.section;
   }
 
-  function updateNavButtons() {
-    $('#btn-back').disabled = state.historyIndex <= 0;
-    $('#btn-forward').disabled = state.historyIndex >= state.history.length - 1;
-
-    $('#btn-up').disabled = state.level === 'home';
-  }
-
   function userLabel(user) {
     return Auth.formatDisplayEmail(user.email);
   }
@@ -2246,7 +2239,6 @@ const App = (() => {
 
       renderBreadcrumbs();
       renderCurrentView();
-      updateNavButtons();
     } catch (err) {
       if (!isScopeError(err.message)) {
         showError(err.message);
@@ -2308,53 +2300,6 @@ const App = (() => {
     state.section = 'my-drive';
     pushHistory();
     loadCurrentLocation();
-  }
-
-  function navigateBack() {
-    if (state.historyIndex <= 0) return;
-    state.historyIndex--;
-    restoreHistory(state.history[state.historyIndex]);
-    loadCurrentLocation();
-  }
-
-  function navigateForward() {
-    if (state.historyIndex >= state.history.length - 1) return;
-    state.historyIndex++;
-    restoreHistory(state.history[state.historyIndex]);
-    loadCurrentLocation();
-  }
-
-  function navigateUp() {
-    if (state.level === 'home') return;
-
-    if (state.section !== 'my-drive') {
-      state.section = 'my-drive';
-      state.currentFolderId = getDriveRootId();
-      pushHistory();
-      loadCurrentLocation();
-      return;
-    }
-
-    const rootId = getDriveRootId();
-    if (state.currentFolderId !== rootId) {
-      const parent = state.breadcrumbs[state.breadcrumbs.length - 2];
-      if (!parent?.id) {
-        navigateToHome();
-        return;
-      }
-      if (parent.id.startsWith('user:')) {
-        navigateToUser(parent.id.slice(5), Drive.ROOT_ID);
-      } else if (LocalDisk.getDisk(parent.id)) {
-        navigateToLocalDisk(parent.id, LocalDisk.ROOT_ID);
-      } else if (GithubDisk.getDisk(parent.id)) {
-        navigateToGithubDisk(parent.id, GithubDisk.ROOT_ID);
-      } else {
-        navigateToFolder(parent.id);
-      }
-      return;
-    }
-
-    navigateToHome();
   }
 
   function switchUserSection(userId, section) {
@@ -2820,9 +2765,6 @@ const App = (() => {
     });
     $('#btn-conflict-center')?.addEventListener('click', () => openConflictCenter());
 
-    $('#btn-back').addEventListener('click', navigateBack);
-    $('#btn-forward').addEventListener('click', navigateForward);
-    $('#btn-up').addEventListener('click', navigateUp);
     $('#btn-refresh').addEventListener('click', () => {
       if (state.currentUserId) clearTreeCache(state.currentUserId);
       if (GithubDisk.isGithubId(state.currentUserId)) {
