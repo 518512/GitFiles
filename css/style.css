@@ -480,14 +480,12 @@ body {
   border-left: 1px solid #ebebeb;
 }
 
-.tree-root-node,
 .tree-user-node,
 .tree-section-node,
 .tree-folder-node {
   margin-bottom: 2px;
 }
 
-.tree-root-node.collapsed > .tree-level-1,
 .tree-user-node.collapsed > .tree-level-2,
 .tree-section-node.collapsed > .tree-level-3,
 .tree-folder-node.collapsed > .tree-children {
