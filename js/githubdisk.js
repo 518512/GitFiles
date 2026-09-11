@@ -1592,12 +1592,15 @@ const GithubDisk = (() => {
   }
 
   function upsertDiskFromRepo(profile, repo) {
-    const id = `${ID_PREFIX}${repo.owner.login}/${repo.name}`;
+    const owner = typeof repo.owner === 'string' ? repo.owner : repo.owner?.login;
+    if (!owner || !repo.name) throw new Error('仓库信息无效');
+    const id = `${ID_PREFIX}${owner}/${repo.name}`;
     const existing = getDisk(id);
     const disk = {
       id,
       name: repo.name,
-      owner: repo.owner.login,
+      owner,
+      repo: repo.name,
       repo: repo.name,
       branch: repo.default_branch || 'main',
       accountLogin: profile.login,
@@ -1614,6 +1617,20 @@ const GithubDisk = (() => {
     }
     saveDisks();
     return getDisk(id);
+  }
+
+  async function syncAvailableRepositories() {
+    const { repositories = [] } = await GithubApi.request('/api/repos');
+    const profile = await GithubApi.request('/api/me');
+    const available = repositories.filter((repo) => repo?.owner && repo?.repo);
+    available.forEach((repo) => upsertDiskFromRepo(profile, {
+      owner: repo.owner,
+      name: repo.repo,
+      default_branch: repo.default_branch,
+      html_url: repo.html_url,
+      private: repo.private,
+    }));
+    return getDisks();
   }
 
   async function createNewRepository() {
@@ -2496,6 +2513,7 @@ const GithubDisk = (() => {
     resolveFileByPath,
     ensureGithubStorage,
     reauthorizeDisk,
+    syncAvailableRepositories,
     collectGithubItems,
     createBatchFromCollected,
     deleteBatch,
