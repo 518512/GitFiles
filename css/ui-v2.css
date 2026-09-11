@@ -73,15 +73,18 @@ body {
   min-width: 32px;
   height: 32px;
   padding: 0;
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-sm);
-  background: var(--color-surface);
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
   color: var(--color-text);
-  font-size: 18px;
+  font-size: 17px;
+  font-weight: 400;
   line-height: 1;
   cursor: pointer;
 }
-.header-action--primary { background: var(--color-accent); border-color: var(--color-accent); color: #fff; }
+.header-action:hover { border-color: var(--color-border); background: var(--color-bg); }
+.header-action:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+.header-action--primary { color: var(--color-text); }
 .header-repo-state { color: var(--color-muted); font-size: 13px; }
 
 .ribbon {
