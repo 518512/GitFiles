@@ -2936,6 +2936,13 @@ const App = (() => {
     GithubDisk.setConflictListener?.((conflict) => addConflictRecord(conflict));
     GithubDisk.setTransferListener?.((transfer) => addConflictRecord(transfer));
     const authenticated = await refreshGithubSessionState();
+    if (authenticated) {
+      try {
+        await GithubDisk.syncAvailableRepositories();
+      } catch (err) {
+        console.warn('同步 GitHub 仓库列表失败：', err);
+      }
+    }
 
     ContextMenu.init({
       openFile,
