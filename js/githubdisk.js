@@ -1847,6 +1847,15 @@ const GithubDisk = (() => {
     return state.tree;
   }
 
+  async function listHistory(diskId) {
+    const disk = getDisk(diskId);
+    if (!disk) throw new Error('找不到 GitHub 存储');
+    const data = await GithubApi.request(
+      `/api/repos/${encodeURIComponent(disk.owner)}/${encodeURIComponent(disk.repo)}/history?branch=${encodeURIComponent(disk.branch || 'main')}`
+    );
+    return data.commits || [];
+  }
+
   async function listFiles(diskId, parentId = ROOT_ID) {
     const disk = getDisk(diskId);
     if (!disk) throw new Error('找不到 GitHub 存储');
@@ -2469,6 +2478,7 @@ const GithubDisk = (() => {
     getDisk,
     getDiskByName,
     removeDisk,
+    listHistory,
     listFiles,
     listTrash,
     createFolder,
