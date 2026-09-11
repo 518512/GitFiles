@@ -132,8 +132,8 @@
   <!-- 文件管理器 -->
   <div id="explorer" class="explorer hidden" data-pwa="enabled">
     <div class="window">
-      <!-- 工具栏 -->
-      <header class="app-header">
+      <!-- 统一工作区工具栏 -->
+      <div class="ribbon">
         <button id="app-brand" class="app-brand" type="button" title="返回工作区首页">GitFiles</button>
         <label class="global-search" title="搜索文件">
           <span aria-hidden="true">⌕</span>
@@ -144,8 +144,6 @@
           <span id="header-repo-state" class="header-repo-state">未连接仓库</span>
           <button id="btn-header-account" class="header-account" type="button" title="账户菜单" aria-label="账户菜单">●</button>
         </div>
-      </header>
-      <div class="ribbon">
         <div class="nav-buttons">
           <button id="btn-sidebar-toggle" class="tool-btn mobile-only" type="button" title="显示导航" aria-label="显示导航">
             <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
@@ -239,6 +237,24 @@
               <button type="button" class="repository-tab active" role="tab">文件</button>
               <button type="button" class="repository-tab" role="tab" disabled>历史</button>
             </div>
+          </section>
+          <section id="overview-panel" class="overview-panel hidden" aria-label="工作区概览">
+            <div class="overview-heading">
+              <div>
+                <p class="eyebrow">工作区</p>
+                <h1>概览</h1>
+                <p id="overview-summary" class="overview-summary">管理已挂载的本地存储和 GitHub 仓库。</p>
+              </div>
+              <button id="btn-overview-add" class="btn btn-primary" type="button">＋ 添加存储</button>
+            </div>
+            <div class="overview-stats" aria-label="存储统计">
+              <div class="overview-stat"><strong id="overview-repo-count">0</strong><span>GitHub 仓库</span></div>
+              <div class="overview-stat"><strong id="overview-local-count">0</strong><span>本地存储</span></div>
+              <div class="overview-stat"><strong id="overview-total-count">0</strong><span>已挂载存储</span></div>
+            </div>
+            <div class="overview-section-heading"><h2>已挂载存储</h2><button id="btn-overview-repositories" class="link-button" type="button">查看仓库</button></div>
+            <div id="overview-storage-list" class="overview-storage-list"></div>
+            <div id="overview-empty" class="overview-empty hidden">尚未挂载存储。添加一个 GitHub 仓库后，它会出现在这里。</div>
           </section>
           <div id="loading" class="loading hidden">
             <div class="spinner"></div>

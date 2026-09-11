@@ -1240,7 +1240,40 @@ const App = (() => {
     }
   }
 
+  function renderOverview() {
+    const local = LocalDisk.getDisks();
+    const github = GithubDisk.getDisks();
+    const disks = [...local, ...github];
+    const list = $('#overview-storage-list');
+    const empty = $('#overview-empty');
+    if (!list) return;
+    list.innerHTML = '';
+    $('#overview-repo-count').textContent = String(github.length);
+    $('#overview-local-count').textContent = String(local.length);
+    $('#overview-total-count').textContent = String(disks.length);
+    empty?.classList.toggle('hidden', disks.length > 0);
+    disks.forEach((disk) => {
+      const isGithub = GithubDisk.isGithubId(disk.id);
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'overview-storage-item';
+      item.innerHTML = `<span class="overview-storage-icon">${isGithub ? '◫' : '▣'}</span><span class="overview-storage-copy"><strong></strong><small></small></span><span aria-hidden="true">›</span>`;
+      item.querySelector('strong').textContent = isGithub ? `${disk.owner}/${disk.repo}` : disk.name;
+      item.querySelector('small').textContent = isGithub ? `GitHub · ${disk.branch || '默认分支'}` : '本地存储';
+      item.addEventListener('click', () => isGithub
+        ? navigateToGithubDisk(disk.id, GithubDisk.ROOT_ID)
+        : navigateToLocalDisk(disk.id, LocalDisk.ROOT_ID));
+      list.appendChild(item);
+    });
+  }
+
   function renderCurrentView() {
+    const overview = $('#overview-panel');
+    const isOverview = state.level === 'home';
+    overview?.classList.toggle('hidden', !isOverview);
+    if (isOverview) renderOverview();
+    setSidebarActive(getActiveNavId());
+    renderGithubSessionState();
     const repoHeader = $('#repository-header');
     const repoName = $('#repository-name');
     const repoMeta = $('#repository-meta');
@@ -1251,7 +1284,10 @@ const App = (() => {
     if (repoName && disk) repoName.textContent = `${disk.owner}/${disk.repo}`;
     if (repoMeta && disk) repoMeta.textContent = `${disk.private ? '私有仓库' : '公开仓库'} · 分支 ${disk.branch || '默认分支'}`;
 
-    if (state.view === 'grid') {
+    if (isOverview) {
+      hide($('#file-grid'));
+      hide($('#file-list'));
+    } else if (state.view === 'grid') {
       show($('#file-grid'));
       hide($('#file-list'));
       renderGrid();
@@ -1261,7 +1297,10 @@ const App = (() => {
       renderList();
     }
 
-    if (!hasMountedDrives()) {
+    if (isOverview) {
+      hide($('#empty-state'));
+      hide($('#no-storage-state'));
+    } else if (!hasMountedDrives()) {
       // 登录后尚未挂载任何存储：欢迎空态引导添加 Repository（Mutation 由用户显式发起）
       hide($('#empty-state'));
       show($('#no-storage-state'));
@@ -1350,9 +1389,9 @@ const App = (() => {
   }
 
   function setSidebarActive(itemId) {
-    document.querySelectorAll('.sidebar-item').forEach((el) => el.classList.remove('active'));
-    const el = document.querySelector(`[data-nav="${itemId}"]`);
-    el?.classList.add('active');
+    document.querySelectorAll('[data-nav]').forEach((el) => {
+      el.classList.toggle('active', el.dataset.nav === itemId);
+    });
   }
 
   function isUserExpanded(userId) {
@@ -2680,11 +2719,28 @@ const App = (() => {
     window.addEventListener('online', () => showStatus('网络已恢复'));
     window.addEventListener('offline', () => showStatus('当前离线：本地存储仍可用，GitHub 操作需要联网'));
     $('#btn-add-repository')?.addEventListener('click', () => addRepositoryFromWelcome());
-    document.querySelectorAll('[data-nav="repositories"]').forEach((el) => {
+    document.querySelectorAll('.sidebar-nav [data-nav]').forEach((el) => {
       el.addEventListener('click', () => {
-        if (GithubDisk.getDisks().length) navigateToGithubDisk(GithubDisk.getDisks()[0].id, GithubDisk.ROOT_ID);
-        else showStatus('尚未挂载 GitHub 仓库');
+        const nav = el.dataset.nav;
+        if (nav === 'home') {
+          navigateToHome();
+          return;
+        }
+        if (nav === 'repositories') {
+          const disk = GithubDisk.getDisks()[0];
+          if (disk) navigateToGithubDisk(disk.id, GithubDisk.ROOT_ID);
+          else showStatus('尚未挂载 GitHub 仓库');
+        }
       });
+    });
+    $('#btn-overview-add')?.addEventListener('click', (event) => {
+      const rect = event.currentTarget.getBoundingClientRect();
+      ContextMenu.showAddDiskMenu(rect.left, rect.bottom + 4);
+    });
+    $('#btn-overview-repositories')?.addEventListener('click', () => {
+      const disk = GithubDisk.getDisks()[0];
+      if (disk) navigateToGithubDisk(disk.id, GithubDisk.ROOT_ID);
+      else showStatus('尚未挂载 GitHub 仓库');
     });
     $('#btn-add-user')?.addEventListener('click', (e) => {
       e.preventDefault();
