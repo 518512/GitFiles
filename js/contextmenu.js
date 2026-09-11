@@ -660,8 +660,8 @@ const ContextMenu = (() => {
           const hasGithub = GithubDisk.getDisks().length > 0;
           if (!hasUsers && !hasLocal && !hasGithub) break;
           if (await Dialog.confirm(
-            'Eject all drives? Google accounts will be signed out and local/GitHub storage mounts removed.',
-            { title: 'Eject all drives', confirmLabel: 'Eject all', danger: true }
+            '确定要移除所有存储吗？已登录的账号会退出，本地和 GitHub 存储挂载也会移除。',
+            { title: '移除所有存储', confirmLabel: '全部移除', danger: true }
           )) {
             await app.ejectAllDrives?.();
           }
@@ -672,9 +672,9 @@ const ContextMenu = (() => {
           break;
         case 'clear-app-cache':
           if (await Dialog.confirm(
-            'Clear cached app files (HTML, CSS, JavaScript)?\n\n' +
-            'Signed-in Google accounts, local storage volumes, and GitHub tokens are kept.',
-            { title: 'Clear app cache', confirmLabel: 'Clear cache' }
+            '确定要清除应用缓存文件（HTML、CSS、JavaScript）吗？\n\n' +
+            '已登录的账号、本地存储卷和 GitHub 会话不会受到影响。',
+            { title: '清除应用缓存', confirmLabel: '清除缓存' }
           )) {
             if (window.StorageHub?.clearCache) {
               window.StorageHub.clearCache();

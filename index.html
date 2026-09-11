@@ -91,6 +91,7 @@
   <script src="js/github-oauth-deliver.js"></script>
   <script>GithubOAuthDeliver.runIfPopupCallback();</script>
   <title>GitFiles</title>
+  <link rel="stylesheet" href="css/ui-v2.css">
   <link rel="icon" href="assets/favicon-32.png" sizes="32x32" type="image/png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/logo-180.png">
@@ -132,6 +133,18 @@
   <div id="explorer" class="explorer hidden" data-pwa="enabled">
     <div class="window">
       <!-- 工具栏 -->
+      <header class="app-header">
+        <button id="app-brand" class="app-brand" type="button" title="返回工作区首页">GitFiles</button>
+        <label class="global-search" title="搜索文件">
+          <span aria-hidden="true">⌕</span>
+          <input id="global-search" type="search" placeholder="搜索文件" autocomplete="off">
+        </label>
+        <div class="app-header-actions">
+          <button id="btn-header-add" class="header-action header-action--primary" type="button" title="添加存储">＋<span>添加</span></button>
+          <span id="header-repo-state" class="header-repo-state">未连接仓库</span>
+          <button id="btn-header-account" class="header-account" type="button" title="账户菜单" aria-label="账户菜单">●</button>
+        </div>
+      </header>
       <div class="ribbon">
         <div class="nav-buttons">
           <button id="btn-sidebar-toggle" class="tool-btn mobile-only" type="button" title="显示导航" aria-label="显示导航">
@@ -185,6 +198,12 @@
       <div class="main-area">
         <div id="sidebar-overlay" class="sidebar-overlay hidden" aria-hidden="true"></div>
         <aside class="sidebar">
+          <nav class="sidebar-nav" aria-label="应用导航">
+            <div class="sidebar-nav-heading">工作区</div>
+            <button class="sidebar-nav-item active" type="button" data-nav="home"><span aria-hidden="true">⌂</span>概览</button>
+            <button class="sidebar-nav-item" type="button" data-nav="repositories"><span aria-hidden="true">◫</span>仓库</button>
+            <div class="sidebar-nav-heading">存储</div>
+          </nav>
           <div class="sidebar-section sidebar-tree-section">
             <ul class="sidebar-tree">
               <li id="tree-root-node" class="tree-root-node">
@@ -208,6 +227,19 @@
         </aside>
 
         <main class="content">
+          <section id="repository-header" class="repository-header hidden" aria-label="当前仓库">
+            <div class="repository-heading">
+              <span class="repository-mark" aria-hidden="true">◫</span>
+              <div>
+                <div id="repository-name" class="repository-name">GitHub Repository</div>
+                <div id="repository-meta" class="repository-meta"></div>
+              </div>
+            </div>
+            <div class="repository-tabs" role="tablist" aria-label="仓库视图">
+              <button type="button" class="repository-tab active" role="tab">文件</button>
+              <button type="button" class="repository-tab" role="tab" disabled>历史</button>
+            </div>
+          </section>
           <div id="loading" class="loading hidden">
             <div class="spinner"></div>
             <span>正在加载…</span>
@@ -250,7 +282,7 @@
         <span id="status-count">0 个项目</span>
         <span id="worker-session-state" class="worker-session-state" role="status">GitHub 会话：检查中</span>
         <button id="btn-conflict-center" class="title-btn title-btn--conflicts hidden" type="button" aria-label="打开冲突中心" title="打开冲突中心">冲突</button>
-        <button class="title-btn close" id="btn-sign-out" aria-label="退出登录" title="退出登录">退出 GitHub</button>
+        <button class="title-btn close hidden" id="btn-sign-out" aria-label="退出登录" title="退出登录">退出 GitHub</button>
         <span id="status-selected"></span>
       </div>
     </div>
