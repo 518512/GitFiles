@@ -138,10 +138,6 @@
           <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/></svg>
         </button>
         <button id="app-brand" class="app-brand" type="button" title="返回工作区首页">GitFiles</button>
-        <label class="global-search" title="搜索文件">
-          <span aria-hidden="true">⌕</span>
-          <input id="global-search" type="search" placeholder="搜索文件" autocomplete="off">
-        </label>
         <div class="app-header-actions">
           <button id="btn-header-add" class="header-action header-action--primary" type="button" title="添加存储"><span aria-hidden="true">＋</span><span class="header-action-label">添加存储</span></button>
           <span id="header-repo-state" class="header-repo-state">未连接仓库</span>
@@ -149,9 +145,6 @@
         <div class="nav-buttons">
           <button id="btn-refresh" class="tool-btn" title="刷新">
             <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M17.65 6.35A7.958 7.958 0 0 0 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08A5.99 5.99 0 0 1 12 18c-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
-          </button>
-          <button id="btn-mobile-menu" class="tool-btn mobile-only" type="button" title="操作" aria-label="操作菜单">
-            <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
           </button>
         </div>
         <div class="address-bar">
@@ -191,24 +184,11 @@
             <div class="sidebar-nav-heading">存储</div>
           </nav>
           <div class="sidebar-section sidebar-tree-section">
-            <ul class="sidebar-tree">
-              <li id="tree-root-node" class="tree-root-node">
-                <div class="tree-row">
-                  <button type="button" class="tree-toggle" data-tree-toggle="root" aria-expanded="true" aria-label="折叠"><span class="tree-chevron" aria-hidden="true"></span></button>
-                  <button id="nav-home" class="sidebar-item tree-root-item active" data-nav="home">
-                    <span class="sidebar-icon">🏠</span> GitFiles
-                  </button>
-                </div>
-                <ul id="sidebar-tree-users" class="tree-children tree-level-1"></ul>
-                <button id="btn-add-user" class="sidebar-add-btn tree-add-btn">
-                  <span class="sidebar-icon">＋</span> 添加存储
-                </button>
-                <button id="btn-install-pwa" class="sidebar-install-btn hidden" type="button">
-                  <span class="sidebar-icon">⇩</span> 点击安装 GitFiles -PWA
-                </button>
-                <p id="pwa-install-hint" class="sidebar-install-hint">Edge 可从菜单“应用”中安装。</p>
-              </li>
-            </ul>
+            <ul id="sidebar-tree-users" class="sidebar-tree tree-children"></ul>
+            <button id="btn-install-pwa" class="sidebar-install-btn hidden" type="button">
+              <span class="sidebar-icon">⇩</span> 点击安装 GitFiles -PWA
+            </button>
+            <p id="pwa-install-hint" class="sidebar-install-hint">Edge 可从菜单“应用”中安装。</p>
           </div>
         </aside>
 
@@ -227,7 +207,7 @@
             </div>
           </section>
           <section id="repository-history" class="repository-history hidden" aria-label="仓库提交历史">
-            <div class="history-heading"><h2>提交历史</h2><button id="btn-history-refresh" class="tool-btn" type="button" title="刷新历史" aria-label="刷新历史">↻</button></div>
+            <div class="history-heading"><h2>提交历史</h2></div>
             <div id="repository-history-list" class="repository-history-list"></div>
             <div id="repository-history-empty" class="overview-empty hidden">该分支尚没有提交记录。</div>
           </section>
@@ -235,17 +215,16 @@
             <div class="overview-heading">
               <div>
                 <p class="eyebrow">工作区</p>
-                <h1>概览</h1>
+                <h1 id="overview-title">概览</h1>
                 <p id="overview-summary" class="overview-summary">管理已挂载的本地存储和 GitHub 仓库。</p>
               </div>
-              <button id="btn-overview-add" class="btn btn-primary" type="button">＋ 添加存储</button>
             </div>
             <div class="overview-stats" aria-label="存储统计">
               <div class="overview-stat"><strong id="overview-repo-count">0</strong><span>GitHub 仓库</span></div>
               <div class="overview-stat"><strong id="overview-local-count">0</strong><span>本地存储</span></div>
               <div class="overview-stat"><strong id="overview-total-count">0</strong><span>已挂载存储</span></div>
             </div>
-            <div class="overview-section-heading"><h2>已挂载存储</h2><button id="btn-overview-repositories" class="link-button" type="button">查看仓库</button></div>
+            <div class="overview-section-heading"><h2>已挂载存储</h2></div>
             <div id="overview-storage-list" class="overview-storage-list"></div>
             <div id="overview-empty" class="overview-empty hidden">尚未挂载存储。添加一个 GitHub 仓库后，它会出现在这里。</div>
           </section>
@@ -273,7 +252,6 @@
           <div id="empty-state" class="empty-state hidden">
             <span class="empty-icon">📂</span>
             <p>此文件夹为空</p>
-            <p class="empty-hint mobile-only">点击工具栏中的 <strong>⋮</strong> 查看文件夹操作</p>
           </div>
         </main>
       </div>

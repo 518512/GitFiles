@@ -19,7 +19,6 @@ const App = (() => {
     searchQuery: '',
     sortBy: 'name',
     sortDirection: 'asc',
-    expandedRoot: true,
     expandedUsers: new Set(),
     expandedFolders: new Set(),
     treeChildren: {},
@@ -29,6 +28,7 @@ const App = (() => {
     githubSession: 'checking',
     conflicts: [],
     repositoryView: 'files',
+    overviewMode: 'all',
   };
 
   let urlPushPending = false;
@@ -373,28 +373,6 @@ const App = (() => {
     attachLongPress(row, () => ContextMenu.showContext(getContext()));
   }
 
-  function getCurrentAreaContext() {
-    if (state.selectedId) {
-      const file = state.files.find((f) => f.id === state.selectedId);
-      if (file) return buildFileContext(file);
-    }
-    if (state.level === 'home') return { type: 'root' };
-    if (state.level === 'drive' && state.currentUserId) {
-      return {
-        type: 'empty',
-        userId: state.currentUserId,
-        folderId: state.currentFolderId,
-        section: state.section,
-      };
-    }
-    return null;
-  }
-
-  function openMobileAreaMenu() {
-    const ctx = getCurrentAreaContext();
-    if (ctx) ContextMenu.showContext(ctx);
-  }
-
   function snapshot() {
     return {
       level: state.level,
@@ -656,14 +634,6 @@ const App = (() => {
       return;
     }
     await applyRoute(route, addToHistory);
-  }
-
-  function restoreHistory(entry) {
-    state.level = entry.level;
-    state.currentUserId = entry.userId;
-    state.currentFolderId = entry.folderId
-      || (LocalDisk.isLocalId(entry.userId) ? LocalDisk.ROOT_ID : GithubDisk.isGithubId(entry.userId) ? GithubDisk.ROOT_ID : Drive.ROOT_ID);
-    state.section = entry.section;
   }
 
   function userLabel(user) {
@@ -1286,14 +1256,20 @@ const App = (() => {
   function renderOverview() {
     const local = LocalDisk.getDisks();
     const github = GithubDisk.getDisks();
-    const disks = [...local, ...github];
+    const disks = state.overviewMode === 'repositories' ? github : [...local, ...github];
     const list = $('#overview-storage-list');
     const empty = $('#overview-empty');
     if (!list) return;
     list.innerHTML = '';
     $('#overview-repo-count').textContent = String(github.length);
     $('#overview-local-count').textContent = String(local.length);
-    $('#overview-total-count').textContent = String(disks.length);
+    $('#overview-total-count').textContent = String(local.length + github.length);
+    const title = $('#overview-title');
+    if (title) title.textContent = state.overviewMode === 'repositories' ? '仓库' : '概览';
+    const summary = $('#overview-summary');
+    if (summary) summary.textContent = state.overviewMode === 'repositories'
+      ? '选择一个已挂载的 GitHub 仓库以浏览文件和提交历史。'
+      : '管理已挂载的本地存储和 GitHub 仓库。';
     empty?.classList.toggle('hidden', disks.length > 0);
     disks.forEach((disk) => {
       const isGithub = GithubDisk.isGithubId(disk.id);
@@ -1328,6 +1304,10 @@ const App = (() => {
     if (repoMeta && disk) repoMeta.textContent = `${disk.private ? '私有仓库' : '公开仓库'} · 分支 ${disk.branch || '默认分支'}`;
 
     const isHistory = !isOverview && state.repositoryView === 'history' && !!disk;
+    const isFileWorkspace = !isOverview && !isHistory;
+    $('.file-tools')?.classList.toggle('hidden', !isFileWorkspace);
+    $('.view-toggle')?.classList.toggle('hidden', !isFileWorkspace);
+    $('.address-bar')?.classList.toggle('hidden', isOverview);
     document.querySelectorAll('[data-repository-view]').forEach((button) => {
       const active = button.dataset.repositoryView === (isHistory ? 'history' : 'files');
       button.classList.toggle('active', active);
@@ -1415,7 +1395,7 @@ const App = (() => {
   }
 
   function getActiveNavId() {
-    if (state.level === 'home') return 'home';
+    if (state.level === 'home') return state.overviewMode === 'repositories' ? 'repositories' : 'home';
     if (!state.currentUserId) return 'home';
     if (state.section === 'my-drive') {
       const rootId = getDriveRootId();
@@ -1658,13 +1638,6 @@ const App = (() => {
 
   function renderSidebarTree() {
     ContextMenu.hide();
-    const rootNode = $('#tree-root-node');
-    rootNode.classList.toggle('collapsed', !state.expandedRoot);
-    rootNode.querySelector('[data-tree-toggle="root"]')?.setAttribute(
-      'aria-expanded',
-      String(state.expandedRoot)
-    );
-
     const list = $('#sidebar-tree-users');
     list.innerHTML = '';
 
@@ -2018,12 +1991,6 @@ const App = (() => {
     ContextMenu.hide();
     const type = toggle.dataset.treeToggle;
 
-    if (type === 'root') {
-      state.expandedRoot = !state.expandedRoot;
-      renderSidebarTree();
-      return;
-    }
-
     if (type === 'user' || type === 'local-disk' || type === 'github-disk') {
       const userId = toggle.dataset.userId;
       if (state.expandedUsers.has(userId)) {
@@ -2106,7 +2073,7 @@ const App = (() => {
   function closeSidebar() {
     $('.sidebar')?.classList.remove('open');
     $('#sidebar-overlay')?.classList.add('hidden');
-    document.body.classList.remove('sidebar-open');
+    document.body.classList.remove('sidebar-open', 'sidebar-collapsed');
   }
 
   function openSidebar() {
@@ -2116,8 +2083,12 @@ const App = (() => {
   }
 
   function toggleSidebar() {
-    if ($('.sidebar')?.classList.contains('open')) closeSidebar();
-    else openSidebar();
+    if (isMobileLayout()) {
+      if ($('.sidebar')?.classList.contains('open')) closeSidebar();
+      else openSidebar();
+      return;
+    }
+    document.body.classList.toggle('sidebar-collapsed');
   }
 
   async function refreshGithubFolderView({ reloadTree = true, silent = false } = {}) {
@@ -2170,7 +2141,7 @@ const App = (() => {
         renderSidebarTree();
         state.files = homeDriveItems();
         state.breadcrumbs = [{ id: ROOT_ID, name: ROOT_NAME }];
-        setSidebarActive('home');
+        setSidebarActive(getActiveNavId());
         refreshUserQuotas();
       } else {
         const userId = state.currentUserId || Auth.getActiveUser()?.id;
@@ -2250,8 +2221,9 @@ const App = (() => {
     }
   }
 
-  function navigateToHome() {
+  function navigateToHome(mode = 'all') {
     state.level = 'home';
+    state.overviewMode = mode;
     state.currentUserId = null;
     state.currentFolderId = DRIVE_ROOT_ID;
     state.section = 'my-drive';
@@ -2712,13 +2684,6 @@ const App = (() => {
       ContextMenu.showAddDiskMenu(rect?.left ?? 8, rect?.bottom ?? 8);
     };
     $('#btn-header-add')?.addEventListener('click', openAddStorageMenu);
-    $('#global-search')?.addEventListener('input', (event) => {
-      const value = event.target.value;
-      const localSearch = $('#file-search');
-      if (localSearch) localSearch.value = value;
-      state.searchQuery = value;
-      renderCurrentView();
-    });
     window.addEventListener('online', () => showStatus('网络已恢复'));
     window.addEventListener('offline', () => showStatus('当前离线：本地存储仍可用，GitHub 操作需要联网'));
     $('#btn-add-repository')?.addEventListener('click', () => addRepositoryFromWelcome());
@@ -2726,32 +2691,17 @@ const App = (() => {
       el.addEventListener('click', () => {
         const nav = el.dataset.nav;
         if (nav === 'home') {
-          navigateToHome();
+          navigateToHome('all');
           return;
         }
         if (nav === 'repositories') {
-          const disk = GithubDisk.getDisks()[0];
-          if (disk) navigateToGithubDisk(disk.id, GithubDisk.ROOT_ID);
-          else showStatus('尚未挂载 GitHub 仓库');
+          navigateToHome('repositories');
         }
       });
-    });
-    $('#btn-overview-add')?.addEventListener('click', openAddStorageMenu);
-    $('#btn-overview-repositories')?.addEventListener('click', () => {
-      const disk = GithubDisk.getDisks()[0];
-      if (disk) navigateToGithubDisk(disk.id, GithubDisk.ROOT_ID);
-      else showStatus('尚未挂载 GitHub 仓库');
-    });
-    $('#btn-add-user')?.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const rect = e.currentTarget.getBoundingClientRect();
-      ContextMenu.showAddDiskMenu(rect.left, rect.bottom + 4);
     });
     document.querySelectorAll('[data-repository-view]').forEach((button) => {
       button.addEventListener('click', () => setRepositoryView(button.dataset.repositoryView));
     });
-    $('#btn-history-refresh')?.addEventListener('click', () => loadRepositoryHistory(true));
 
     $('#btn-sign-out').addEventListener('click', async () => {
       try {
@@ -2766,6 +2716,10 @@ const App = (() => {
     $('#btn-conflict-center')?.addEventListener('click', () => openConflictCenter());
 
     $('#btn-refresh').addEventListener('click', () => {
+      if (state.repositoryView === 'history' && GithubDisk.isGithubId(state.currentUserId)) {
+        loadRepositoryHistory(true);
+        return;
+      }
       if (state.currentUserId) clearTreeCache(state.currentUserId);
       if (GithubDisk.isGithubId(state.currentUserId)) {
         GithubDisk.invalidateRepoTree(state.currentUserId);
@@ -2813,13 +2767,6 @@ const App = (() => {
         ContextMenu.runAction(action, buildFileContext(file));
       }
     });
-    $('#btn-mobile-menu')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      openMobileAreaMenu();
-    });
-
-    addTreeMoreButton($('#nav-home')?.closest('.tree-row'), () => ({ type: 'root' }));
-
     $('.content').addEventListener('contextmenu', (e) => {
       if (e.target.closest('.file-item, .list-row, .item-more-btn')) return;
       if (state.level === 'home') {
