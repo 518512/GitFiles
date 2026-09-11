@@ -45,12 +45,7 @@ const App = (() => {
   ];
 
   const LOCAL_DISK_SECTIONS = [
-    { id: 'my-drive', icon: '📁', label: '文件' },
     { id: 'trash', icon: '🗑️', label: '回收站' },
-  ];
-
-  const GITHUB_DISK_SECTIONS = [
-    { id: 'my-drive', icon: '📁', label: '文件' },
   ];
 
   const SECTION_LABELS = {
@@ -1819,6 +1814,12 @@ const App = (() => {
 
       const children = document.createElement('ul');
       children.className = 'tree-children tree-level-2';
+      const rootTree = document.createElement('ul');
+      rootTree.className = 'tree-children tree-level-3';
+      if (expanded && isFolderExpanded(disk.id, LocalDisk.ROOT_ID)) {
+        renderTreeNodes(disk.id, LocalDisk.ROOT_ID, rootTree);
+      }
+      children.appendChild(rootTree);
 
       LOCAL_DISK_SECTIONS.forEach((section) => {
         const sectionLi = document.createElement('li');
@@ -1940,44 +1941,12 @@ const App = (() => {
 
       const children = document.createElement('ul');
       children.className = 'tree-children tree-level-2';
-
-      GITHUB_DISK_SECTIONS.forEach((section) => {
-        const sectionLi = document.createElement('li');
-        sectionLi.className = 'tree-section-node';
-        const myDriveExpanded = isFolderExpanded(disk.id, GithubDisk.ROOT_ID);
-        sectionLi.classList.toggle('collapsed', !myDriveExpanded);
-
-        const sectionRow = document.createElement('div');
-        sectionRow.className = 'tree-row';
-
-        const sectionToggle = createTreeToggle({
-          type: 'my-drive',
-          userId: disk.id,
-          folderId: GithubDisk.ROOT_ID,
-          expanded: myDriveExpanded,
-        });
-
-        const sectionBtn = document.createElement('button');
-        sectionBtn.type = 'button';
-        sectionBtn.className = 'sidebar-item tree-child-item';
-        sectionBtn.dataset.nav = `${diskNav}:my-drive`;
-        sectionBtn.innerHTML = `
-          <span class="sidebar-icon">${section.icon}</span>
-          <span>${section.label}</span>
-        `;
-
-        sectionRow.appendChild(sectionToggle);
-        sectionRow.appendChild(sectionBtn);
-        sectionLi.appendChild(sectionRow);
-
-        const folderTree = document.createElement('ul');
-        folderTree.className = 'tree-children tree-level-3';
-        if (myDriveExpanded) {
-          renderTreeNodes(disk.id, GithubDisk.ROOT_ID, folderTree);
-        }
-        sectionLi.appendChild(folderTree);
-        children.appendChild(sectionLi);
-      });
+      const rootTree = document.createElement('ul');
+      rootTree.className = 'tree-children tree-level-3';
+      if (expanded && isFolderExpanded(disk.id, GithubDisk.ROOT_ID)) {
+        renderTreeNodes(disk.id, GithubDisk.ROOT_ID, rootTree);
+      }
+      children.appendChild(rootTree);
 
       li.appendChild(row);
       li.appendChild(children);
@@ -1995,9 +1964,22 @@ const App = (() => {
       const userId = toggle.dataset.userId;
       if (state.expandedUsers.has(userId)) {
         state.expandedUsers.delete(userId);
-      } else {
-        state.expandedUsers.clear();
-        state.expandedUsers.add(userId);
+        renderSidebarTree();
+        return;
+      }
+      state.expandedUsers.clear();
+      state.expandedUsers.add(userId);
+      const rootId = LocalDisk.isLocalId(userId)
+        ? LocalDisk.ROOT_ID
+        : GithubDisk.isGithubId(userId)
+          ? GithubDisk.ROOT_ID
+          : Drive.ROOT_ID;
+      state.expandedFolders.add(folderKey(userId, rootId));
+      try {
+        const token = !isLocalOrGithubDrive(userId) ? await Auth.tryGetValidToken(userId) : null;
+        await loadTreeChildren(userId, token, rootId);
+      } catch (error) {
+        showError(error?.message || '加载存储目录失败');
       }
       renderSidebarTree();
       return;
@@ -2298,12 +2280,6 @@ const App = (() => {
     const diskSectionMatch = nav.match(/^disk:([^:]+):(my-drive|trash)$/);
     if (diskSectionMatch) {
       switchUserSection(fromDiskNavId(diskSectionMatch[1]), diskSectionMatch[2]);
-      return;
-    }
-
-    const githubSectionMatch = nav.match(/^github:([^:]+):(my-drive)$/);
-    if (githubSectionMatch) {
-      switchUserSection(fromGithubNavId(githubSectionMatch[1]), githubSectionMatch[2]);
       return;
     }
 
