@@ -147,6 +147,7 @@ const App = (() => {
   // 退出登录原本只存在于底部状态栏的一个小按钮，移动端不易发现。
   // 这里按 UI V2 任务单 §六，把账户与退出放到顶栏右侧的显式入口。
   let githubLogin = null;
+  let githubAvatar = null;
 
   function setUserMenuOpen(open) {
     const panel = $('#user-menu-panel');
@@ -175,7 +176,8 @@ const App = (() => {
     }
     if (avatar) {
       const initial = label ? label.slice(0, 1).toUpperCase() : 'G';
-      const src = disk?.accountAvatar;
+      // 优先用 Worker session 里存着的 GitHub 头像；旧 session 回退到 disk 元数据
+      const src = githubAvatar || disk?.accountAvatar;
       // 头像是外部 URL，走 <img> 而非 innerHTML，避免不可信内容注入
       if (src && !/^data:/i.test(src)) {
         avatar.textContent = '';
@@ -190,6 +192,31 @@ const App = (() => {
     }
     // 未登录时退出按钮没有意义
     if (signOutBtn) signOutBtn.disabled = state.githubSession !== 'connected';
+  }
+
+  // --- 移动端搜索：平时只占一个图标，点开才展开输入框 -------------------
+  // 之前在移动端搜索框常驻一整行，占用纵向空间且挤压面包屑。
+  function setSearchOpen(open) {
+    const ribbon = $('.ribbon');
+    const input = $('#file-search');
+    const toggle = $('#btn-search-toggle');
+    if (!ribbon) return;
+    ribbon.classList.toggle('search-open', open);
+    if (toggle) toggle.setAttribute('aria-expanded', String(open));
+    if (open) input?.focus();
+    else if (input) {
+      input.value = '';
+      state.searchQuery = '';
+      renderCurrentView();
+    }
+  }
+
+  function wireSearchToggle() {
+    $('#btn-search-toggle')?.addEventListener('click', () => setSearchOpen(true));
+    $('#btn-search-close')?.addEventListener('click', (event) => {
+      event.preventDefault();
+      setSearchOpen(false);
+    });
   }
 
   function wireUserMenu() {
@@ -218,6 +245,7 @@ const App = (() => {
       // Local drive sign-out still proceeds if the Worker session is unavailable.
     }
     githubLogin = null;
+    githubAvatar = null;
     state.githubSession = 'expired';
     renderGithubSessionState();
     ejectAllDrives();
@@ -233,6 +261,7 @@ const App = (() => {
       .then((me) => {
         state.githubSession = 'connected';
         githubLogin = me?.login || null;
+        githubAvatar = me?.avatar || null;
         return true;
       })
       .catch((err) => {
@@ -3058,6 +3087,7 @@ const App = (() => {
     $('#btn-sign-out').addEventListener('click', () => signOutGithub());
     $('#btn-user-sign-out')?.addEventListener('click', () => { closeUserMenu(); return signOutGithub(); });
     wireUserMenu();
+    wireSearchToggle();
     $('#btn-conflict-center')?.addEventListener('click', () => openConflictCenter());
 
     const refreshBtn = $('#btn-refresh');

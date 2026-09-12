@@ -168,9 +168,13 @@
           <div id="breadcrumbs" class="breadcrumbs"></div>
         </div>
         <div class="file-tools" role="toolbar" aria-label="文件视图工具">
+          <button id="btn-search-toggle" class="tool-btn search-toggle" type="button" title="搜索当前目录" aria-label="搜索当前目录" aria-expanded="false">
+            <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M10.68 11.74a6 6 0 0 1-7.922-8.982 6 6 0 0 1 8.982 7.922l3.04 3.04a.749.749 0 0 1-.326 1.275.749.749 0 0 1-.734-.215ZM11.5 7a4.5 4.5 0 1 0-9 0 4.5 4.5 0 0 0 9 0Z"/></svg>
+          </button>
           <label class="search-box" title="搜索当前目录">
-            <span aria-hidden="true">⌕</span>
+            <span class="search-box-icon" aria-hidden="true">⌕</span>
             <input id="file-search" type="search" placeholder="搜索当前目录" autocomplete="off">
+            <button id="btn-search-close" class="search-box-close" type="button" aria-label="关闭搜索">✕</button>
           </label>
           <select id="file-sort" class="sort-select" aria-label="排序方式">
             <option value="name">名称</option>
