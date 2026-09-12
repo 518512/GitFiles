@@ -15,6 +15,19 @@
 
 GitFiles 将 GitHub Repository 作为可靠的云端文件系统。浏览器只调用同源 Worker API；GitHub access token 仅保存在 Worker 的 D1 session 中，并通过 HttpOnly Cookie 使用。文件写入由 Worker 的 Git Data pipeline 执行，保持 Tree、Commit 与 branch ref 的正确历史。
 
+> **项目状态**：已完成 / 待规划见 [`docs/状态总览-20260912.md`](docs/状态总览-20260912.md)（唯一状态来源）。
+> **文档索引**：见 [`docs/README.md`](docs/README.md)。
+
+### 与上游的关系
+
+本项目派生自 [fi3ik-mme/storage-hub](https://github.com/fi3ik-mme/storage-hub)（作者 Mykhailo Mikus）。
+上游是**纯客户端**的浏览器文件管理器（以 Google Drive 为主，无后端）；
+GitFiles 已引入 Cloudflare Worker + D1 后端、Git Data 变更管线与 CAS，
+数据模型也从 Google Drive 转为 Git 对象模型。详见
+[`docs/架构现状-20260912.md`](docs/架构现状-20260912.md) 第 3 节。
+
+上游仓库未声明 LICENSE。在取得授权前，请勿再分发本派生版本。
+
 ## 核心能力
 
 - GitHub OAuth 登录只建立 Worker session，不自动创建或挂载仓库。
@@ -130,4 +143,4 @@ node scripts/check-ui.mjs
 - README 预览使用内置的 MarkdownLite（安全优先，不支持表格 / 任务列表 / 嵌套列表，也不放行原始 HTML）。
 - 本地存储只支持文本内容，二进制文件上传会被明确拒绝。
 
-详细规范见 [docs/PROJECT_SPEC.md](docs/PROJECT_SPEC.md)。每次改动的中文记录见 `docs/改造记录-*.md`。
+详细规范见 [docs/PROJECT_SPEC.md](docs/PROJECT_SPEC.md)；项目状态见 [docs/状态总览-20260912.md](docs/状态总览-20260912.md)；文档与改造记录索引见 [docs/README.md](docs/README.md)。
