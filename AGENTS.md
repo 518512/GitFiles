@@ -559,6 +559,13 @@ git status
 
 ```bash
 node --test tests/github-engine.test.mjs tests/worker-api.test.mjs tests/markdown-lite.test.mjs
+node tests/github-engine.test.mjs
+```
+
+改动图标资源后还要运行：
+
+```bash
+node scripts/build-logo-from-image.mjs --check
 ```
 
 改动 UI（HTML / CSS / DOM id / 事件绑定）时还必须运行：

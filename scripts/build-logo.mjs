@@ -13,9 +13,13 @@
  * 设计延续原方案的识别特征（蓝色文件夹 + 白色菱形 + Git 分支图腾），
  * 但改为自绘矢量几何，以解决位图源在小尺寸（16/32px）下糊成一团的问题。
  *
- * 用法：
- *   node scripts/build-logo.mjs          # 重新生成 assets/ 下全部图标
- *   node scripts/build-logo.mjs --check  # 只校验文件是否存在且尺寸正确
+ * ⚠️ 本脚本是**备选**来源（自绘矢量）。当前生效的图标来自 `docs/图标源图-20260912.png`，
+ * 由 `scripts/build-logo-from-image.mjs` 生成。两者产出同一组文件名，**会互相覆盖**，
+ * 因此本脚本默认拒绝执行，必须显式加 `--force` 才会写入：
+ *
+ *   node scripts/build-logo-from-image.mjs "docs/图标源图-20260912.png"   # 当前采用
+ *   node scripts/build-logo.mjs --force                                   # 切回矢量版
+ *   node scripts/build-logo.mjs --check
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -461,6 +465,13 @@ function checkAll() {
 }
 
 const check = process.argv.includes('--check');
+const force = process.argv.includes('--force');
+if (!check && !force) {
+  console.error('build-logo: 这是备选（矢量）来源，会覆盖 image 版图标。');
+  console.error('  当前采用：node scripts/build-logo-from-image.mjs "docs/图标源图-20260912.png"');
+  console.error('  确实要切回矢量版请加 --force');
+  process.exit(2);
+}
 if (check) {
   const problems = checkAll();
   if (problems.length) {
