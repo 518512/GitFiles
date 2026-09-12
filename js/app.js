@@ -932,6 +932,48 @@ const App = (() => {
     return renderUserAvatar(user?.picture, className);
   }
 
+  /**
+   * 当前目录的父目录；已在磁盘根目录或处于特殊分区时返回 null。
+   *
+   * GitHub / Drive 的文件夹 id 就是路径（"a/b" → 父级 "a"，"a" → 根），
+   * 本地存储的 id 是生成的 entryId，因此改用 disk 元数据或 breadcrumbs 推导。
+   * 三种磁盘的根 id 都是 'root'。
+   */
+  function folderParentId(userId) {
+    const folderId = state.currentFolderId;
+    if (folderId === undefined || folderId === null || folderId === 'root') return null;
+    if (state.section && state.section !== 'my-drive') return null;
+    if (LocalDisk.isLocalId(userId)) {
+      const disk = LocalDisk.getDisk(userId);
+      const entry = disk?.entries?.find((item) => item.id === folderId);
+      if (entry) return entry.parentId || 'root';
+      const crumbs = state.breadcrumbs || [];
+      return crumbs.length > 1 ? crumbs[crumbs.length - 2].id : null;
+    }
+    if (typeof folderId !== 'string') return null;
+    const index = folderId.lastIndexOf('/');
+    return index === -1 ? 'root' : folderId.slice(0, index);
+  }
+
+  /** 同步「返回上一级」按钮的可用状态：根目录下直接隐藏，不占位。 */
+  function updateNavUp() {
+    const button = $('#btn-nav-up');
+    if (!button) return;
+    const userId = state.currentUserId;
+    const available = state.level === 'drive' && !!userId && folderParentId(userId) !== null;
+    button.classList.toggle('hidden', !available);
+  }
+
+  function goToParentFolder() {
+    const userId = state.currentUserId;
+    if (!userId) return;
+    const parent = folderParentId(userId);
+    if (parent === null) return;
+    if (LocalDisk.isLocalId(userId)) navigateToLocalDisk(userId, parent);
+    else if (GithubDisk.isGithubId(userId)) navigateToGithubDisk(userId, parent);
+    else navigateToUser(userId, parent);
+  }
+
   function renderBreadcrumbs() {
     const container = $('#breadcrumbs');
     container.innerHTML = '';
@@ -1744,6 +1786,7 @@ const App = (() => {
     const isFileWorkspace = !isOverview && !isHistory && !isReadme;
     $('.file-tools')?.classList.toggle('hidden', !isFileWorkspace);
     $('.view-toggle')?.classList.toggle('hidden', !isFileWorkspace);
+    updateNavUp();
     // 面包屑在 README/历史下没有意义（它们始终作用于仓库根）。
     $('.address-bar')?.classList.toggle('hidden', isOverview || isHistory || isReadme);
     document.querySelectorAll('[data-repository-view]').forEach((button) => {
@@ -3142,6 +3185,7 @@ const App = (() => {
       }
     });
 
+    $('#btn-nav-up')?.addEventListener('click', () => goToParentFolder());
     $('#btn-view-toggle')?.addEventListener('click', () => {
       viewPinnedByUser = true;
       setView(state.view === 'list' ? 'grid' : 'list');

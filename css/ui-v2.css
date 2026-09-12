@@ -230,6 +230,9 @@ body {
   background: transparent;
   overflow: hidden;
 }
+/* 「返回上一级」：放在面包屑左侧，根目录下由 JS 隐藏（不占位） */
+.ribbon .nav-up { flex: 0 0 auto; }
+.ribbon .nav-up.hidden { display: none; }
 .breadcrumbs {
   display: flex;
   align-items: center;
@@ -312,6 +315,47 @@ body {
 .ribbon .tool-btn {
   border-radius: var(--radius-sm);
 }
+
+/* --- 2.2 其余历史属性复位 ----------------------------------------------
+   以下属性经 `node scripts/audit-css.mjs` 逐条核对后确认：历史层（style.css）
+   在新布局下仍然胜出，但**其中一部分在新布局下依然正确**（保留），
+   另一部分需要显式改写才符合 V2 设计（本区块处理）。
+
+   保留（历史值即 V2 期望值，故不覆盖）：
+     .ribbon flex-shrink:0         保持工具栏在纵向不收缩
+     .nav-buttons/.view-toggle flex-shrink:0   按钮组不被压扁
+     .sidebar display:flex/flex-direction:column  侧栏竖排布局
+     .sidebar 移动端抽屉的 position/top/left/bottom/z-index/transform
+     .sidebar-tree list-style:none  列表去点
+     .tool-btn display:flex/align-items/justify-content/cursor/background
+     .list-row cursor:not-allowed 之外的 cursor:pointer、-webkit-touch-callout
+     .list-header position:sticky/top/z-index    吸顶表头
+     .empty-state display:flex 等   居中布局
+     .file-grid display:grid       网格容器
+
+   需要改写：见下列规则。
+   ------------------------------------------------------------------------ */
+.breadcrumb-item {
+  /* 历史值是 --win-blue(#0078d4，Google Drive 时代的蓝)，与 V2 令牌不一致 */
+  color: var(--color-accent);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+.breadcrumb-item:hover { text-decoration: underline; }
+.ribbon .tool-btn { color: var(--color-text); }
+.breadcrumbs { font-size: 13px; }
+.ribbon .search-box { color: var(--color-text); }
+.sort-select {
+  /* 历史层在窄屏设了 min-height:40px、flex:1，会把紧凑工具栏顶高 */
+  min-height: 32px;
+  flex: 0 0 auto;
+}
+/* 保留历史值但显式声明，避免日后调布局时被"看不见的继承"咬到 */
+.tree-row { padding-right: 2px; border-radius: 4px; }
+.sidebar-tree { list-style: none; margin: 0; }
+.file-grid { display: grid; gap: 4px; padding: 8px; }
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
 
 /* --- 3. 主区域与侧栏 ----------------------------------------------------- */
 .main-area { min-height: calc(100vh - var(--header-height)); }
@@ -586,7 +630,8 @@ body.sidebar-collapsed .sidebar { width: 0; flex-basis: 0; border-right: 0; over
   .user-menu-item { min-height: var(--tap-target); }
   .user-menu-avatar { width: 24px; height: 24px; }
 
-  /* 第 2 行：面包屑 + 搜索图标 + 视图切换 */
+  /* 第 2 行：返回上级 + 面包屑 + 搜索图标 + 视图切换 */
+  .ribbon .nav-up { order: 4; width: 36px; height: 36px; }
   .ribbon .address-bar {
     order: 5;
     flex: 1 1 auto;

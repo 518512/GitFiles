@@ -572,14 +572,18 @@ node scripts/build-logo-from-image.mjs --check
 
 ```bash
 node scripts/check-ui.mjs
-node scripts/audit-css.mjs
+node scripts/audit-css.mjs --strict
 ```
+
+`audit-css.mjs --strict` 是**必须通过**的闸门：存在未处理的样式泄漏时返回非 0。
+若确认某条历史属性在新布局下依然正确，应把它登记进脚本里的 `ALLOWED_LEGACY`
+并写明理由，而不是让闸门失败。
 
 `check-ui.mjs` 检查重复 id、JS 引用但已不存在的 id、样式表层叠顺序、CSS 选择器使用情况。
 `audit-css.mjs` 审计**两层样式表的冲突**：列出给定类在 `style.css`（历史层）与
 `ui-v2.css`（V2 层）里的全部规则，并标出「历史层设置、V2 层未显式复位」的属性——
 这些就是"多余横线""割裂色块"这类问题的来源，必须逐条确认。
-它只做提示、不阻断构建，因为部分历史属性在新布局下依然正确。
+不带 `--strict` 时只做报告；「有意保留」的属性登记在 `ALLOWED_LEGACY` 中并附理由。
 `notepad.js` 中失效的对话框判断就是由 `check-ui.mjs` 发现的。
 
 ### Step 8
