@@ -5,7 +5,7 @@
 **A GitHub Repository file manager PWA powered by Cloudflare Workers**
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/MbAIGC/GitFiles)
-[![Tests](https://img.shields.io/badge/tests-44%20passing-2da44e)](tests/)
+[![Tests](https://img.shields.io/badge/tests-62%20passing-2da44e)](tests/)
 
 [简体中文](README.md) · English
 
@@ -112,13 +112,14 @@ node --test tests/github-engine.test.mjs tests/worker-api.test.mjs
 node scripts/build-config.mjs
 ```
 
-Current tests cover Git operations, Blob SHA reuse, one-commit batches, CAS, initial empty-repository refs, D1/session/ACL rejection, same-origin mutations, and OAuth token non-disclosure.
+Current tests cover Git operations, Blob SHA reuse, one-commit batches, CAS, initial empty-repository refs, D1/session/ACL rejection and stale-ACL revalidation, same-origin mutations, OAuth token non-disclosure, the OAuth callback delivery-origin allowlist, path NFC normalization, rejection of invalid UTF-16 content, propagation of 429 back-off details, and streaming/Range file downloads.
 
 ## Current limitations
 
-- Sessions currently use an OAuth user token; GitHub App installation tokens, session rotation, and cleanup jobs are not implemented.
+- Sessions currently use an OAuth user token; GitHub App installation tokens and session rotation are not implemented. Expired sessions are reaped opportunistically on `/api/me` — there is no cron binding.
+- Single-file downloads are capped at 95 MB (a Worker memory guard); larger files need an R2 relay to be supported.
 - The Conflict Center records conflicts and reloads remote state, but does not yet provide text three-way merge or per-file diffs.
 - Cross-repository Move is a recoverable two-phase flow, not one atomic Git commit; its recovery UI is still pending.
-- The practical GitHub file API limit remains 100 MB per file.
+- Repository ACL reads are cached for 5 minutes; writes always re-validate against GitHub.
 
 See [docs/PROJECT_SPEC.md](docs/PROJECT_SPEC.md) for the complete specification. Chinese change records live in `docs/改造记录-*.md`.

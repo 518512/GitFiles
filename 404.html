@@ -97,8 +97,8 @@
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/logo-180.png">
   <link rel="manifest" href="manifest.webmanifest">
-  <link rel="stylesheet" href="css/style.css">
-  <link rel="stylesheet" href="css/ui-v2.css">
+  <link rel="stylesheet" data-storage-hub-css href="css/style.css">
+  <link rel="stylesheet" data-storage-hub-css-v2 href="css/ui-v2.css">
   <script>
     (function () {
       if (typeof BasePath === 'undefined') return;
@@ -106,7 +106,8 @@
       document.querySelectorAll('link[href]').forEach((el) => {
         const href = el.getAttribute('href');
         if (!href || href.startsWith('/') || /^https?:/i.test(href)) return;
-        el.href = BasePath.prefixRelativeAsset(href) + (href.includes('style.css') ? version : '');
+        const isCss = el.hasAttribute('data-storage-hub-css') || el.hasAttribute('data-storage-hub-css-v2');
+        el.href = BasePath.prefixRelativeAsset(href) + (isCss ? version : '');
       });
     })();
   </script>

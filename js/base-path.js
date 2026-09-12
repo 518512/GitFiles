@@ -275,19 +275,29 @@ const BasePath = (() => {
       baseEl.href = baseHref;
     }
 
-    const cssHref = `${prefixRelativeAsset('css/style.css')}${version}`;
-    let cssLink = document.querySelector('link[data-storage-hub-css]');
-    if (!cssLink) {
-      cssLink = document.createElement('link');
-      cssLink.rel = 'stylesheet';
-      cssLink.setAttribute('data-storage-hub-css', '1');
-      document.head.appendChild(cssLink);
-    }
-    if (cssLink.getAttribute('href') !== cssHref) {
-      cssLink.href = cssHref;
-    }
+    // The markup in <head> already lists style.css then ui-v2.css in cascade
+    // order, so this only has to fix up the hrefs for a non-root base path.
+    // ui-v2.css carries the design tokens and V2 overrides and MUST come after
+    // the legacy style.css; otherwise every V2 rule has to out-specify a
+    // 3400-line legacy sheet. Create the links only if the markup lacks them.
+    const ensureStyleLink = (attr, relPath) => {
+      const href = `${prefixRelativeAsset(relPath)}${version}`;
+      let link = document.querySelector(`link[${attr}]`);
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'stylesheet';
+        link.setAttribute(attr, '1');
+        document.head.appendChild(link);
+      }
+      if (link.getAttribute('href') !== href) link.href = href;
+      return link;
+    };
+    ensureStyleLink('data-storage-hub-css', 'css/style.css');
+    const v2Link = ensureStyleLink('data-storage-hub-css-v2', 'css/ui-v2.css');
+    // Re-append if some other script moved it, so V2 always cascades last.
+    if (v2Link !== document.head.lastElementChild) document.head.appendChild(v2Link);
 
-    document.querySelectorAll('link[href]:not([data-storage-hub-css])').forEach((el) => {
+    document.querySelectorAll('link[href]:not([data-storage-hub-css]):not([data-storage-hub-css-v2])').forEach((el) => {
       const value = el.getAttribute('href');
       if (!value || value.startsWith('/') || /^https?:/i.test(value)) return;
       const resolved = prefixRelativeAsset(value);

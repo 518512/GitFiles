@@ -83,8 +83,11 @@
   <script src="js/config.js"></script>
   <script src="js/base-path.js"></script>
   <script src="js/app-version.js"></script>
-  <script>BasePath.bootstrapHeadAssets();</script>
   <title>Notepad — GitFiles</title>
+  <!-- 与 index.html 一致：style.css 是基础层，ui-v2.css 是覆盖层，必须后加载。 -->
+  <link rel="stylesheet" data-storage-hub-css href="css/style.css">
+  <link rel="stylesheet" data-storage-hub-css-v2 href="css/ui-v2.css">
+  <script>BasePath.bootstrapHeadAssets();</script>
   <link id="notepad-favicon-32" rel="icon" href="assets/favicon-32.png" sizes="32x32" type="image/png">
   <link id="notepad-favicon-svg" rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link id="notepad-manifest" rel="manifest" href="manifest.webmanifest">

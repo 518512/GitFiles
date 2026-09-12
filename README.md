@@ -5,7 +5,7 @@
 **基于 Cloudflare Workers 的 GitHub Repository 文件管理器（PWA）**
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/MbAIGC/GitFiles)
-[![Tests](https://img.shields.io/badge/tests-44%20passing-2da44e)](tests/)
+[![Tests](https://img.shields.io/badge/tests-62%20passing-2da44e)](tests/)
 
 [English](README_EN.md) · 简体中文
 
@@ -112,13 +112,14 @@ node --test tests/github-engine.test.mjs tests/worker-api.test.mjs
 node scripts/build-config.mjs
 ```
 
-当前测试覆盖 Git 操作、Blob SHA 复用、批量单 commit、CAS、空仓库初始 ref、D1/session/ACL 拒绝、同源写入和 OAuth token 不泄漏。
+当前测试覆盖 Git 操作、Blob SHA 复用、批量单 commit、CAS、空仓库初始 ref、D1/session/ACL 拒绝与陈旧 ACL 重校验、同源写入、OAuth token 不泄漏、OAuth 回调投递域名白名单、路径 NFC 规范化、非法 UTF-16 内容拒绝、429 退避信息透传，以及文件下载的流式透传与 Range。
 
 ## 当前限制
 
-- 当前 session 使用 OAuth user token；GitHub App installation token、session 轮换与清理任务尚未完成。
+- 当前 session 使用 OAuth user token；GitHub App installation token 与 session 轮换尚未完成。过期 session 会在 `/api/me` 上顺带清理，没有 cron 绑定。
+- 单文件下载上限为 95 MB（Worker 内存保护）；超过该大小需要 R2 中转才能真正支持。
 - Conflict Center 已支持记录与重载远端状态，尚未提供文本三方合并与逐文件 diff。
 - 跨仓库 Move 是两阶段可恢复流程，不能是单个原子 Git commit；恢复 UI 尚未完成。
-- GitHub 文件 API 的实用上限仍为单文件 100 MB。
+- 仓库访问权限（ACL）读操作有 5 分钟缓存，写操作每次都回源 GitHub 校验。
 
 详细规范见 [docs/PROJECT_SPEC.md](docs/PROJECT_SPEC.md)。每次改动的中文记录见 `docs/改造记录-*.md`。

@@ -1509,7 +1509,9 @@ const GithubDisk = (() => {
 
   async function connectExistingRepository() {
     if (typeof Dialog === 'undefined') throw new Error('选择仓库需要应用对话框组件。');
-    const { repositories = [] } = await GithubApi.request('/api/repos');
+    // Force a fresh discovery: the cached Worker ACL list never learns about
+    // repositories that were created or shared after the last crawl.
+    const { repositories = [] } = await GithubApi.request('/api/repos?refresh=1');
     const mounted = new Set(disks.map((disk) => disk.id));
     const choices = repositories.filter((repo) => repo.can_write && !mounted.has(`${ID_PREFIX}${repo.owner}/${repo.repo}`));
     if (!choices.length) throw new Error('当前 Worker 会话中没有可写仓库。');
