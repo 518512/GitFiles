@@ -144,6 +144,20 @@
         <div class="app-header-actions">
           <button id="btn-header-add" class="header-action header-action--primary" type="button" title="添加存储" aria-label="添加存储"><span aria-hidden="true">＋</span></button>
           <span id="header-repo-state" class="header-repo-state">未连接仓库</span>
+          <div class="user-menu">
+            <button id="btn-user-menu" class="header-action user-menu-trigger" type="button" aria-haspopup="menu" aria-expanded="false" title="账户" aria-label="账户菜单">
+              <span id="user-menu-avatar" class="user-menu-avatar" aria-hidden="true">G</span>
+            </button>
+            <div id="user-menu-panel" class="user-menu-panel hidden" role="menu" aria-label="账户">
+              <div class="user-menu-head">
+                <strong id="user-menu-login">未登录</strong>
+                <small id="user-menu-state">GitHub 会话：检查中</small>
+              </div>
+              <button type="button" class="user-menu-item" role="menuitem" id="btn-user-sign-out">
+                <span class="user-menu-item-icon" aria-hidden="true">⎋</span> 退出 GitHub 登录
+              </button>
+            </div>
+          </div>
         </div>
         <div class="nav-buttons">
           <button id="btn-refresh" class="tool-btn" title="刷新">

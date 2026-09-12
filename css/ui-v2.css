@@ -133,6 +133,64 @@ body {
 /* 未连接仓库时不占位：这是一个状态提示，不是常驻控件。 */
 .header-repo-state:empty { display: none; }
 
+/* 顶栏账户菜单：登录后退出登录的主要入口（原来只在底部状态栏，移动端难发现）。 */
+.user-menu { position: relative; display: inline-flex; }
+.user-menu-trigger { padding: 0; }
+.user-menu-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+  font-size: 12px;
+  font-weight: 700;
+  overflow: hidden;
+}
+.user-menu-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.user-menu-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  min-width: 210px;
+  padding: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  box-shadow: 0 8px 24px rgba(31, 35, 40, .16);
+}
+.user-menu-head {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--color-border-muted);
+}
+.user-menu-head strong { font-size: 13px; overflow-wrap: anywhere; }
+.user-menu-head small { color: var(--color-muted); font-size: 11px; }
+.user-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.user-menu-item:hover:not(:disabled) { background: var(--color-bg); }
+.user-menu-item:disabled { color: var(--color-muted); cursor: default; opacity: .6; }
+.user-menu-item-icon { display: inline-flex; width: 16px; justify-content: center; }
+
 .toolbar-menu-toggle { display: inline-flex; }
 
 /* 位置区是唯一的弹性区域，保证面包屑优先占用剩余宽度。 */
@@ -427,6 +485,10 @@ body.sidebar-collapsed .sidebar { width: 0; flex-basis: 0; border-right: 0; over
 
   /* 第 1 行 */
   .ribbon .toolbar-menu-toggle { order: 1; }
+  /* 账户菜单在移动端同样必须可达（退出登录的入口） */
+  .user-menu-panel { right: -4px; min-width: 200px; }
+  .user-menu-item { min-height: var(--tap-target); }
+  .user-menu-avatar { width: 26px; height: 26px; }
   .ribbon .app-brand { order: 2; font-size: 15px; }
   .ribbon .app-header-actions { order: 3; margin-left: auto; }
   .ribbon .nav-buttons { order: 4; }

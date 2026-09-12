@@ -140,6 +140,87 @@ const App = (() => {
     };
     el.textContent = labels[state.githubSession] || labels.checking;
     el.dataset.state = state.githubSession;
+    renderUserMenu();
+  }
+
+  // --- 顶栏账户菜单 -------------------------------------------------------
+  // 退出登录原本只存在于底部状态栏的一个小按钮，移动端不易发现。
+  // 这里按 UI V2 任务单 §六，把账户与退出放到顶栏右侧的显式入口。
+  let githubLogin = null;
+
+  function setUserMenuOpen(open) {
+    const panel = $('#user-menu-panel');
+    const trigger = $('#btn-user-menu');
+    if (!panel || !trigger) return;
+    panel.classList.toggle('hidden', !open);
+    trigger.setAttribute('aria-expanded', String(open));
+  }
+
+  function closeUserMenu() {
+    setUserMenuOpen(false);
+  }
+
+  function renderUserMenu() {
+    const login = $('#user-menu-login');
+    const stateEl = $('#user-menu-state');
+    const avatar = $('#user-menu-avatar');
+    const signOutBtn = $('#btn-user-sign-out');
+    const disk = GithubDisk.getDisks()[0] || null;
+    const label = githubLogin || disk?.accountLogin || disk?.accountName || null;
+    if (login) login.textContent = label ? `@${label}` : '未登录';
+    if (stateEl) {
+      stateEl.textContent = state.githubSession === 'connected'
+        ? 'GitHub 会话已连接'
+        : state.githubSession === 'expired' ? '需要重新登录' : '未连接 GitHub';
+    }
+    if (avatar) {
+      const initial = label ? label.slice(0, 1).toUpperCase() : 'G';
+      const src = disk?.accountAvatar;
+      // 头像是外部 URL，走 <img> 而非 innerHTML，避免不可信内容注入
+      if (src && !/^data:/i.test(src)) {
+        avatar.textContent = '';
+        const img = document.createElement('img');
+        img.src = src;
+        img.alt = '';
+        img.addEventListener('error', () => { img.remove(); avatar.textContent = initial; }, { once: true });
+        avatar.appendChild(img);
+      } else {
+        avatar.textContent = initial;
+      }
+    }
+    // 未登录时退出按钮没有意义
+    if (signOutBtn) signOutBtn.disabled = state.githubSession !== 'connected';
+  }
+
+  function wireUserMenu() {
+    const trigger = $('#btn-user-menu');
+    const panel = $('#user-menu-panel');
+    if (!trigger || !panel) return;
+    trigger.addEventListener('click', (event) => {
+      event.stopPropagation();
+      setUserMenuOpen(panel.classList.contains('hidden'));
+    });
+    // 点击面板外部或按 Esc 关闭
+    document.addEventListener('click', (event) => {
+      if (panel.classList.contains('hidden')) return;
+      if (panel.contains(event.target)) return;
+      closeUserMenu();
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') closeUserMenu();
+    });
+  }
+
+  async function signOutGithub() {
+    try {
+      await GithubApi.request('/api/logout', { method: 'POST', body: {} });
+    } catch {
+      // Local drive sign-out still proceeds if the Worker session is unavailable.
+    }
+    githubLogin = null;
+    state.githubSession = 'expired';
+    renderGithubSessionState();
+    ejectAllDrives();
   }
 
   let sessionCheckPromise = null;
@@ -149,8 +230,9 @@ const App = (() => {
     state.githubSession = 'checking';
     renderGithubSessionState();
     sessionCheckPromise = GithubApi.request('/api/me')
-      .then(() => {
+      .then((me) => {
         state.githubSession = 'connected';
+        githubLogin = me?.login || null;
         return true;
       })
       .catch((err) => {
@@ -2972,16 +3054,10 @@ const App = (() => {
       button.addEventListener('click', () => setRepositoryView(button.dataset.repositoryView));
     });
 
-    $('#btn-sign-out').addEventListener('click', async () => {
-      try {
-        await GithubApi.request('/api/logout', { method: 'POST', body: {} });
-      } catch {
-        // Local drive sign-out still proceeds if the Worker session is unavailable.
-      }
-      state.githubSession = 'expired';
-      renderGithubSessionState();
-      ejectAllDrives();
-    });
+    // 两个退出入口（顶栏账户菜单、底部状态栏）共用同一段逻辑
+    $('#btn-sign-out').addEventListener('click', () => signOutGithub());
+    $('#btn-user-sign-out')?.addEventListener('click', () => { closeUserMenu(); return signOutGithub(); });
+    wireUserMenu();
     $('#btn-conflict-center')?.addEventListener('click', () => openConflictCenter());
 
     const refreshBtn = $('#btn-refresh');
