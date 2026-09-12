@@ -2,6 +2,13 @@ import { ApiError } from './http.js';
 import { githubRequest, repoPrefix } from './github.js';
 
 const COOKIE_NAME = 'gitfiles_session';
+// How long a cached repository ACL may be trusted before it is re-validated
+// against GitHub. Permission changes in GitHub must not require a re-login,
+// but re-checking on every request would burn the API rate limit (AGENTS.md §27).
+const ACL_TTL_MS = 5 * 60 * 1000;
+// Writes always re-validate, so a revoked collaborator cannot mutate a repo
+// with a stale cached `can_write=1` row.
+const WRITE_ACL_TTL_MS = 0;
 
 function cookieValue(request, name) {
   const cookies = request.headers.get('Cookie') || '';
@@ -49,24 +56,68 @@ export async function requireSession(request, env) {
 export async function requireRepositoryAccess(env, session, owner, repo, write = false) {
   const normalizedOwner = String(owner || '').trim();
   const normalizedRepo = String(repo || '').trim();
-  let row = await env.DB.prepare(
-    'SELECT can_read, can_write FROM repository_access WHERE session_id = ? AND owner = ? AND repo = ?'
+  const ttl = write ? WRITE_ACL_TTL_MS : ACL_TTL_MS;
+  const row = await env.DB.prepare(
+    'SELECT can_read, can_write, checked_at FROM repository_access WHERE session_id = ? AND owner = ? AND repo = ?'
   ).bind(session.id, normalizedOwner, normalizedRepo).first();
 
-  // ACL discovery is lazy. If this repository was not cached yet, validate it
-  // with GitHub and persist the exact permissions before allowing access.
-  if (!row) {
-    const { payload } = await githubRequest(session, `${repoPrefix(normalizedOwner, normalizedRepo)}`);
-    const canRead = payload?.permissions?.pull !== false ? 1 : 0;
-    const canWrite = payload?.permissions?.push || payload?.permissions?.admin ? 1 : 0;
-    await env.DB.prepare(
-      'INSERT OR REPLACE INTO repository_access (session_id, owner, repo, can_read, can_write) VALUES (?, ?, ?, ?, ?)'
-    ).bind(session.id, normalizedOwner, normalizedRepo, canRead, canWrite).run();
-    row = { can_read: canRead, can_write: canWrite };
+  const fresh = row && row.checked_at != null && (Date.now() - Number(row.checked_at)) < ttl;
+  if (fresh) {
+    if ((!write && !row.can_read) || (write && !row.can_write)) {
+      throw new ApiError(403, 'forbidden', 'You do not have permission for this repository');
+    }
+    return row;
   }
 
-  if ((!write && !row.can_read) || (write && !row.can_write)) {
+  // ACL discovery and re-validation share one path: ask GitHub for the exact
+  // permissions and persist them. A repository the session cannot see returns
+  // 404 upstream, which we surface as 403 so we never confirm its existence.
+  let payload;
+  try {
+    ({ payload } = await githubRequest(session, `${repoPrefix(normalizedOwner, normalizedRepo)}`));
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      throw new ApiError(403, 'forbidden', 'You do not have permission for this repository');
+    }
+    throw error;
+  }
+  const canRead = payload?.permissions?.pull !== false ? 1 : 0;
+  const canWrite = payload?.permissions?.push || payload?.permissions?.admin ? 1 : 0;
+  await env.DB.prepare(
+    'INSERT OR REPLACE INTO repository_access (session_id, owner, repo, can_read, can_write, checked_at) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(session.id, normalizedOwner, normalizedRepo, canRead, canWrite, Date.now()).run();
+
+  const resolved = { can_read: canRead, can_write: canWrite, checked_at: Date.now() };
+  if ((!write && !resolved.can_read) || (write && !resolved.can_write)) {
     throw new ApiError(403, 'forbidden', 'You do not have permission for this repository');
   }
-  return row;
+  return resolved;
+}
+
+/**
+ * Drop sessions that are already past their expiry (and their ACL rows).
+ *
+ * There is no cron binding in this Workers deployment, so cleanup is
+ * opportunistic. It is throttled because it is best-effort housekeeping, not
+ * part of any request's contract (AGENTS.md §32).
+ */
+let lastPurgeAt = 0;
+const PURGE_INTERVAL_MS = 10 * 60 * 1000;
+
+export async function purgeExpiredSessions(env) {
+  if (!env.DB) return 0;
+  const now = Date.now();
+  if (now - lastPurgeAt < PURGE_INTERVAL_MS) return 0;
+  lastPurgeAt = now;
+  try {
+    await env.DB.prepare(
+      'DELETE FROM repository_access WHERE session_id IN (SELECT id FROM sessions WHERE expires_at <= ?)'
+    ).bind(now).run();
+    const result = await env.DB.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(now).run();
+    return result?.meta?.changes ?? 0;
+  } catch (error) {
+    // Cleanup must never break a user request.
+    console.error('purgeExpiredSessions failed', error);
+    return 0;
+  }
 }

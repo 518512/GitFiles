@@ -1,6 +1,6 @@
 import { ApiError, assertSameOrigin, parseRepoPath, readJson, json } from './http.js';
 import { requireRepositoryAccess, requireSession } from './session.js';
-import { branchState, githubRaw, githubRequest, repoPrefix } from './github.js';
+import { branchState, githubRequest, repoPrefix, streamFile } from './github.js';
 import { executeOperations } from './operations.js';
 
 function defaultBranch(branch) {
@@ -56,8 +56,8 @@ export async function handleRepositoryApi(request, env, url) {
     if (!path || path.includes('\0') || path.split('/').some((part) => !part || part === '.' || part === '..')) {
       throw new ApiError(422, 'validation_error', 'A valid file path is required');
     }
-    const raw = await githubRaw(session, `${repoPrefix(owner, repo)}/contents/${path.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(branch)}`);
-    return new Response(raw.body, { headers: { 'Content-Type': raw.headers.get('content-type') || 'application/octet-stream' } });
+    const encodedPath = path.split('/').map(encodeURIComponent).join('/');
+    return streamFile(request, session, `${repoPrefix(owner, repo)}/contents/${encodedPath}?ref=${encodeURIComponent(branch)}`);
   }
 
   if (request.method === 'POST' && action === 'operations') {
@@ -97,18 +97,23 @@ export async function createRepository(request, env) {
     body: JSON.stringify({ name, private: body.private !== false, auto_init: true }),
   });
   await env.DB.prepare(
-    'INSERT OR REPLACE INTO repository_access (session_id, owner, repo, can_read, can_write) VALUES (?, ?, ?, 1, 1)'
-  ).bind(session.id, repository.owner.login, repository.name).run();
+    'INSERT OR REPLACE INTO repository_access (session_id, owner, repo, can_read, can_write, checked_at) VALUES (?, ?, ?, 1, 1, ?)'
+  ).bind(session.id, repository.owner.login, repository.name, Date.now()).run();
   return json({ repository }, 201);
 }
 
 export async function handleRepoList(request, env) {
   const session = await requireSession(request, env);
+  const url = new URL(request.url);
+  // The cached ACL list is authoritative enough to avoid a full GitHub crawl on
+  // every page load, but the user must be able to force a re-discovery; without
+  // this, a newly created or newly shared repository never appears.
+  const force = url.searchParams.get('refresh') === '1';
   const rows = await env.DB.prepare(
-    'SELECT owner, repo, can_read, can_write FROM repository_access WHERE session_id = ? ORDER BY owner, repo'
+    'SELECT owner, repo, can_read, can_write FROM repository_access WHERE session_id = ? AND can_read = 1 ORDER BY owner, repo'
   ).bind(session.id).all();
   const cached = rows.results || [];
-  if (cached.length) return json({ repositories: cached });
+  if (cached.length && !force) return json({ repositories: cached, cached: true });
 
   const discovered = [];
   for (let page = 1; page <= 10; page += 1) {
@@ -120,19 +125,21 @@ export async function handleRepoList(request, env) {
     discovered.push(...list);
     if (list.length < 100) break;
   }
-  const statements = discovered.flatMap((repo) => {
+  const shaped = discovered.flatMap((repo) => {
     const owner = repo?.owner?.login;
     if (!owner || !repo?.name) return [];
-    return [env.DB.prepare(
-      'INSERT OR REPLACE INTO repository_access (session_id, owner, repo, can_read, can_write) VALUES (?, ?, ?, ?, ?)'
-    ).bind(session.id, owner, repo.name, repo.permissions?.pull !== false ? 1 : 0, repo.permissions?.push || repo.permissions?.admin ? 1 : 0)];
+    return [{
+      owner,
+      repo: repo.name,
+      can_read: repo.permissions?.pull !== false ? 1 : 0,
+      can_write: repo.permissions?.push || repo.permissions?.admin ? 1 : 0,
+    }];
   });
+  const checkedAt = Date.now();
+  const statements = shaped.map((repo) => env.DB.prepare(
+    'INSERT OR REPLACE INTO repository_access (session_id, owner, repo, can_read, can_write, checked_at) VALUES (?, ?, ?, ?, ?, ?)'
+  ).bind(session.id, repo.owner, repo.repo, repo.can_read, repo.can_write, checkedAt));
   if (statements.length && typeof env.DB.batch === 'function') await env.DB.batch(statements);
   else await Promise.all(statements.map((statement) => statement.run()));
-  return json({ repositories: discovered.map((repo) => ({
-    owner: repo.owner.login,
-    repo: repo.name,
-    can_read: repo.permissions?.pull !== false ? 1 : 0,
-    can_write: repo.permissions?.push || repo.permissions?.admin ? 1 : 0,
-  })) });
+  return json({ repositories: shaped.filter((repo) => repo.can_read), cached: false });
 }

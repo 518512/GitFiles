@@ -132,9 +132,91 @@ test('uncached repository access is discovered from GitHub and persisted', async
   globalThis.fetch = async () => new Response(JSON.stringify({ permissions: { pull: true, push: true } }), { status: 200 });
   try {
     const access = await requireRepositoryAccess(env, { id: 's1', access_token: 'secret' }, 'octo', 'repo', true);
-    assert.deepEqual(access, { can_read: 1, can_write: 1 });
+    assert.equal(access.can_read, 1);
+    assert.equal(access.can_write, 1);
+    assert.equal(typeof access.checked_at, 'number');
     assert.equal(writes.length, 1);
     assert.match(writes[0].sql, /INSERT OR REPLACE INTO repository_access/);
+    assert.match(writes[0].sql, /checked_at/);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('a fresh cached ACL is reused without calling GitHub', async () => {
+  const env = {
+    DB: {
+      prepare(sql) {
+        return {
+          bind() {
+            return {
+              async first() { return { can_read: 1, can_write: 1, checked_at: Date.now() }; },
+              async run() { throw new Error('a fresh ACL must not be rewritten'); },
+            };
+          },
+        };
+      },
+    },
+  };
+  const originalFetch = globalThis.fetch;
+  let called = 0;
+  globalThis.fetch = async () => { called += 1; return new Response('{}', { status: 200 }); };
+  try {
+    const access = await requireRepositoryAccess(env, { id: 's1', access_token: 'secret' }, 'octo', 'repo');
+    assert.equal(access.can_write, 1);
+    assert.equal(called, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('a stale cached ACL is re-validated so revoked write access is not trusted', async () => {
+  const writes = [];
+  const env = {
+    DB: {
+      prepare(sql) {
+        return {
+          bind(...args) {
+            return {
+              // Row exists but its checked_at is old, and it claims can_write=1.
+              async first() { return { can_read: 1, can_write: 1, checked_at: Date.now() - 60 * 60 * 1000 }; },
+              async run() { writes.push({ sql, args }); return { success: true }; },
+            };
+          },
+        };
+      },
+    },
+  };
+  const originalFetch = globalThis.fetch;
+  // GitHub now reports read-only (the collaborator was downgraded).
+  globalThis.fetch = async () => new Response(JSON.stringify({ permissions: { pull: true, push: false } }), { status: 200 });
+  try {
+    await assert.rejects(
+      () => requireRepositoryAccess(env, { id: 's1', access_token: 'secret' }, 'octo', 'repo', true),
+      (error) => error.status === 403
+    );
+    assert.equal(writes.length, 1);
+    assert.equal(writes[0].args[4], 0, 'can_write must be persisted as revoked');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('a repository the session cannot see is reported as 403, not 404', async () => {
+  const env = {
+    DB: {
+      prepare() {
+        return { bind() { return { async first() { return null; }, async run() { return { success: true }; } }; } };
+      },
+    },
+  };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ message: 'Not Found' }), { status: 404 });
+  try {
+    await assert.rejects(
+      () => requireRepositoryAccess(env, { id: 's1', access_token: 'secret' }, 'octo', 'secret-repo'),
+      (error) => error.status === 403
+    );
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -230,27 +312,36 @@ test('Worker mutation reuses a Blob SHA for rename and performs one CAS ref upda
   }
 });
 
-test('Worker rejects truncated trees before creating a new tree', async () => {
+test('a truncated recursive tree is walked through subtrees instead of blocking the write', async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];
   globalThis.fetch = async (url, options = {}) => {
     const path = new URL(url).pathname;
-    calls.push({ path, method: options.method || 'GET' });
+    calls.push({ path, method: options.method || 'GET', body: options.body });
     const payload = path.endsWith('/branches/main')
       ? { commit: { sha: 'head-A', commit: { tree: { sha: 'tree-A' } } } }
+      // Root listing is truncated, so the reader must descend into `docs`.
       : path.endsWith('/git/trees/head-A')
-        ? { sha: 'tree-A', truncated: true, tree: [{ path: 'visible.md', type: 'blob', sha: 'blob-A' }] }
-        : {};
+        ? { sha: 'tree-A', truncated: true, tree: [{ path: 'visible.md', type: 'blob', sha: 'blob-A' }, { path: 'docs', type: 'tree', sha: 'tree-docs' }] }
+        : path.endsWith('/git/trees/tree-docs')
+          ? { sha: 'tree-docs', tree: [{ path: 'guide.md', mode: '100644', type: 'blob', sha: 'blob-B' }] }
+          : path.endsWith('/git/trees') ? { sha: 'tree-B' }
+            : path.endsWith('/git/commits') ? { sha: 'head-B' }
+              : {};
     return new Response(JSON.stringify(payload), { status: 200, headers: { 'Content-Type': 'application/json' } });
   };
   try {
-    await assert.rejects(
-      () => executeOperations({ access_token: 'secret' }, 'octo', 'repo', {
-        branch: 'main', expectedHead: 'head-A', operations: [{ type: 'create', path: 'new.md', content: 'new' }],
-      }),
-      (error) => error.status === 422 && error.code === 'validation_error'
-    );
-    assert.equal(calls.some((call) => call.method === 'POST'), false);
+    await executeOperations({ access_token: 'secret' }, 'octo', 'repo', {
+      branch: 'main', expectedHead: 'head-A', operations: [{ type: 'create', path: 'new.md', content: 'new' }],
+    });
+    // The subtree was fetched with the correct path prefix.
+    assert.equal(calls.some((call) => call.path.endsWith('/git/trees/tree-docs')), true);
+    const treeCall = calls.find((call) => call.path === '/repos/octo/repo/git/trees' && call.method === 'POST');
+    assert.ok(treeCall, 'a new tree must still be created');
+    const body = JSON.parse(treeCall.body);
+    const paths = body.tree.map((entry) => entry.path).sort();
+    // The lazy walk must recover the nested blob, not silently drop it.
+    assert.deepEqual(paths, ['docs/guide.md', 'new.md', 'visible.md']);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -410,6 +501,177 @@ test('Worker maps concurrent initial ref creation to conflict', async () => {
       }),
       (error) => error.status === 409 && error.details?.remoteHead === 'head-other'
     );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Encoding, path normalization, rate limits and streaming (review follow-ups)
+// ---------------------------------------------------------------------------
+
+test('content with a lone surrogate is rejected as 422 validation_error, not a 500', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const path = new URL(url).pathname;
+    const payload = path.endsWith('/branches/main') ? { commit: { sha: 'head-A', commit: { tree: { sha: 'tree-A' } } } }
+      : path.endsWith('/git/trees/head-A') ? { sha: 'tree-A', tree: [] }
+      : {};
+    return new Response(JSON.stringify(payload), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  try {
+    await assert.rejects(
+      () => executeOperations({ access_token: 'secret' }, 'octo', 'repo', {
+        // A truncated UTF-8 sequence decodes to a lone surrogate in JS.
+        branch: 'main', expectedHead: 'head-A', operations: [{ type: 'create', path: 'a.txt', content: 'abc\uD800def' }],
+      }),
+      (error) => error.status === 422 && error.code === 'validation_error'
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('NFD and NFC spellings of a path resolve to the same NFC repository path', async () => {
+  const originalFetch = globalThis.fetch;
+  let treeBody = null;
+  globalThis.fetch = async (url, options = {}) => {
+    const path = new URL(url).pathname;
+    if (path.endsWith('/git/trees') && options.method === 'POST') treeBody = JSON.parse(options.body);
+    const payload = path.endsWith('/branches/main') ? { commit: { sha: 'head-A', commit: { tree: { sha: 'tree-A' } } } }
+      : path.endsWith('/git/trees/head-A') ? { sha: 'tree-A', tree: [] }
+      : path.endsWith('/git/blobs') ? { sha: 'blob-A' }
+      : path.endsWith('/git/trees') ? { sha: 'tree-B' }
+      : path.endsWith('/git/commits') ? { sha: 'head-B' }
+      : {};
+    return new Response(JSON.stringify(payload), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  try {
+    // "e" + combining acute (NFD) must be stored as the precomposed NFC form.
+    await executeOperations({ access_token: 'secret' }, 'octo', 'repo', {
+      branch: 'main', expectedHead: 'head-A', operations: [{ type: 'create', path: 'cafe\u0301.md', content: 'x' }],
+    });
+    assert.equal(treeBody.tree[0].path, 'caf\u00e9.md');
+    assert.equal(treeBody.tree[0].path.normalize('NFC'), treeBody.tree[0].path);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('delete of a path that never existed reports skipped with missingPaths', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const path = new URL(url).pathname;
+    const payload = path.endsWith('/branches/main') ? { commit: { sha: 'head-A', commit: { tree: { sha: 'tree-A' } } } }
+      : path.endsWith('/git/trees/head-A') ? { sha: 'tree-A', tree: [{ path: 'real.md', type: 'blob', sha: 'blob-A' }] }
+      : {};
+    return new Response(JSON.stringify(payload), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  try {
+    const result = await executeOperations({ access_token: 'secret' }, 'octo', 'repo', {
+      branch: 'main', expectedHead: 'head-A', operations: [{ type: 'delete', path: 'never/existed.md' }],
+    });
+    assert.equal(result.skipped, true);
+    assert.deepEqual(result.missingPaths, ['never/existed.md']);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('rate limit errors preserve Retry-After for client backoff', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ message: 'API rate limit exceeded' }), {
+    status: 403,
+    headers: { 'Content-Type': 'application/json', 'Retry-After': '42', 'X-RateLimit-Reset': '1700000000' },
+  });
+  try {
+    await assert.rejects(
+      () => githubRequest({ access_token: 'secret' }, '/user'),
+      (error) => error.status === 429
+        && error.details?.retryAfter === 42
+        && error.details?.resetAt === 1700000000000
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('file download streams the upstream body and forwards Range/206', async () => {
+  const originalFetch = globalThis.fetch;
+  let sentRange = null;
+  globalThis.fetch = async (url, options = {}) => {
+    const path = new URL(url).pathname;
+    if (path.includes('/contents/')) {
+      sentRange = options.headers?.Range ?? null;
+      return new Response('BINARY', {
+        status: 206,
+        headers: { 'Content-Type': 'image/png', 'Content-Length': '6', 'Content-Range': 'bytes 0-5/100' },
+      });
+    }
+    return new Response(JSON.stringify({ permissions: { pull: true, push: true } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  const env = { DB: dbWith({ session: { id: 's1', github_login: 'octo', access_token: 'secret', expires_at: Date.now() + 100000 } }) };
+  try {
+    const response = await worker.fetch(
+      request('/api/repos/octo/repo/file?branch=main&path=img.png', { headers: { Cookie: 'gitfiles_session=s1', Range: 'bytes=0-5' } }),
+      env
+    );
+    assert.equal(response.status, 206);
+    assert.equal(sentRange, 'bytes=0-5');
+    assert.equal(response.headers.get('Content-Range'), 'bytes 0-5/100');
+    assert.equal(await response.text(), 'BINARY');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('operations on a pre-existing NFD path still match after NFC normalization', async () => {
+  const originalFetch = globalThis.fetch;
+  let treeBody = null;
+  // The repository already stores the NFD spelling from before the NFC change.
+  const nfdPath = 'cafe\u0301.md';
+  globalThis.fetch = async (url, options = {}) => {
+    const path = new URL(url).pathname;
+    if (path.endsWith('/git/trees') && options.method === 'POST') treeBody = JSON.parse(options.body);
+    const payload = path.endsWith('/branches/main') ? { commit: { sha: 'head-A', commit: { tree: { sha: 'tree-A' } } } }
+      : path.endsWith('/git/trees/head-A') ? { sha: 'tree-A', tree: [{ path: nfdPath, type: 'blob', sha: 'blob-NFD' }] }
+      : path.endsWith('/git/trees') ? { sha: 'tree-B' }
+        : path.endsWith('/git/commits') ? { sha: 'head-B' }
+          : {};
+    return new Response(JSON.stringify(payload), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  try {
+    // Rename it to a new NFC name; older NFD paths must not become undeletable.
+    await executeOperations({ access_token: 'secret' }, 'octo', 'repo', {
+      branch: 'main', expectedHead: 'head-A',
+      operations: [{ type: 'rename', from: 'cafe\u0301.md', to: 'renamed.md' }],
+    });
+    const paths = treeBody.tree.map((entry) => entry.path);
+    assert.deepEqual(paths, ['renamed.md']);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('deleting a pre-existing NFD path removes it instead of failing', async () => {
+  const originalFetch = globalThis.fetch;
+  let treeBody = null;
+  const nfdPath = 'cafe\u0301.md';
+  globalThis.fetch = async (url, options = {}) => {
+    const path = new URL(url).pathname;
+    if (path.endsWith('/git/trees') && options.method === 'POST') treeBody = JSON.parse(options.body);
+    const payload = path.endsWith('/branches/main') ? { commit: { sha: 'head-A', commit: { tree: { sha: 'tree-A' } } } }
+      : path.endsWith('/git/trees/head-A') ? { sha: 'tree-A', tree: [{ path: nfdPath, type: 'blob', sha: 'blob-NFD' }, { path: 'keep.md', type: 'blob', sha: 'blob-K' }] }
+        : path.endsWith('/git/trees') ? { sha: 'tree-B' }
+          : path.endsWith('/git/commits') ? { sha: 'head-B' }
+            : {};
+    return new Response(JSON.stringify(payload), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  try {
+    await executeOperations({ access_token: 'secret' }, 'octo', 'repo', {
+      branch: 'main', expectedHead: 'head-A', operations: [{ type: 'delete', path: 'cafe\u0301.md' }],
+    });
+    assert.deepEqual(treeBody.tree.map((entry) => entry.path), ['keep.md']);
   } finally {
     globalThis.fetch = originalFetch;
   }

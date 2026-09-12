@@ -25,8 +25,42 @@ const GithubOAuthDeliver = (() => {
     }
   }
 
+  /**
+   * Origins this app is allowed to hand the OAuth authorization code back to.
+   *
+   * The callback page runs on the same origin as the app, so the only
+   * legitimate opener origin is this page's own origin. The origin embedded in
+   * `state` is NOT trusted: an attacker can craft an authorize URL whose state
+   * carries their own origin and have the authorization code delivered there.
+   */
+  function allowedDeliveryOrigins() {
+    const origins = new Set([location.origin]);
+    for (const candidate of [window.CONFIG?.GITHUB_REDIRECT_URI, window.CONFIG?.GITHUB_TOKEN_EXCHANGE_URL]) {
+      if (!candidate) continue;
+      try {
+        const url = new URL(candidate, location.href);
+        if (url.protocol === 'http:' || url.protocol === 'https:') origins.add(url.origin);
+      } catch {
+        // ignore malformed configuration
+      }
+    }
+    return origins;
+  }
+
+  /**
+   * Resolve the postMessage target: the state origin only when it is explicitly
+   * allow-listed, otherwise this page's own origin. Never an untrusted
+   * third-party origin.
+   */
+  function resolveDeliveryOrigin(state) {
+    const allowed = allowedDeliveryOrigins();
+    const stated = extractOpenerOrigin(state);
+    if (stated && allowed.has(stated)) return stated;
+    return location.origin;
+  }
+
   function deliverPayload(payload) {
-    const openerOrigin = extractOpenerOrigin(payload.state) || location.origin;
+    const openerOrigin = resolveDeliveryOrigin(payload.state);
 
     try {
       if (window.opener && !window.opener.closed) {
@@ -110,6 +144,8 @@ const GithubOAuthDeliver = (() => {
   return {
     OAUTH_MESSAGE_SOURCE,
     extractOpenerOrigin,
+    allowedDeliveryOrigins,
+    resolveDeliveryOrigin,
     deliverFromSearchParams,
     runIfPopupCallback,
   };

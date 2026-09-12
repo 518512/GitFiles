@@ -1,5 +1,5 @@
 import { apiError, assertSameOrigin, json } from './http.js';
-import { clearSessionCookie, deleteSession, sessionCookie } from './session.js';
+import { clearSessionCookie, deleteSession, purgeExpiredSessions, requireSession, sessionCookie } from './session.js';
 import { createRepository, handleRepoList, handleRepositoryApi } from './repos.js';
 import { githubRequest } from './github.js';
 
@@ -88,8 +88,10 @@ async function handleApi(request, env, url) {
     return json({ ok: true }, 200, { 'Set-Cookie': clearSessionCookie(request) });
   }
   if (url.pathname === '/api/me') {
-    const { requireSession } = await import('./session.js');
     const session = await requireSession(request, env);
+    // Opportunistic cleanup: there is no cron binding, so expired sessions are
+    // reaped on the cheap endpoint that every page load already calls.
+    await purgeExpiredSessions(env);
     return json({ login: session.github_login || null });
   }
   if (url.pathname === '/api/repos') {

@@ -91,7 +91,10 @@
   <script src="js/github-oauth-deliver.js"></script>
   <script>GithubOAuthDeliver.runIfPopupCallback();</script>
   <title>GitFiles</title>
-  <link rel="stylesheet" href="css/ui-v2.css">
+  <!-- 顺序即层叠顺序：style.css 是历史基础层，ui-v2.css 是设计令牌与 V2 覆盖层，
+       必须后加载，否则 V2 规则无法生效。base-path.js 会给两者补 ?v= 版本号。 -->
+  <link rel="stylesheet" data-storage-hub-css href="css/style.css">
+  <link rel="stylesheet" data-storage-hub-css-v2 href="css/ui-v2.css">
   <link rel="icon" href="assets/favicon-32.png" sizes="32x32" type="image/png">
   <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="assets/logo-180.png">
