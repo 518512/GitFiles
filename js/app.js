@@ -1250,7 +1250,7 @@ const App = (() => {
     // 单单元格 + grid-column:1/-1：避免为对齐再补三个空单元格
     row.innerHTML = `
       <span class="col-name go-up-cell">
-        <span class="list-icon">${goUpIcon(18)}</span>
+        <span class="list-icon">${goUpIcon('file-icon-wrap--small')}</span>
         <span class="list-name-text">..</span>
       </span>
     `;
@@ -1265,15 +1265,17 @@ const App = (() => {
   }
 
   /**
-   * 「..」的图标：文件夹 + 右上角向上箭头角标。
-   * 只用文件夹会与普通目录项难以区分，叠加箭头后才能一眼看出是"返回上级"。
+   * 「..」的图标。
+   *
+   * 用与普通文件夹项**完全相同**的 emoji（GitHub/本地/Drive 的目录项都是 `📁`），
+   * 而不是自绘的 SVG 文件夹 —— 早先版本用了灰色 SVG 图标，与同列表中
+   * 彩色的 emoji 目录图标并列时显得突兀。
+   * 「返回上级」的语义由 `..` 名称 + title/aria-label 承担。
    */
-  function goUpIcon(size = 40) {
-    const badge = Math.max(12, Math.round(size * 0.5));
-    return `<span class="go-up-icon-wrap" style="--go-up-size:${size}px">
-      <svg class="go-up-folder" viewBox="0 0 16 16" width="${size}" height="${size}" aria-hidden="true"><path fill="currentColor" d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1Z"/></svg>
-      <svg class="go-up-arrow" viewBox="0 0 16 16" width="${badge}" height="${badge}" aria-hidden="true"><path fill="currentColor" d="M7.78 12.53a.75.75 0 0 1-1.06 0L2.47 8.28a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 1.06L4.06 7.75h9.19a.75.75 0 0 1 0 1.5H4.06l3.72 3.72a.75.75 0 0 1 0 1.06Z"/></svg>
-    </span>`;
+  function goUpIcon(sizeClass = '') {
+    // 与普通目录项用同一个尺寸类（列表用 file-icon-wrap--small → emoji 1rem），
+    // 否则两行图标的字号会不一致。
+    return `<span class="file-type-fallback ${sizeClass}">📁</span>`;
   }
 
   function renderGrid() {
