@@ -252,6 +252,8 @@ const App = (() => {
   }
 
   let sessionCheckPromise = null;
+  // 用户手动切过视图后，不再因视口变化而自动改默认值
+  let viewPinnedByUser = false;
 
   function refreshGithubSessionState() {
     if (sessionCheckPromise) return sessionCheckPromise;
@@ -1775,10 +1777,21 @@ const App = (() => {
     syncProgressLoop();
   }
 
+  // 单按钮切换视图：按钮上的图标表示「点击后会切到的模式」
+  const VIEW_ICON_PATH = 'M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z';
+  const GRID_ICON_PATH = 'M4 4h4v4H4V4zm6 0h4v4h-4V4zm6 0h4v4h-4V4zM4 10h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4z';
+
   function setView(view) {
     state.view = view;
-    $('#btn-view-grid').classList.toggle('active', view === 'grid');
-    $('#btn-view-list').classList.toggle('active', view === 'list');
+    const button = $('#btn-view-toggle');
+    const icon = $('#view-toggle-icon path');
+    const isList = view === 'list';
+    if (icon) icon.setAttribute('d', isList ? GRID_ICON_PATH : VIEW_ICON_PATH);
+    if (button) {
+      const label = isList ? '切换到大图标' : '切换到详细信息';
+      button.title = label;
+      button.setAttribute('aria-label', label);
+    }
     renderCurrentView();
   }
 
@@ -3121,8 +3134,10 @@ const App = (() => {
       }
     });
 
-    $('#btn-view-grid').addEventListener('click', () => setView('grid'));
-    $('#btn-view-list').addEventListener('click', () => setView('list'));
+    $('#btn-view-toggle')?.addEventListener('click', () => {
+      viewPinnedByUser = true;
+      setView(state.view === 'list' ? 'grid' : 'list');
+    });
     $('#file-search')?.addEventListener('input', (event) => {
       state.searchQuery = event.target.value;
       renderCurrentView();
@@ -3403,7 +3418,15 @@ const App = (() => {
 
     bindEvents();
 
-    if (isMobileLayout()) state.view = 'list';
+    // 移动端默认 list（网格在窄屏信息密度过低）。
+    // 需要走 setView 而不是直接改 state，否则按钮的图标与 aria-label 不会同步。
+    setView(isMobileLayout() ? 'list' : state.view);
+    // 视口跨过断点时同步默认值：仅当用户没有手动切换过时才跟随
+    const layoutQuery = window.matchMedia('(max-width: 768px)');
+    layoutQuery.addEventListener?.('change', (event) => {
+      if (viewPinnedByUser) return;
+      setView(event.matches ? 'list' : 'grid');
+    });
 
     if (authenticated) showExplorer();
     else showLogin();

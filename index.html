@@ -193,11 +193,9 @@
           <button id="btn-sort-direction" class="tool-btn" type="button" title="切换排序方向" aria-label="切换排序方向">↑</button>
         </div>
         <div class="view-toggle">
-          <button id="btn-view-grid" class="tool-btn active" title="大图标">
-            <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M4 4h4v4H4V4zm6 0h4v4h-4V4zm6 0h4v4h-4V4zM4 10h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4zM4 16h4v4H4v-4zm6 0h4v4h-4v-4zm6 0h4v4h-4v-4z"/></svg>
-          </button>
-          <button id="btn-view-list" class="tool-btn" title="详细信息">
-            <svg viewBox="0 0 24 24" width="16" height="16"><path fill="currentColor" d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
+          <!-- 单一按钮切换视图：图标表示「点击后会切到的模式」，节省一个控件位 -->
+          <button id="btn-view-toggle" class="tool-btn" type="button" title="切换到详细信息" aria-label="切换到详细信息">
+            <svg id="view-toggle-icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
           </button>
         </div>
       </div>
