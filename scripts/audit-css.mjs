@@ -47,9 +47,23 @@ function lineOf(src, idx) {
   return line;
 }
 
+/** 该规则是否位于 @media 内（向前找最近的未闭合 '{'） */
+
 /** 解析 CSS 为声明列表 */
+/**
+ * 去掉注释但保留换行数，避免破坏行号。
+ *
+ * 必须先去掉注释：规则体里的 /* ... *\/ 会被下面的 `([^{}]*)\}`
+ * 一起吞掉，导致该花括号无法闭合，于是**后续整段规则全部解析错位**——
+ * 早先版本因此把「已经复位过的属性」误报为泄漏（例如 .ribbon .file-tools
+ * 已经 background: transparent，却仍报告历史层的 background: #fff 在胜出）。
+ */
+function stripComments(src) {
+  return src.replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ' '));
+}
+
 function parseCss(relPath) {
-  const src = fs.readFileSync(path.join(ROOT, relPath), 'utf8');
+  const src = stripComments(fs.readFileSync(path.join(ROOT, relPath), 'utf8'));
   const out = [];
   const re = /([^{}]+)\{([^{}]*)\}/g;
   let m;
@@ -88,6 +102,66 @@ function parseCss(relPath) {
   return out;
 }
 
+/**
+ * 已确认「历史层的值就是 V2 期望值」的属性白名单。
+ *
+ * 这些属性在层叠中由历史层胜出，但**核对后认为在新布局下依然正确**，
+ * 因此不写覆盖规则（写了反而制造重复）。列入白名单等于显式登记这个判断，
+ * 而不是把它藏在"没人注意到"里。
+ *
+ * 新增条目必须在注释里写明理由；发现理由不成立时应改为真正复位。
+ */
+const ALLOWED_LEGACY = new Map(Object.entries({
+  ribbon: { 'flex-shrink': '工具栏在纵向不收缩' },
+  'nav-buttons': { 'flex-shrink': '按钮组不被压扁' },
+  'view-toggle': { 'flex-shrink': '同上' },
+  'tool-btn': {
+    display: '按钮需 flex 居中', 'align-items': '同上', 'justify-content': '同上',
+    cursor: '可点击指针', background: '透明底（V2 亦为透明）',
+    border: '透明占位边框，便于 hover 变色',
+  },
+  'address-bar': { 'border-color': 'border 已为 0，颜色无实际影响' },
+  breadcrumbs: {
+    overflow: '横向滚动容器需要裁剪',
+    'font-size': '13px，与 V2 正文一致',
+    '-webkit-overflow-scrolling': '移动端惯性滚动',
+  },
+  'file-tools': { 'flex-wrap': '仅窄屏媒体查询内，与 V2 的 wrap 一致' },
+  sidebar: {
+    display: '侧栏需竖向 flex', 'flex-direction': '同上', 'flex-shrink': '不参与收缩',
+    position: '移动端抽屉定位', top: '同上', left: '同上', bottom: '同上',
+    'z-index': '抽屉层级', 'max-width': '抽屉最大宽度', transform: '收起时移出视口',
+    'box-shadow': '抽屉投影', 'padding-top': '安全区适配', 'padding-bottom': '安全区适配',
+  },
+  'sidebar-tree': { 'list-style': '列表需去点' },
+  'tree-row': { 'display': '行内 flex', 'align-items': '同上', 'min-width': '允许压缩', 'padding-right': '与图标对齐的微调' },
+  'list-header': {
+    position: '表头吸顶', top: '同上', 'z-index': '吸顶层级',
+    'background': '表头底色', padding: '表头内边距', 'font-size': '紧凑字号',
+    'font-weight': '表头加粗', 'border-bottom-color': '仅改颜色，边框本身由 V2 提供',
+  },
+  'list-row': {
+    cursor: '可点击指针', 'align-items': '行内对齐', border: '透明占位边框',
+    '-webkit-touch-callout': '移动端长按行为', gap: '紧凑间距', 'font-size': '紧凑字号',
+  },
+  'file-grid': { display: '网格容器', 'grid-template-columns': '自适应列宽', gap: '紧凑间距', padding: '容器内边距' },
+  'empty-state': {
+    display: '居中布局', 'flex-direction': '纵向', 'align-items': '居中',
+    'justify-content': '居中', gap: '元素间距', color: '次要文字色',
+    height: '占满可用高度', background: '与表面色一致',
+  },
+  'status-bar': {
+    display: '横向 flex', 'align-items': '垂直居中', gap: '元素间距',
+    padding: '内边距', 'font-size': '紧凑字号', color: '次要文字色',
+    'flex-shrink': '不参与收缩', 'min-height': '最小高度',
+    'border-top-color': '仅改颜色，边框本身由 V2 提供',
+    'padding-bottom': '安全区适配', 'padding-left': '与主区域内边距对齐',
+    'padding-right': '同上',
+  },
+  'overview-panel': {}, 'overview-storage-item': {}, 'user-menu': {},
+  'repository-header': {}, 'repository-tab': {}, 'sidebar-nav': {}, 'sidebar-nav-item': {},
+}));
+
 const baseRules = parseCss(BASE);
 const v2Rules = parseCss(V2);
 const allRules = [...baseRules, ...v2Rules];
@@ -114,16 +188,39 @@ function audit(cls, { verbose = true } = {}) {
   const exact = hits.filter((h) => h.sel === `.${cls}`);
   const scoped = hits.filter((h) => h.sel !== `.${cls}`);
 
-  // 找出「历史层设置了、但 V2 层没有为同类选择器显式复位」的属性
-  const baseProps = new Map();
-  for (const h of exact.filter((r) => r.file === BASE)) baseProps.set(h.prop, h);
+  // 判定「泄漏」：对每个属性，找出真正在层叠中胜出的声明。
+  //
+  // 不能用「V2 是否出现过同名属性」来判断——早先的实现就是这么写的，
+  // 会把 display / flex 这类"历史层与 V2 层都设、且 V2 用更高特异性胜出"的
+  // 属性误报为泄漏（100 条候选里大部分是这种误报）。
+  //
+  // 正确做法：候选规则只取「以该类结尾的选择器」（即整条规则就是为这个元素设的），
+  // 按 (特异性, 层叠顺序) 取最大值；若胜出者来自历史层，才算真正泄漏。
+  const rxEnd = new RegExp(`\\.${cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-])\\s*$`);
+  const byProp = new Map();
+  // allRules 的顺序 = style.css 全部规则，再 ui-v2.css 全部规则，
+  // 正好等价于浏览器里「style.css 先、ui-v2.css 后」的层叠顺序。
+  allRules.forEach((r, index) => {
+    if (!rxEnd.test(r.sel)) return;
+    const spec = specificity(r.sel);
+    const prev = byProp.get(r.prop);
+    const better = !prev
+      || spec > prev.spec
+      || (spec === prev.spec && index > prev.index)
+      || (r.important && !prev.important);
+    if (better) byProp.set(r.prop, { ...r, spec, index });
+  });
   const leaks = [];
-  for (const [prop, decl] of baseProps) {
-    const v2SameScope = exact.some((r) => r.file === V2 && r.prop === prop);
-    // V2 里任何以该元素结尾的规则覆盖了同名属性，也算已处理
-    const v2Any = allRules.some((r) => r.file === V2 && r.prop === prop
-      && new RegExp(`\\.${cls}(?![\\w-])\\s*$`).test(r.sel));
-    if (!v2SameScope && !v2Any) leaks.push(decl);
+  const handled = [];
+  for (const [prop, winner] of byProp) {
+    const baseDecl = exact.find((r) => r.file === BASE && r.prop === prop);
+    if (!baseDecl) continue; // 历史层没设过这个属性，无需关心
+    if (winner.file === BASE) {
+      // 历史层胜出：检查 V2 是否"根本没管"这个属性（真正的泄漏）
+      leaks.push(winner);
+    } else {
+      handled.push({ base: baseDecl, winner });
+    }
   }
 
   if (verbose) {
@@ -140,7 +237,7 @@ function audit(cls, { verbose = true } = {}) {
       }
     }
   }
-  return { cls, leaks, exact, scoped };
+  return { cls, leaks, handled, exact, scoped };
 }
 
 const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
@@ -148,26 +245,49 @@ const targets = args.length ? args : DEFAULT_TARGETS;
 
 console.log(`审计 ${targets.length} 个类；已解析 ${baseRules.length} 条(style.css) + ${v2Rules.length} 条(ui-v2.css)\n`);
 
+const STRICT = process.argv.includes('--strict');
 let leakCount = 0;
+let handledCount = 0;
+let allowedCount = 0;
 const results = [];
 for (const cls of targets) {
   const r = audit(cls, { verbose: true });
   if (!r) continue;
+  const allowedProps = ALLOWED_LEGACY.get(cls) || {};
+  const kept = r.leaks.filter((l) => allowedProps[l.prop]);
+  const real = r.leaks.filter((l) => !allowedProps[l.prop]);
+  r.allowed = kept;
+  r.real = real;
+  allowedCount += kept.length;
+  leakCount += real.length;
+  handledCount += r.handled.length;
   results.push(r);
-  if (r.leaks.length) leakCount += r.leaks.length;
 }
 
 console.log('\n' + '='.repeat(72));
-console.log('可能泄漏的历史属性（历史层设置了、V2 层未显式复位）：');
+console.log('未处理：历史层在层叠中胜出，且未登记为「有意保留」');
 let shown = 0;
 for (const r of results) {
-  if (!r.leaks.length) continue;
+  if (!r.real.length) continue;
   shown += 1;
   console.log(`\n  .${r.cls}`);
-  for (const l of r.leaks) {
-    console.log(`    ${BASE}:${l.line}  ${l.prop}: ${l.value}${l.important ? '  !important' : ''}`);
+  for (const l of r.real) {
+    console.log(`    ${l.file}:${l.line} (spec ${l.spec})  ${l.prop}: ${l.value}${l.important ? '  !important' : ''}`);
   }
 }
 if (!shown) console.log('  （无）');
-console.log(`\n合计 ${leakCount} 条候选。请逐条确认这些属性在新布局下是否仍然成立。`);
-console.log('注意：本脚本是静态提示，不是错误——有些属性在新布局下依然正确。');
+
+console.log('\n已登记为有意保留（历史值即 V2 期望值，见 ALLOWED_LEGACY 注释）：');
+let shownAllowed = 0;
+for (const r of results) {
+  if (!r.allowed?.length) continue;
+  shownAllowed += 1;
+  console.log(`  .${r.cls}: ${r.allowed.map((l) => l.prop).join(', ')}`);
+}
+if (!shownAllowed) console.log('  （无）');
+
+console.log(`\n未处理 ${leakCount} 条；已登记 ${allowedCount} 条；已被 V2 层接管 ${handledCount} 条。`);
+if (STRICT && leakCount) {
+  console.error('\n--strict: 存在未处理的样式泄漏，视为失败。');
+  process.exit(1);
+}
