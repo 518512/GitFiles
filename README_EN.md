@@ -5,7 +5,7 @@
 **A GitHub Repository file manager PWA powered by Cloudflare Workers**
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/MbAIGC/GitFiles)
-[![Tests](https://img.shields.io/badge/tests-62%20passing-2da44e)](tests/)
+[![Tests](https://img.shields.io/badge/tests-77%20passing-2da44e)](tests/)
 
 [简体中文](README.md) · English
 
@@ -108,11 +108,17 @@ Writes must include `expectedHead`; the first write to an empty repository uses 
 ## Development and tests
 
 ```bash
-node --test tests/github-engine.test.mjs tests/worker-api.test.mjs
+node --test tests/github-engine.test.mjs tests/worker-api.test.mjs tests/markdown-lite.test.mjs
 node scripts/build-config.mjs
 ```
 
-Current tests cover Git operations, Blob SHA reuse, one-commit batches, CAS, initial empty-repository refs, D1/session/ACL rejection and stale-ACL revalidation, same-origin mutations, OAuth token non-disclosure, the OAuth callback delivery-origin allowlist, path NFC normalization, rejection of invalid UTF-16 content, propagation of 429 back-off details, and streaming/Range file downloads.
+Current tests cover Git operations, Blob SHA reuse, one-commit batches, CAS, initial empty-repository refs, D1/session/ACL rejection and stale-ACL revalidation, same-origin mutations, OAuth token non-disclosure, the OAuth callback delivery-origin allowlist, path NFC normalization, rejection of invalid UTF-16 content, propagation of 429 back-off details, streaming/Range file downloads, and XSS hardening of Markdown rendering.
+
+UI structure has its own static checks (duplicate ids, JS references to missing ids, stylesheet cascade order, unused CSS class selectors):
+
+```bash
+node scripts/check-ui.mjs
+```
 
 ## Current limitations
 
@@ -121,5 +127,7 @@ Current tests cover Git operations, Blob SHA reuse, one-commit batches, CAS, ini
 - The Conflict Center records conflicts and reloads remote state, but does not yet provide text three-way merge or per-file diffs.
 - Cross-repository Move is a recoverable two-phase flow, not one atomic Git commit; its recovery UI is still pending.
 - Repository ACL reads are cached for 5 minutes; writes always re-validate against GitHub.
+- README preview uses the built-in MarkdownLite (safety first: no tables, task lists or nested lists, and raw HTML is never emitted).
+- Local storage is text-only; binary uploads are rejected explicitly.
 
 See [docs/PROJECT_SPEC.md](docs/PROJECT_SPEC.md) for the complete specification. Chinese change records live in `docs/改造记录-*.md`.

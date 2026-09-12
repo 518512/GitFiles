@@ -556,6 +556,19 @@ git status
 
 运行测试。
 
+```bash
+node --test tests/github-engine.test.mjs tests/worker-api.test.mjs tests/markdown-lite.test.mjs
+```
+
+改动 UI（HTML / CSS / DOM id / 事件绑定）时还必须运行：
+
+```bash
+node scripts/check-ui.mjs
+```
+
+它检查重复 id、JS 引用但已不存在的 id、三个页面的样式表层叠顺序，以及 CSS 类选择器的使用情况。
+`notepad.js` 中失效的对话框判断就是由它发现的。
+
 ### Step 8
 
 检查：

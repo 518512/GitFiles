@@ -30,6 +30,7 @@ const SHELL_ASSETS = [
   './js/router.js',
   './js/notepad.js',
   './js/contextmenu.js',
+  './js/markdown-lite.js',
   './js/app.js',
   './js/register-sw.js',
   './assets/default-avatar.svg',
