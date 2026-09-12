@@ -7,7 +7,7 @@
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/MbAIGC/GitFiles)
 [![Tests](https://img.shields.io/badge/tests-77%20passing-2da44e)](tests/)
 
-[English](README_EN.md) · 简体中文
+[English](README_EN.md) · 花了2亿Token重复造的轮子，不如Openlist好用
 
 </div>
 
@@ -21,7 +21,6 @@ storage-hub 是一个纯客户端的多后端文件管理器——它把 Google 
 挂在同一个界面里，用一套 Windows 资源管理器风格的 UI 统一操作，并支持跨盘复制粘贴、
 内置记事本与可分享的路径深链，全部在浏览器内完成、不需要后端服务器。
 
-> **没有 storage-hub 就没有 GitFiles。** 本项目早期的应用外壳、
 > 多存储抽象（`localdisk.js` / `drive.js`）、文件树交互、记事本与 PWA 骨架都源自它。
 > 谨向原作者**致以诚挚的感谢与敬意**。
 
