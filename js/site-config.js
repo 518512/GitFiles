@@ -1,6 +1,6 @@
 const SITE = {
   name: 'GitFiles',
-  tagline: '统一管理本地存储和 GitHub 仓库的文件管理器。',
+  tagline: '把 GitHub Repository 当作云端文件系统来浏览、编辑与提交的 PWA。',
   developer: 'MbAIGC',
   developerUrl: 'https://github.com/MbAIGC',
   githubRepo: 'https://github.com/MbAIGC/GitFiles',

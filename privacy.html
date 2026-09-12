@@ -26,11 +26,11 @@
 
     <article class="legal-card">
       <h1>隐私政策</h1>
-      <p class="legal-meta">最后更新：2026 年 6 月 6 日</p>
+      <p class="legal-meta">最后更新：2026 年 9 月 12 日</p>
 
       <p>
         GitFiles（<a href="https://mbaigc.github.io/GitFiles/">https://mbaigc.github.io/GitFiles/</a>）是一个浏览器文件管理器，
-        由 MbAIGC 维护，是基于 Mykhailo Mikus 的 Storage Hub 修改的分支项目。它可以访问本地存储以及 GitHub 仓库。
+        由 MbAIGC 维护，是基于 Mykhailo Mikus 的 Storage Hub 修改的分支项目。它以 GitHub Repository 为主要存储，并支持浏览器本地存储；Google Drive 支持已移除。
         本政策说明应用处理哪些信息以及处理方式。
       </p>
 
@@ -39,7 +39,7 @@
         GitFiles 是一个由 <a href="https://github.com/MbAIGC">MbAIGC</a> 维护的开源项目，基于
         <a href="https://github.com/fi3ik-mme/storage-hub">Storage Hub</a>（原作者：
         <a href="https://github.com/fi3ik-mme">Mykhailo Mikus</a>）。
-        本项目不隶属于 Google LLC，也未获得其认可或赞助。
+        本项目不隶属于 GitHub，也未获得其认可或赞助。
       </p>
 
       <h2>摘要</h2>
@@ -59,55 +59,52 @@
       <p>当你使用 GitHub 登录时，GitHub OAuth 授权码会发送到配置的 Worker。Worker 会将访问令牌保存在 D1 会话记录中，并根据 GitHub 返回的仓库权限建立会话访问控制列表。</p>
 
       <h2>信息用途</h2>
-      <p>通过 Google API 或 GitHub API 访问的信息仅用于提供应用功能，包括：</p>
+      <p>通过 GitHub API 访问的信息仅用于提供应用功能，包括：</p>
       <ul>
         <li>展示你的云端文件、文件夹和已授权的 GitHub 仓库；</li>
         <li>执行你主动发起的导航、查看、搜索、创建、编辑、移动、复制和删除操作；</li>
-        <li>在同一浏览器中支持多个 Google 账号以及挂载多个本地存储或 GitHub 仓库；</li>
+        <li>支持挂载多个 GitHub 仓库与本地存储；</li>
         <li>在内置记事本中打开支持的文本文件。</li>
       </ul>
 
       <h2>数据存储位置</h2>
       <ul>
-        <li><strong>你的 Google Drive 或 GitHub 仓库：</strong>文件仍由对应服务保存，除非你通过应用或服务本身修改或删除它们。</li>
-        <li><strong>你的浏览器：</strong>Google 会话令牌、已登录用户列表、本地存储元数据和界面偏好可能保存在设备浏览器的本地存储中。GitHub 访问令牌不保存在浏览器。</li>
+        <li><strong>你的 GitHub 仓库：</strong>文件仍保存在 GitHub，除非你通过应用或 GitHub 本身修改或删除它们。本地存储的文件保存在你自己的浏览器中。</li>
+        <li><strong>你的浏览器：</strong>已挂载存储的元数据、本地存储的文件内容与界面偏好保存在设备浏览器中。GitHub 访问令牌从不保存在浏览器。</li>
         <li><strong>Cloudflare Worker 与 D1：</strong>GitHub 会话令牌、登录名、过期时间以及仓库访问控制信息用于完成同源 API 请求和权限检查。</li>
-        <li><strong>Service Worker 缓存：</strong>HTML、CSS、JavaScript、图标和其他应用外壳文件可能被缓存以支持离线加载；缓存不会包含 Google Drive 或 GitHub 文件内容，也不会缓存 `/api/` 响应。</li>
+        <li><strong>Service Worker 缓存：</strong>HTML、CSS、JavaScript、图标和其他应用外壳文件可能被缓存以支持离线加载；缓存不会包含 GitHub 文件内容，也不会缓存 `/api/` 响应。</li>
       </ul>
-      <p>清除网站数据、退出 Google 账号，或退出 GitHub 会话，会移除该应用可移除的本地或服务器端会话信息。</p>
+      <p>清除网站数据或退出 GitHub 会话，会移除该应用可移除的本地或服务器端会话信息。</p>
 
       <h2>我们不会收集的内容</h2>
       <ul>
         <li>我们不会建立用于销售或分析的用户资料数据库或文件内容数据库。</li>
-        <li>我们不会收到你的 Google 或 GitHub 密码。</li>
+        <li>我们不会收到你的 GitHub 密码。</li>
         <li>应用不运行第三方广告或分析跟踪器。</li>
       </ul>
 
       <h2>第三方服务</h2>
       <p>应用会与以下服务通信：</p>
       <ul>
-        <li>Google Identity Services（登录）</li>
-        <li>Google Drive API</li>
         <li>GitHub OAuth 和 Git Data API</li>
         <li>Cloudflare Workers 与 D1（同源 API、会话和访问控制）</li>
       </ul>
-      <p>Google 对信息的使用受其<a href="https://policies.google.com/privacy" rel="noopener noreferrer">隐私政策</a>约束。</p>
       <p>GitHub 对信息的使用受其<a href="https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement" rel="noopener noreferrer">隐私声明</a>约束。Cloudflare 可能按照其服务条款和隐私政策处理技术连接数据。</p>
 
       <h2>数据保留</h2>
-      <p>浏览器中的 Google 会话信息和偏好会保留到你退出、移除账号或清除该站点存储为止。GitHub Worker 会话会在过期后失效；退出 GitHub 会话会清除对应 Cookie 和服务器端会话记录。文件内容仍由 Google Drive 或 GitHub 按其自身规则保留。</p>
+      <p>浏览器中的偏好与本地存储内容会保留到你清除该站点存储为止。GitHub Worker 会话会在过期后失效；退出 GitHub 会话会清除对应 Cookie 和服务器端会话记录。仓库中的文件内容仍由 GitHub 按其自身规则保留。</p>
 
       <h2>安全</h2>
-      <p>应用通过 HTTPS 与 Google、GitHub 和 Worker API 通信。GitHub 访问令牌仅在 Worker 侧使用，并通过 HttpOnly、Secure、SameSite Cookie 关联浏览器会话。你仍应负责保护使用应用的设备和浏览器；请勿在共享或不受信任的设备上处理敏感数据。</p>
+      <p>应用通过 HTTPS 与 GitHub 和同源 Worker API 通信。GitHub 访问令牌仅在 Worker 侧使用，并通过 HttpOnly、Secure、SameSite Cookie 关联浏览器会话。你仍应负责保护使用应用的设备和浏览器；请勿在共享或不受信任的设备上处理敏感数据。</p>
 
       <h2>儿童隐私</h2>
       <p>本应用不面向 13 岁以下儿童，我们不会故意收集儿童的个人信息。</p>
 
       <h2>你的选择</h2>
       <ul>
-        <li>你可以随时在 <a href="https://myaccount.google.com/permissions" rel="noopener noreferrer">Google 账号权限页面</a>撤销应用访问权限。</li>
+        <li>你可以随时在 <a href="https://github.com/settings/applications" rel="noopener noreferrer">GitHub 已授权应用页面</a>撤销本应用的访问权限。</li>
         <li>你可以在 GitHub 账号设置中撤销 GitFiles 的 OAuth 授权。</li>
-        <li>你可以在应用中退出单个 Google 用户、退出 GitHub 会话或移除所有已挂载存储。</li>
+        <li>你可以在应用中退出 GitHub 会话，或移除所有已挂载存储。</li>
         <li>你可以随时停止使用应用。</li>
       </ul>
 
