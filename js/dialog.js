@@ -8,6 +8,18 @@ const Dialog = (() => {
   let queue = Promise.resolve();
   let backdropMouseDown = false;
 
+  /**
+   * Whether a dialog is currently visible.
+   *
+   * The dialog root is created lazily by ensureRoot(), so callers must not probe
+   * `document.getElementById('app-dialog')` directly: before the first dialog it
+   * does not exist yet, and a naive `?.classList.contains('hidden')` check then
+   * yields undefined/false, letting handlers act as if no dialog were open.
+   */
+  function isOpen() {
+    return !!rootEl && !rootEl.classList.contains('hidden');
+  }
+
   function ensureRoot() {
     if (rootEl) return;
 
@@ -382,5 +394,5 @@ const Dialog = (() => {
     });
   }
 
-  return { init, alert, confirm, prompt, form, choose, resolveNameConflict };
+  return { init, isOpen, alert, confirm, prompt, form, choose, resolveNameConflict };
 })();

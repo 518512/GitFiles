@@ -1832,7 +1832,6 @@ const GithubDisk = (() => {
   }
 
   async function getRepoTreeState(disk, { force = false } = {}) {
-    void force;
     const data = await GithubApi.request(
       `/api/repos/${encodeURIComponent(disk.owner)}/${encodeURIComponent(disk.repo)}/tree?branch=${encodeURIComponent(disk.branch || 'main')}`
     );
@@ -1847,6 +1846,13 @@ const GithubDisk = (() => {
   async function getRepoTree(disk, { force = false } = {}) {
     const state = await getRepoTreeState(disk, { force });
     return state.tree;
+  }
+
+  /** diskId 版本的树读取，供 UI 层（如 README 视图）使用。 */
+  async function getRepoTreeById(diskId) {
+    const disk = getDisk(diskId);
+    if (!disk) throw new Error('找不到 GitHub 存储');
+    return getRepoTree(disk);
   }
 
   async function listHistory(diskId) {
@@ -2501,6 +2507,7 @@ const GithubDisk = (() => {
     buildBatchMoveOperations,
     isConflictError,
     getTextFileContent,
+    getRepoTreeById,
     updateFileContent,
     downloadFile,
     getFolderPath,

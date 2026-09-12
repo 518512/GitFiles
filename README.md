@@ -5,7 +5,7 @@
 **基于 Cloudflare Workers 的 GitHub Repository 文件管理器（PWA）**
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/MbAIGC/GitFiles)
-[![Tests](https://img.shields.io/badge/tests-62%20passing-2da44e)](tests/)
+[![Tests](https://img.shields.io/badge/tests-77%20passing-2da44e)](tests/)
 
 [English](README_EN.md) · 简体中文
 
@@ -108,11 +108,17 @@ POST /api/repos/:owner/:repo/operations
 ## 开发与测试
 
 ```bash
-node --test tests/github-engine.test.mjs tests/worker-api.test.mjs
+node --test tests/github-engine.test.mjs tests/worker-api.test.mjs tests/markdown-lite.test.mjs
 node scripts/build-config.mjs
 ```
 
-当前测试覆盖 Git 操作、Blob SHA 复用、批量单 commit、CAS、空仓库初始 ref、D1/session/ACL 拒绝与陈旧 ACL 重校验、同源写入、OAuth token 不泄漏、OAuth 回调投递域名白名单、路径 NFC 规范化、非法 UTF-16 内容拒绝、429 退避信息透传，以及文件下载的流式透传与 Range。
+当前测试覆盖 Git 操作、Blob SHA 复用、批量单 commit、CAS、空仓库初始 ref、D1/session/ACL 拒绝与陈旧 ACL 重校验、同源写入、OAuth token 不泄漏、OAuth 回调投递域名白名单、路径 NFC 规范化、非法 UTF-16 内容拒绝、429 退避信息透传、文件下载的流式透传与 Range，以及 Markdown 渲染的 XSS 防护。
+
+UI 结构另有静态校验（重复 id、JS 引用的 id 是否存在、样式表层叠顺序、CSS 选择器使用情况）：
+
+```bash
+node scripts/check-ui.mjs
+```
 
 ## 当前限制
 
@@ -121,5 +127,7 @@ node scripts/build-config.mjs
 - Conflict Center 已支持记录与重载远端状态，尚未提供文本三方合并与逐文件 diff。
 - 跨仓库 Move 是两阶段可恢复流程，不能是单个原子 Git commit；恢复 UI 尚未完成。
 - 仓库访问权限（ACL）读操作有 5 分钟缓存，写操作每次都回源 GitHub 校验。
+- README 预览使用内置的 MarkdownLite（安全优先，不支持表格 / 任务列表 / 嵌套列表，也不放行原始 HTML）。
+- 本地存储只支持文本内容，二进制文件上传会被明确拒绝。
 
 详细规范见 [docs/PROJECT_SPEC.md](docs/PROJECT_SPEC.md)。每次改动的中文记录见 `docs/改造记录-*.md`。

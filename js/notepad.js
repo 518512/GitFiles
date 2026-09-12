@@ -679,7 +679,8 @@ const Notepad = (() => {
         closeAllMenus();
         return;
       }
-      if (!document.getElementById('app-dialog')?.classList.contains('hidden')) return;
+      // 让位给打开中的对话框（Dialog 的根节点是惰性创建的，必须用它自己的 API 判断）
+      if (typeof Dialog !== 'undefined' && Dialog.isOpen()) return;
       e.preventDefault();
       close();
       return;

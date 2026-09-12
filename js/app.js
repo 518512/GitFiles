@@ -3,6 +3,8 @@ const App = (() => {
   const ROOT_NAME = typeof SITE !== 'undefined' ? SITE.name : 'GitFiles';
   const DRIVE_ROOT_ID = 'root';
   const TREE_PAGE_SIZE = 10;
+  // 最近访问的 storage（按 disk id 记录时间与最后停留目录），仅本地 UI 状态。
+  const RECENT_DISKS_KEY = 'storage_hub_recent_disks';
 
   const state = {
     level: 'home',
@@ -28,7 +30,6 @@ const App = (() => {
     githubSession: 'checking',
     conflicts: [],
     repositoryView: 'files',
-    overviewMode: 'all',
   };
 
   let urlPushPending = false;
@@ -890,7 +891,9 @@ const App = (() => {
       return renderUserAvatar(file.picture || GithubDisk.getDisk(file.userId)?.accountAvatar, 'user-drive-avatar');
     }
 
-    const fallback = getFileTypeIcon(file);
+    // file.icon / Drive.getDefaultIcon 来自 API 响应或后端数据，一律按不可信内容
+    // 转义后再拼进 innerHTML（AGENTS.md §17）。
+    const fallback = escapeHtml(getFileTypeIcon(file));
     const previewSrc = !file.isFolder && (file.thumbnailLink || file.iconLink);
 
     if (!previewSrc) {
@@ -1234,51 +1237,365 @@ const App = (() => {
   }
 
   function setRepositoryView(view) {
-    if (!['files', 'history'].includes(view)) return;
+    if (!['files', 'readme', 'history'].includes(view)) return;
     state.repositoryView = view;
-    document.querySelectorAll('[data-repository-view]').forEach((button) => {
-      const active = button.dataset.repositoryView === view;
-      button.classList.toggle('active', active);
-      button.setAttribute('aria-selected', String(active));
-    });
-    $('#repository-history')?.classList.toggle('hidden', view !== 'history');
-    $('#file-grid')?.classList.toggle('hidden', view !== 'files');
-    $('#file-list')?.classList.toggle('hidden', view !== 'files' || state.view !== 'list');
-    if (view === 'history') loadRepositoryHistory();
-    else renderCurrentView();
+    // 统一交给 renderCurrentView 同步所有区块的显示状态，避免这套逻辑散落两处。
+    renderCurrentView();
   }
 
+  /**
+   * 仓库 README 视图。
+   *
+   * README 是仓库根目录的普通文件，直接复用同一个读取接口；渲染走
+   * MarkdownLite（先整体转义再做白名单替换），因此 README 里的原始 HTML
+   * 不可能被当作可执行内容注入（PROJECT_SPEC §17）。
+   */
+  async function loadRepositoryReadme(force = false) {
+    const diskId = state.currentUserId;
+    if (!GithubDisk.isGithubId(diskId)) return;
+    const body = $('#repository-readme-body');
+    if (!body) return;
+    if (!force && body.dataset.loadedFor === diskId) return;
+    body.dataset.loadedFor = diskId;
+    body.textContent = '正在加载 README…';
+    try {
+      // 只读一次仓库树，在根目录里挑出 README；避免为 5 个候选文件名
+      // 各触发一次 tree 请求（AGENTS.md §27）。
+      const tree = await GithubDisk.getRepoTreeById(diskId);
+      const README_NAMES = ['readme.md', 'readme.markdown', 'readme.txt', 'readme'];
+      const entry = (tree || []).find((item) => (
+        item.type === 'blob'
+        && !item.path.includes('/')
+        && README_NAMES.includes(String(item.path).toLowerCase())
+      ));
+      if (!entry) {
+        body.textContent = '';
+        const empty = document.createElement('p');
+        empty.className = 'overview-empty';
+        empty.textContent = '此仓库根目录没有 README 文件。';
+        body.appendChild(empty);
+        return;
+      }
+      const text = await GithubDisk.getTextFileContent(diskId, entry.path);
+      // MarkdownLite 先整体转义再做白名单替换：README 里的原始 HTML
+      // 不可能被当作可执行内容注入（PROJECT_SPEC §17）。
+      body.innerHTML = MarkdownLite.render(text);
+      body.dataset.renderedName = entry.path;
+    } catch (err) {
+      body.textContent = '';
+      const failed = document.createElement('p');
+      failed.className = 'overview-empty';
+      failed.textContent = `README 加载失败：${err.message}`;
+      body.appendChild(failed);
+    }
+  }
+
+  /**
+   * 空文件夹空态：同一份 DOM 服务所有场景，由 JS 决定文案与可用动作。
+   * 之前这里只有一个静态的「此文件夹为空」，没有任何下一步动作。
+   */
+  const NEW_FILE_TYPES = [
+    { type: 'md', label: 'Markdown 文件' },
+    { type: 'txt', label: '文本文件' },
+  ];
+
+  function renderEmptyState() {
+    const disk = state.currentUserId
+      ? (GithubDisk.isGithubId(state.currentUserId) ? GithubDisk.getDisk(state.currentUserId) : LocalDisk.getDisk(state.currentUserId))
+      : null;
+    const isTrash = state.section === 'trash';
+    const icon = $('#empty-state-icon');
+    const title = $('#empty-state-title');
+    const hint = $('#empty-state-hint');
+    const actions = $('#empty-state-actions');
+    if (!title || !actions) return;
+
+    if (icon) icon.innerHTML = isTrash ? storageIcon(false) : panelIcon('folder-open');
+
+    if (isTrash) {
+      title.textContent = '回收站是空的';
+      if (hint) hint.textContent = '删除的项目会先出现在这里。';
+      actions.innerHTML = '';
+      return;
+    }
+
+    title.textContent = state.searchQuery ? '没有匹配的项目' : '此文件夹为空';
+    if (hint) {
+      hint.textContent = state.searchQuery
+        ? `没有名称包含“${state.searchQuery}”的项目。`
+        : '可以上传文件，或直接在这里新建一个。';
+    }
+    actions.innerHTML = '';
+    if (state.searchQuery) return;
+
+    const ctx = {
+      type: 'empty',
+      diskId: state.currentUserId,
+      userId: state.currentUserId,
+      folderId: state.currentFolderId,
+      section: state.section,
+    };
+    const run = (action, fileType) => {
+      if (typeof ContextMenu === 'undefined' || !ContextMenu.runAction) return undefined;
+      return ContextMenu.runAction(action, ctx).catch((err) => showError(err.message));
+    };
+
+    actions.append(
+      emptyActionButton('上传文件', true, () => pickAndUploadFiles()),
+      emptyActionButton('新建文件', false, () => run('new-file', 'md')),
+    );
+    return disk;
+  }
+
+  /**
+   * 从空态触发文件上传。
+   *
+   * 复用各 storage 已有的 createFileFromBlob（GitHub / 本地 / Drive），因此
+   * Git 侧仍然走一次 Blob + Tree + Commit 的批量管线，不会退化成逐文件提交。
+   */
+  function pickAndUploadFiles() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.style.display = 'none';
+    document.body.appendChild(input);
+    input.addEventListener('change', async () => {
+      const files = [...(input.files || [])];
+      input.remove();
+      if (files.length) await uploadFilesToCurrentFolder(files);
+    }, { once: true });
+    input.click();
+  }
+
+  async function uploadFilesToCurrentFolder(files) {
+    const userId = state.currentUserId;
+    if (!userId) return;
+    const parentId = state.currentFolderId
+      || (GithubDisk.isGithubId(userId) ? GithubDisk.ROOT_ID : LocalDisk.ROOT_ID);
+    let uploaded = 0;
+    const failures = [];
+    for (const file of files) {
+      const mimeType = file.type || 'application/octet-stream';
+      try {
+        if (GithubDisk.isGithubId(userId)) {
+          await GithubDisk.createFileFromBlob(userId, parentId, file.name, mimeType, file);
+        } else if (LocalDisk.isLocalId(userId)) {
+          // 本地存储只支持文本内容；二进制直接拒绝，避免静默写入损坏的文件。
+          if (!isTextMime(mimeType, file.name)) {
+            failures.push(`${file.name}（本地存储不支持二进制文件）`);
+            continue;
+          }
+          await LocalDisk.createFile(userId, parentId, file.name, mimeType, await file.text());
+        } else {
+          const token = await Auth.ensureValidToken(userId);
+          await Drive.createFileFromBlob(token, parentId, file.name, mimeType, file);
+        }
+        uploaded += 1;
+      } catch (err) {
+        failures.push(`${file.name}（${err.message}）`);
+      }
+    }
+    if (uploaded) showStatus(`已上传 ${uploaded} 个文件`);
+    if (failures.length) showError(`以下文件未上传：${failures.join('；')}`);
+    if (uploaded) await refreshCurrentDrive();
+  }
+
+  function isTextMime(mimeType, name = '') {
+    if (/^text\//i.test(mimeType)) return true;
+    if (/^application\/(json|xml|javascript|x-yaml)/i.test(mimeType)) return true;
+    return /\.(txt|md|markdown|csv|log|xml|yml|yaml|html?|css|js|ts|tsx|jsx|py|sh|bat|sql|json)$/i.test(name);
+  }
+
+  function emptyActionButton(label, primary, onClick) {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = primary ? 'btn btn-primary' : 'btn';
+    button.textContent = label;
+    button.addEventListener('click', onClick);
+    return button;
+  }
+
+  /**
+   * 首页渲染。
+   *
+   * 设计约束（避免首页变成新的 API 热点，AGENTS.md §27）：
+   * 这里只使用「本地已知」的数据——已挂载的 storage 元信息、以及本地记录的
+   * 最近访问时间。不为了显示每个仓库的提交时间而逐个请求 tree 接口。
+   */
   function renderOverview() {
     const local = LocalDisk.getDisks();
     const github = GithubDisk.getDisks();
-    const disks = state.overviewMode === 'repositories' ? github : [...local, ...github];
     const list = $('#overview-storage-list');
-    const empty = $('#overview-empty');
     if (!list) return;
-    list.innerHTML = '';
-    $('#overview-repo-count').textContent = String(github.length);
-    $('#overview-local-count').textContent = String(local.length);
-    $('#overview-total-count').textContent = String(local.length + github.length);
-    const title = $('#overview-title');
-    if (title) title.textContent = state.overviewMode === 'repositories' ? '仓库' : '概览';
+
+    const repoCount = $('#overview-repo-count');
+    const localCount = $('#overview-local-count');
+    const totalCount = $('#overview-total-count');
+    if (repoCount) repoCount.textContent = String(github.length);
+    if (localCount) localCount.textContent = String(local.length);
+    if (totalCount) totalCount.textContent = String(local.length + github.length);
     const summary = $('#overview-summary');
-    if (summary) summary.textContent = state.overviewMode === 'repositories'
-      ? '选择一个已挂载的 GitHub 仓库以浏览文件和提交历史。'
-      : '管理已挂载的本地存储和 GitHub 仓库。';
-    empty?.classList.toggle('hidden', disks.length > 0);
-    disks.forEach((disk) => {
-      const isGithub = GithubDisk.isGithubId(disk.id);
-      const item = document.createElement('button');
-      item.type = 'button';
-      item.className = 'overview-storage-item';
-      item.innerHTML = `<span class="overview-storage-icon">${isGithub ? '◫' : '▣'}</span><span class="overview-storage-copy"><strong></strong><small></small></span><span aria-hidden="true">›</span>`;
-      item.querySelector('strong').textContent = isGithub ? `${disk.owner}/${disk.repo}` : disk.name;
-      item.querySelector('small').textContent = isGithub ? `GitHub · ${disk.branch || '默认分支'}` : '本地存储';
-      item.addEventListener('click', () => isGithub
-        ? navigateToGithubDisk(disk.id, GithubDisk.ROOT_ID)
-        : navigateToLocalDisk(disk.id, LocalDisk.ROOT_ID));
-      list.appendChild(item);
-    });
+    if (summary) {
+      summary.textContent = (local.length + github.length) === 0
+        ? '还没有挂载任何存储。添加一个 GitHub 仓库后即可浏览、上传与提交文件。'
+        : '选择一个存储进入工作区，或直接打开最近访问的位置。';
+    }
+
+    // 最近访问：先按时间排序再过滤已卸载的项，保证列表不会残留失效条目。
+    const recentBox = $('#overview-recent');
+    const recentList = $('#overview-recent-list');
+    if (recentBox && recentList) {
+      const recents = readRecent();
+      const byId = new Map([...local, ...github].map((disk) => [disk.id, disk]));
+      const resolved = recents.map((entry) => ({ entry, disk: byId.get(entry.id) })).filter((row) => row.disk);
+      recentList.innerHTML = '';
+      recentBox.classList.toggle('hidden', resolved.length === 0);
+      for (const { entry, disk } of resolved) {
+        recentList.appendChild(buildDiskRow(disk, {
+          openedAt: entry.at,
+          folderPath: entry.folderPath || '',
+        }));
+      }
+    }
+
+    list.innerHTML = '';
+    const all = [...github, ...local].sort((a, b) => diskLabel(a).localeCompare(diskLabel(b)));
+    for (const disk of all) list.appendChild(buildDiskRow(disk, {}));
+
+    // 零状态：内容区直接给出主行动入口，而不是只写一句「尚未挂载」。
+    const empty = $('#overview-empty');
+    if (empty) {
+      const hasAny = all.length > 0;
+      empty.classList.toggle('hidden', hasAny);
+      empty.textContent = hasAny ? '' : '还没有挂载任何存储。点击右上角「添加存储」，登录 GitHub 并选择一个仓库即可开始。';
+    }
+  }
+
+  /** 首页/最近访问共用的 storage 行。 */
+  function buildDiskRow(disk, { openedAt = 0, folderPath = '' } = {}) {
+    const isGithub = GithubDisk.isGithubId(disk.id);
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.className = 'overview-storage-item';
+    item.dataset.diskId = disk.id;
+
+    const icon = document.createElement('span');
+    icon.className = 'overview-storage-icon';
+    icon.setAttribute('aria-hidden', 'true');
+    icon.innerHTML = storageIcon(isGithub);
+
+    const copy = document.createElement('span');
+    copy.className = 'overview-storage-copy';
+    const title = document.createElement('strong');
+    title.textContent = diskLabel(disk);
+    const meta = document.createElement('small');
+    meta.textContent = diskSubtitle(disk, { folderPath });
+    copy.append(title, meta);
+
+    item.append(icon, copy);
+
+    if (openedAt) {
+      const when = document.createElement('span');
+      when.className = 'overview-storage-when';
+      when.textContent = relativeTime(openedAt);
+      item.appendChild(when);
+    }
+
+    const chevron = document.createElement('span');
+    chevron.className = 'overview-storage-chevron';
+    chevron.setAttribute('aria-hidden', 'true');
+    chevron.textContent = '›';
+    item.appendChild(chevron);
+
+    item.addEventListener('click', () => (isGithub
+      ? navigateToGithubDisk(disk.id, GithubDisk.ROOT_ID)
+      : navigateToLocalDisk(disk.id, LocalDisk.ROOT_ID)));
+    return item;
+  }
+
+  function diskLabel(disk) {
+    return disk.owner && disk.repo ? `${disk.owner}/${disk.repo}` : (disk.name || '未命名存储');
+  }
+
+  function diskSubtitle(disk, { folderPath = '' } = {}) {
+    if (!GithubDisk.isGithubId(disk.id)) return '本地存储';
+    const parts = [disk.private ? '私有' : '公开', `分支 ${disk.branch || '默认'}`];
+    if (folderPath) parts.push(folderPath);
+    return `GitHub · ${parts.join(' · ')}`;
+  }
+
+  function relativeTime(ts) {
+    if (!ts) return '';
+    const diff = Date.now() - ts;
+    if (diff < 60 * 1000) return '刚刚';
+    if (diff < 60 * 60 * 1000) return `${Math.floor(diff / (60 * 1000))} 分钟前`;
+    if (diff < 24 * 60 * 60 * 1000) return `${Math.floor(diff / (60 * 60 * 1000))} 小时前`;
+    if (diff < 7 * 24 * 60 * 60 * 1000) return `${Math.floor(diff / (24 * 60 * 60 * 1000))} 天前`;
+    return new Date(ts).toLocaleDateString();
+  }
+
+  function storageIcon(isGithub) {
+    return isGithub ? panelIcon('repo') : panelIcon('database');
+  }
+
+  /**
+   * 面板层统一图标集（内联 SVG，16px 视觉尺寸）。
+   *
+   * 统一原因：此前侧栏用 `⌂ ◫ ▣`、空态用 emoji `🔗 📂`、上下文菜单又用
+   * `📁+ 📥 🗑️`，三套视觉语言混在一起。面板级图标统一走这里；文件类型图标
+   * 仍由 getFileTypeIcon 决定（内容语义，不在此收敛）。
+   */
+  function panelIcon(name, size = 16) {
+    const paths = {
+      home: 'M6.906.664a1.749 1.749 0 0 1 2.187 0l5.25 4.2c.415.332.657.835.657 1.367v7.019A1.75 1.75 0 0 1 13.25 15h-3.5a.75.75 0 0 1-.75-.75V9H7v5.25a.75.75 0 0 1-.75.75h-3.5A1.75 1.75 0 0 1 1 13.25V6.23c0-.531.242-1.034.657-1.366Z',
+      repo: 'M2 2.5A2.5 2.5 0 0 1 4.5 0h8.75a.75.75 0 0 1 .75.75v12.5a.75.75 0 0 1-.75.75h-2.5a.75.75 0 0 1 0-1.5h1.75v-2h-8a1 1 0 0 0-.714 1.7.75.75 0 0 1-1.072 1.05A2.495 2.495 0 0 1 2 11.5Zm10.5-1h-8a1 1 0 0 0-1 1v6.708A2.486 2.486 0 0 1 4.5 9h8ZM5 12.25a.25.25 0 0 1 .25-.25h3.5a.25.25 0 0 1 .25.25v3.25a.25.25 0 0 1-.4.2l-1.45-1.087a.25.25 0 0 0-.3 0L5.4 15.7a.25.25 0 0 1-.4-.2Z',
+      database: 'M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1Z',
+      'folder-open': 'M.513 1.513A1.75 1.75 0 0 1 1.75 1h3.5c.55 0 1.07.26 1.4.7l.9 1.2a.25.25 0 0 0 .2.1H13a1.75 1.75 0 0 1 1.75 1.75V6h-1.5V4.75a.25.25 0 0 0-.25-.25H7.5a1.75 1.75 0 0 1-1.4-.7l-.9-1.2a.25.25 0 0 0-.2-.1H1.75a.25.25 0 0 0-.25.25v9.5c0 .138.112.25.25.25H6v1.5H1.75A1.75 1.75 0 0 1 0 12.25v-9.5c0-.464.184-.91.513-1.237Z',
+      clock: 'M8 0a8 8 0 1 1 0 16A8 8 0 0 1 8 0Zm0 1.5a6.5 6.5 0 1 0 0 13 6.5 6.5 0 0 0 0-13Zm.75 2.75v4.06l2.72 2.72-1.06 1.06L7.25 8.94V4.25Z',
+      plus: 'M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z',
+      upload: 'M2.75 14A1.75 1.75 0 0 1 1 12.25v-2.5a.75.75 0 0 1 1.5 0v2.5c0 .138.112.25.25.25h10.5a.25.25 0 0 0 .25-.25v-2.5a.75.75 0 0 1 1.5 0v2.5A1.75 1.75 0 0 1 13.25 14Zm4.53-8.28L7.99 4.44v5.31a.75.75 0 0 1-1.5 0V4.44L5.22 5.72a.75.75 0 0 1-1.06-1.06l2.83-2.83a.75.75 0 0 1 1.06 0l2.83 2.83a.75.75 0 0 1-1.06 1.06Z',
+    };
+    const d = paths[name];
+    if (!d) return '';
+    return `<svg viewBox="0 0 16 16" width="${size}" height="${size}" aria-hidden="true"><path fill="currentColor" d="${d}"/></svg>`;
+  }
+
+  // --- 最近访问（本地 UI 状态，不写进 storage 元数据）---------------------
+  const RECENT_LIMIT = 6;
+
+  function readRecent() {
+    try {
+      const raw = JSON.parse(localStorage.getItem(RECENT_DISKS_KEY) || '[]');
+      if (!Array.isArray(raw)) return [];
+      return raw.filter((entry) => entry && typeof entry.id === 'string' && typeof entry.at === 'number');
+    } catch {
+      return [];
+    }
+  }
+
+  function recentFolderPath(userId, folderId) {
+    if (!folderId) return '';
+    const isGithub = GithubDisk.isGithubId(userId);
+    const rootId = isGithub ? GithubDisk.ROOT_ID : LocalDisk.ROOT_ID;
+    if (folderId === rootId) return '';
+    // 只记录可读的目录路径，不记录内部 id，避免不同 storage 的 id 语义混淆。
+    const crumbs = (state.breadcrumbs || [])
+      .filter((crumb) => crumb.id !== ROOT_ID && crumb.id !== rootId)
+      .map((crumb) => crumb.name)
+      .filter(Boolean);
+    return crumbs.join(' / ');
+  }
+
+  function markRecent(diskId, folderPath = '') {
+    if (!diskId) return;
+    const next = [{ id: diskId, at: Date.now(), folderPath: folderPath || '' }]
+      .concat(readRecent().filter((entry) => entry.id !== diskId))
+      .slice(0, RECENT_LIMIT);
+    try {
+      localStorage.setItem(RECENT_DISKS_KEY, JSON.stringify(next));
+    } catch {
+      // 隐私模式下 localStorage 可能不可用，最近访问只是便利功能
+    }
   }
 
   function renderCurrentView() {
@@ -1298,21 +1615,28 @@ const App = (() => {
     if (repoName && disk) repoName.textContent = `${disk.owner}/${disk.repo}`;
     if (repoMeta && disk) repoMeta.textContent = `${disk.private ? '私有仓库' : '公开仓库'} · 分支 ${disk.branch || '默认分支'}`;
 
-    const isHistory = !isOverview && state.repositoryView === 'history' && !!disk;
-    const isFileWorkspace = !isOverview && !isHistory;
+    // 标签页需要与 setRepositoryView 保持一致：否则任何一次 renderCurrentView
+    // （刷新、搜索、切换视图）都会把 README/历史强行切回「文件」。
+    const activeView = isOverview ? 'files' : (state.repositoryView || 'files');
+    const isHistory = !isOverview && activeView === 'history' && !!disk;
+    const isReadme = !isOverview && activeView === 'readme' && !!disk;
+    const isFileWorkspace = !isOverview && !isHistory && !isReadme;
     $('.file-tools')?.classList.toggle('hidden', !isFileWorkspace);
     $('.view-toggle')?.classList.toggle('hidden', !isFileWorkspace);
-    $('.address-bar')?.classList.toggle('hidden', isOverview);
+    // 面包屑在 README/历史下没有意义（它们始终作用于仓库根）。
+    $('.address-bar')?.classList.toggle('hidden', isOverview || isHistory || isReadme);
     document.querySelectorAll('[data-repository-view]').forEach((button) => {
-      const active = button.dataset.repositoryView === (isHistory ? 'history' : 'files');
+      const active = button.dataset.repositoryView === activeView;
       button.classList.toggle('active', active);
       button.setAttribute('aria-selected', String(active));
     });
     $('#repository-history')?.classList.toggle('hidden', !isHistory);
-    if (isOverview || isHistory) {
+    $('#repository-readme')?.classList.toggle('hidden', !isReadme);
+    if (isOverview || isHistory || isReadme) {
       hide($('#file-grid'));
       hide($('#file-list'));
       if (isHistory) loadRepositoryHistory();
+      if (isReadme) loadRepositoryReadme();
     } else if (state.view === 'grid') {
       show($('#file-grid'));
       hide($('#file-list'));
@@ -1323,20 +1647,15 @@ const App = (() => {
       renderList();
     }
 
-    if (isOverview) {
+    if (isOverview || isReadme || isHistory) {
+      // 首页自己负责零状态引导（#overview-empty 带主按钮）；
+      // README/历史不是文件夹视图，不应出现「此文件夹为空」。
       hide($('#empty-state'));
-      hide($('#no-storage-state'));
-    } else if (!hasMountedDrives()) {
-      // 登录后尚未挂载任何存储：欢迎空态引导添加 Repository（Mutation 由用户显式发起）
-      hide($('#empty-state'));
-      show($('#no-storage-state'));
+    } else if (state.files.length === 0) {
+      renderEmptyState();
+      show($('#empty-state'));
     } else {
-      hide($('#no-storage-state'));
-      if (state.files.length === 0) {
-        show($('#empty-state'));
-      } else {
-        hide($('#empty-state'));
-      }
+      hide($('#empty-state'));
     }
 
     const count = visibleFiles().length;
@@ -1390,7 +1709,7 @@ const App = (() => {
   }
 
   function getActiveNavId() {
-    if (state.level === 'home') return state.overviewMode === 'repositories' ? 'repositories' : 'home';
+    if (state.level === 'home') return 'home';
     if (!state.currentUserId) return 'home';
     if (state.section === 'my-drive') {
       const rootId = getDriveRootId();
@@ -2192,6 +2511,10 @@ const App = (() => {
 
       renderBreadcrumbs();
       renderCurrentView();
+      // 记录最近访问（此时 breadcrumbs 已更新，可得到可读目录路径）
+      if (state.level !== 'home' && state.currentUserId) {
+        markRecent(state.currentUserId, recentFolderPath(state.currentUserId, state.currentFolderId));
+      }
     } catch (err) {
       if (!isScopeError(err.message)) {
         showError(err.message);
@@ -2203,9 +2526,8 @@ const App = (() => {
     }
   }
 
-  function navigateToHome(mode = 'all') {
+  function navigateToHome() {
     state.level = 'home';
-    state.overviewMode = mode;
     state.currentUserId = null;
     state.currentFolderId = DRIVE_ROOT_ID;
     state.section = 'my-drive';
@@ -2409,31 +2731,6 @@ const App = (() => {
   }
 
   // 欢迎空态的添加仓库入口：点击后才发起 Mount（连接已有 ∥ 创建新仓库）
-  async function addRepositoryFromWelcome() {
-    if (state.githubSession !== 'connected') {
-      await signInWithGithub();
-      if (state.githubSession !== 'connected') {
-        showError('请先完成 GitHub 登录，再添加仓库。');
-        return;
-      }
-    }
-    const btn = $('#btn-add-repository');
-    if (!btn || btn.disabled) return;
-    btn.disabled = true;
-    try {
-      await GithubDisk.ensureGithubStorage();
-      await showExplorer();
-      renderSidebarTree();
-    } catch (err) {
-      const message = err?.message || String(err);
-      if (!/sign-in cancelled|popup closed/i.test(message)) {
-        showError(`添加仓库失败：${message}`);
-      }
-    } finally {
-      btn.disabled = false;
-    }
-  }
-
   function getFileParentId(file, userId) {
     return file.parentId || file.parents?.[0] || (LocalDisk.isLocalId(userId) ? LocalDisk.ROOT_ID : GithubDisk.isGithubId(userId) ? GithubDisk.ROOT_ID : Drive.ROOT_ID);
   }
@@ -2660,19 +2957,15 @@ const App = (() => {
       ContextMenu.showAddDiskMenu(rect?.left ?? 8, rect?.bottom ?? 8);
     };
     $('#btn-header-add')?.addEventListener('click', openAddStorageMenu);
+    // 首页内容区的主行动按钮：与顶栏「＋」共用同一个添加存储菜单。
+    $('#btn-overview-add')?.addEventListener('click', openAddStorageMenu);
     window.addEventListener('online', () => showStatus('网络已恢复'));
     window.addEventListener('offline', () => showStatus('当前离线：本地存储仍可用，GitHub 操作需要联网'));
-    $('#btn-add-repository')?.addEventListener('click', () => addRepositoryFromWelcome());
     document.querySelectorAll('.sidebar-nav [data-nav]').forEach((el) => {
       el.addEventListener('click', () => {
-        const nav = el.dataset.nav;
-        if (nav === 'home') {
-          navigateToHome('all');
-          return;
-        }
-        if (nav === 'repositories') {
-          navigateToHome('repositories');
-        }
+        // 侧栏只保留单一「概览」入口；仓库 / 本地存储的区分由首页分组表达，
+        // 不再用两个导航项切换同一个面板（overviewMode 已移除）。
+        if (el.dataset.nav === 'home') navigateToHome();
       });
     });
     document.querySelectorAll('[data-repository-view]').forEach((button) => {
@@ -2691,18 +2984,35 @@ const App = (() => {
     });
     $('#btn-conflict-center')?.addEventListener('click', () => openConflictCenter());
 
-    $('#btn-refresh').addEventListener('click', () => {
-      if (state.repositoryView === 'history' && GithubDisk.isGithubId(state.currentUserId)) {
-        loadRepositoryHistory(true);
-        return;
+    const refreshBtn = $('#btn-refresh');
+    refreshBtn?.addEventListener('click', async () => {
+      // 刷新是异步的（可能触发多次 API）；给出进行中/禁用反馈，避免重复点击
+      // 造成并发刷新与重复请求。
+      if (refreshBtn.disabled) return;
+      refreshBtn.disabled = true;
+      refreshBtn.classList.add('is-refreshing');
+      refreshBtn.setAttribute('aria-busy', 'true');
+      try {
+        if (state.repositoryView === 'history' && GithubDisk.isGithubId(state.currentUserId)) {
+          await loadRepositoryHistory(true);
+          return;
+        }
+        if (state.repositoryView === 'readme' && GithubDisk.isGithubId(state.currentUserId)) {
+          await loadRepositoryReadme(true);
+          return;
+        }
+        if (state.currentUserId) clearTreeCache(state.currentUserId);
+        if (GithubDisk.isGithubId(state.currentUserId)) {
+          GithubDisk.invalidateRepoTree(state.currentUserId);
+          await refreshGithubFolderView({ reloadTree: true });
+          return;
+        }
+        await loadCurrentLocation();
+      } finally {
+        refreshBtn.disabled = false;
+        refreshBtn.classList.remove('is-refreshing');
+        refreshBtn.removeAttribute('aria-busy');
       }
-      if (state.currentUserId) clearTreeCache(state.currentUserId);
-      if (GithubDisk.isGithubId(state.currentUserId)) {
-        GithubDisk.invalidateRepoTree(state.currentUserId);
-        refreshGithubFolderView({ reloadTree: true });
-        return;
-      }
-      loadCurrentLocation();
     });
 
     $('#btn-view-grid').addEventListener('click', () => setView('grid'));

@@ -215,6 +215,10 @@ timestamp
 - 顶栏显示 Worker session：checking / active / sign-in required / unavailable。
 - CAS 冲突在顶栏显示 Conflict Center 入口。
 - UI 使用高密度、低圆角、低阴影的文件管理器风格，不做营销落地页。
+- 首页是工作区入口：展示已挂载 storage 与本地记录的「最近访问」，并在零状态直接给出添加存储的主行动按钮。首页不得为展示附加信息而逐仓库请求 API。
+- 仓库页签为 文件 / README / 历史。README 使用内置 `js/markdown-lite.js` 渲染；该渲染器必须先整体转义再做白名单替换，绝不输出原始 HTML，且链接与图片只允许 http、https、mailto 与相对路径。
+- 样式表层叠顺序固定为 `css/style.css`（历史基础层）→ `css/ui-v2.css`（设计令牌与 V2 覆盖层）。`js/base-path.js` 保证 V2 最后层叠；新增样式一律写进 `ui-v2.css`，不要叠加同名块。
+- UI 结构变更后必须通过 `node scripts/check-ui.mjs`（重复 id、JS 引用的 id 是否存在、样式表顺序、CSS 选择器使用情况）。
 
 ### 7.1 Android / 移动端
 
@@ -238,6 +242,8 @@ Android file picker
 PWA 保留 manifest、icons、standalone display 与 service worker。缓存 HTML/CSS/JS/icons/manifest；`/api/*` 不缓存。离线时写操作必须显示 Offline/Error，不能报告已提交。
 
 禁止将文件名、文件内容、GitHub API 返回、Markdown 或 SVG 直接写入不可信 `innerHTML`。Markdown 预览需过滤 script、event handler、`javascript:`、iframe 与 SVG script。
+
+`js/markdown-lite.js` 的实现方式是「先整体转义、再做白名单替换」：原始 HTML 在第一步就变成纯文本，因此结构上不可能被注入；`sanitizeUrl()` 额外拦截 `javascript:`、`vbscript:`、`data:text/html`，并先剥离控制字符以防 `java\tscript:` 绕过。安全测试见 `tests/markdown-lite.test.mjs`。
 
 ## 9. 跨仓库语义
 
@@ -287,7 +293,7 @@ GitHub Pages、独立 token proxy、PAT 浏览器 fallback 不属于受支持的
 当前 Node 测试：
 
 ```bash
-node --test tests/github-engine.test.mjs tests/worker-api.test.mjs
+node --test tests/github-engine.test.mjs tests/worker-api.test.mjs tests/markdown-lite.test.mjs
 ```
 
 ## 12. 当前状态与后续
