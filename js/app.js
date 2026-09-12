@@ -1548,8 +1548,8 @@ const App = (() => {
     const summary = $('#overview-summary');
     if (summary) {
       summary.textContent = (local.length + github.length) === 0
-        ? '还没有挂载任何存储。添加一个 GitHub 仓库后即可浏览、上传与提交文件。'
-        : '选择一个存储进入工作区，或直接打开最近访问的位置。';
+        ? '还没有挂载存储。登录 GitHub 并选择一个仓库，即可开始浏览与提交文件。'
+        : 'GitHub Repository 就是你的云端文件系统；选择一个存储进入，或直接打开最近访问的位置。';
     }
 
     // 最近访问：先按时间排序再过滤已卸载的项，保证列表不会残留失效条目。
@@ -1578,7 +1578,7 @@ const App = (() => {
     if (empty) {
       const hasAny = all.length > 0;
       empty.classList.toggle('hidden', hasAny);
-      empty.textContent = hasAny ? '' : '还没有挂载任何存储。点击右上角「添加存储」，登录 GitHub 并选择一个仓库即可开始。';
+      empty.textContent = hasAny ? '' : '还没有挂载存储。点右上角「添加存储」，登录 GitHub 后选择一个仓库即可开始。';
     }
   }
 

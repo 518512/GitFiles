@@ -8,6 +8,14 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="GitFiles">
+  <!-- 静态描述：site-config.js 也会注入一条，但脚本在 head 解析后才执行，
+       社交预览与搜索引擎抓取需要静态可见的标签。 -->
+  <meta name="description" content="GitFiles — 把 GitHub Repository 当作云端文件系统来浏览、编辑与提交的 PWA，基于 Cloudflare Workers 实现同源会话与权限控制。">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="GitFiles">
+  <meta property="og:description" content="把 GitHub Repository 当作云端文件系统来浏览、编辑与提交的 PWA。">
+  <meta property="og:image" content="assets/logo-512.png">
+  <meta name="twitter:card" content="summary_large_image">
   <script>
     (function () {
       const APP_ROOT_KEY = 'storage_hub_app_root';
@@ -110,7 +118,7 @@
       </div>
       <h1>GitFiles</h1>
       <p class="login-brand">MbAIGC 出品</p>
-      <p>一个全屏、快速、安全的本地与 GitHub 仓库文件管理器。</p>
+      <p>把 GitHub Repository 当作云端文件系统：浏览、上传、编辑，并以正确的 Git 历史提交。</p>
       <button id="btn-sign-in-github" class="btn-github">
         <svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true">
           <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
