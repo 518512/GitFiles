@@ -456,12 +456,36 @@ body.sidebar-collapsed .sidebar { width: 0; flex-basis: 0; border-right: 0; over
   gap: 16px;
   padding: 16px 24px 0;
   border-bottom: 1px solid var(--color-border);
+  /* 页签必须保持横向单行：窄屏时让标题区收缩，而不是压缩页签 */
+  flex-wrap: nowrap;
 }
-.repository-heading { display: flex; align-items: center; gap: 12px; min-width: 0; }
-.repository-mark { color: var(--color-accent); font-size: 22px; }
-.repository-name { font-size: 19px; font-weight: 700; overflow-wrap: anywhere; }
-.repository-meta { color: var(--color-muted); font-size: 12px; margin-top: 3px; }
-.repository-tabs { display: flex; gap: 4px; align-self: stretch; align-items: end; }
+.repository-heading { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 auto; }
+.repository-mark { color: var(--color-accent); font-size: 22px; flex: 0 0 auto; }
+.repository-heading > div { min-width: 0; }
+/* 仓库名过长时省略号截断，绝不换行——换行会把页签挤成竖排 */
+.repository-name {
+  font-size: 19px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.repository-meta {
+  color: var(--color-muted);
+  font-size: 12px;
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.repository-tabs {
+  display: flex;
+  gap: 4px;
+  align-self: stretch;
+  align-items: end;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+}
 .repository-tab {
   min-height: 40px;
   padding: 0 14px;
@@ -470,6 +494,10 @@ body.sidebar-collapsed .sidebar { width: 0; flex-basis: 0; border-right: 0; over
   background: transparent;
   color: var(--color-muted);
   cursor: pointer;
+  /* 中文标签禁止折行：曾经因为没有 nowrap + flex-shrink，
+     窄屏下被压到比文字还窄，"文件""历史"逐字竖排 */
+  white-space: nowrap;
+  flex: 0 0 auto;
 }
 .repository-tab:hover { color: var(--color-text); }
 .repository-tab.active { color: var(--color-accent); border-bottom-color: var(--color-accent); font-weight: 600; }
@@ -722,7 +750,13 @@ body.sidebar-collapsed .sidebar { width: 0; flex-basis: 0; border-right: 0; over
   .repository-readme { padding: 16px 14px 48px; }
   .markdown-body { font-size: 14px; }
 
-  .repository-header { padding: 12px 12px 0; }
+  /* 仓库头在窄屏：去掉图标与多余装饰，优先保证页签横向可读。
+     仓库名过长时省略号截断，不换行。 */
+  .repository-header { padding: 10px 12px 0; gap: 10px; }
+  .repository-mark { display: none; }
+  .repository-name { font-size: 15px; }
+  .repository-meta { font-size: 11px; }
+  .repository-tab { min-height: 36px; padding: 0 10px; font-size: 13px; }
   .repository-history { padding: 16px; }
   .history-item { grid-template-columns: minmax(0, 1fr); }
   .history-item code { grid-row: auto; grid-column: auto; }
