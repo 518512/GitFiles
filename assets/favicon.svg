@@ -1,11 +1,10 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="GitFiles">
-  <rect x="1" y="1" width="30" height="30" rx="7" fill="#0078d4"/>
-  <rect x="5" y="7" width="22" height="18" rx="2.5" fill="#fff"/>
-  <rect x="5" y="7" width="22" height="6" rx="2.5" fill="#e8f3fc"/>
-  <path fill="#fbbc04" d="M8 15h6.5l1.5 1.5h9v1.5H8z"/>
-  <path fill="#34a853" d="M8 18.5h17v6.5H8z"/>
-  <path fill="#4285f4" d="M8 18.5h8.5v6.5H8z"/>
-  <path fill="#ea4335" d="M16.5 18.5h8.5v6.5h-8.5z"/>
-  <circle cx="22.5" cy="22" r="3.5" fill="#fff" stroke="#0078d4" stroke-width="1.2"/>
-  <circle cx="25.5" cy="22" r="3.5" fill="#fff" stroke="#34a853" stroke-width="1.2"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="GitFiles"><title>GitFiles</title>
+<defs><linearGradient id="t" x1="0" y1="0" x2="0" y2="32" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#2684fc"/><stop offset="1" stop-color="#0a4fd8"/></linearGradient><linearGradient id="f" x1="0" y1="11.13" x2="0" y2="29.13" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#2b95ff"/><stop offset="1" stop-color="#0a52e6"/></linearGradient></defs>
+<rect width="32" height="32" rx="7.25" fill="url(#t)"/>
+<path d="M3.625,14.625 V26.875 A2.25,2.25 0 0 1 5.875,29.125 H19.375 A2.25,2.25 0 0 1 21.625,26.875 V16.875 A2.25,2.25 0 0 1 19.375,14.625 H16.375 V12.5 A1.375,1.375 0 0 1 15,11.125 H5 A1.375,1.375 0 0 1 3.625,12.5 Z" fill="url(#f)"/>
+<path d="M13.5,17 Q17.375,20.875 16.625,20.125 Q12.75,25.5 13.5,24.75 Q8.125,20.875 8.875,21.625 Q12.75,16.25 12,17 Z" fill="#ffffff"/>
+<g stroke="#0a52e6" stroke-width="1.4" stroke-linecap="round" fill="none"><line x1="10.88" y1="18.75" x2="10.88" y2="23.13"/><line x1="10.88" y1="18.75" x2="14.13" y2="20.88"/></g>
+<circle cx="10.88" cy="18.75" r="1.5" fill="#0a52e6"/>
+<circle cx="10.88" cy="23.13" r="1.5" fill="#0a52e6"/>
+<circle cx="14.88" cy="20.88" r="1.5" fill="#0a52e6"/>
 </svg>
