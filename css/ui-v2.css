@@ -124,16 +124,10 @@ body {
 .header-action:hover { border-color: var(--color-border); background: var(--color-bg); }
 .header-action:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
 .header-action--primary { color: var(--color-text); }
-.header-repo-state {
-  color: var(--color-muted);
-  font-size: 12px;
-  white-space: nowrap;
-  max-width: 22ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-/* 未连接仓库时不占位：这是一个状态提示，不是常驻控件。 */
-.header-repo-state:empty { display: none; }
+/* 顶栏不再显示「owner/repo · 分支」：仓库头（.repository-header）在正下方已经
+   显示了完整的仓库名与分支，属于重复信息；会话状态由账户菜单表达。
+   #header-repo-state 节点保留，但不再占用工具栏空间。 */
+.header-repo-state { display: none; }
 
 /* 顶栏账户菜单：登录后退出登录的主要入口（原来只在底部状态栏，移动端难发现）。 */
 .user-menu { position: relative; display: inline-flex; }
@@ -224,7 +218,17 @@ body {
 .ribbon .nav-buttons,
 .ribbon .file-tools,
 .ribbon .view-toggle { flex: 0 0 auto; }
-.ribbon .file-tools { display: flex; align-items: center; gap: var(--space-1); margin-left: 0; }
+.ribbon .file-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: 0;
+  /* style.css 给 .file-tools 设了白底 + border-bottom（历史上它是独立的一条工具栏）。
+     放进 ribbon 后会画出一条多余的横线，这里显式清掉。 */
+  background: transparent;
+  border-bottom: 0;
+  padding: 0;
+}
 
 /* 顶栏刷新按钮的进行中反馈：禁用 + 图标旋转，避免重复点击触发并发刷新。 */
 .tool-btn[aria-busy="true"],
@@ -480,10 +484,10 @@ body.sidebar-collapsed .sidebar { width: 0; flex-basis: 0; border-right: 0; over
 
    默认（两条紧凑行）：
      第 1 行  导航 · 品牌 · [弹性] · 刷新 · ＋ · 头像
-     第 2 行  面包屑（横向滚动） · 搜索 · 视图
+     第 2 行  面包屑（横向滚动） · 搜索 · 视图切换
    搜索展开（点放大镜后，整条工具栏变成单一搜索行）：
-     搜索图标 · [输入框占满] · ✕
-   排序控件在窄屏收起（低频操作），换取纵向空间。
+     [输入框占满] · ✕
+   排序控件在窄屏收起（低频操作）；视图切换已合并为单一按钮，不额外占行。
    ------------------------------------------------------------------------ */
 @media (max-width: 768px) {
   body { align-items: stretch; }
@@ -504,7 +508,6 @@ body.sidebar-collapsed .sidebar { width: 0; flex-basis: 0; border-right: 0; over
   .ribbon .app-brand { order: 2; font-size: 15px; padding: 6px 2px; }
   .ribbon .nav-buttons { order: 3; margin-left: auto; }
   .ribbon .app-header-actions { order: 4; margin-left: 0; gap: 2px; }
-  .ribbon .header-repo-state { display: none; }
   .ribbon .header-action { width: 36px; min-width: 36px; height: 36px; font-size: 18px; }
 
   /* 账户菜单在移动端必须可达（退出登录入口），且面板不被屏幕右缘裁切 */
@@ -520,7 +523,9 @@ body.sidebar-collapsed .sidebar { width: 0; flex-basis: 0; border-right: 0; over
     min-width: 0;
   }
   .ribbon .file-tools { order: 6; flex: 0 0 auto; }
-  .ribbon .view-toggle { order: 7; }
+  /* 视图切换是单一按钮，与搜索图标并排放在第 2 行，不额外占行 */
+  .ribbon .view-toggle { order: 7; flex: 0 0 auto; }
+  .ribbon .view-toggle .tool-btn { width: 36px; height: 36px; }
 
   /* 搜索平时只占一个图标 */
   .ribbon .search-toggle { display: inline-flex; }
