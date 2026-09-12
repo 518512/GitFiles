@@ -230,9 +230,7 @@ body {
   background: transparent;
   overflow: hidden;
 }
-/* 「返回上一级」：放在面包屑左侧，根目录下由 JS 隐藏（不占位） */
-.ribbon .nav-up { flex: 0 0 auto; }
-.ribbon .nav-up.hidden { display: none; }
+/* 「返回上一级」在列表 / 网格内以 ".." 行呈现（见 .go-up-row / .go-up-item） */
 .breadcrumbs {
   display: flex;
   align-items: center;
@@ -413,6 +411,36 @@ body.sidebar-collapsed .sidebar { width: 0; flex-basis: 0; border-right: 0; over
 .tree-entry-icon { width: 16px; justify-content: center; flex: 0 0 16px; font-size: 13px; }
 
 .content { background: var(--color-surface); flex: 1; min-width: 0; }
+
+/* --- 3.1 「返回上一级」列表行 -------------------------------------------
+   进入子目录后出现在列表 / 网格的最上方，是文件管理器的常识入口。
+   与普通项同构（复用 .list-row / .file-item），只换图标并略作弱化，
+   保证在两种视图下都不显得突兀。
+   ------------------------------------------------------------------------ */
+.go-up-icon-wrap { position: relative; display: inline-flex; }
+.go-up-icon-wrap .go-up-folder { color: var(--color-muted); }
+.go-up-icon-wrap .go-up-arrow {
+  position: absolute;
+  right: -4px;
+  bottom: -2px;
+  color: var(--color-accent);
+  background: var(--color-surface);
+  border-radius: 3px;
+  padding: 1px;
+}
+.go-up-item .file-name,
+.go-up-row .list-name-text { color: var(--color-muted); font-weight: 600; }
+.go-up-item:hover .go-up-icon-wrap .go-up-folder,
+.go-up-row:hover .go-up-icon-wrap .go-up-folder { color: var(--color-accent); }
+/* 该行不是可选中项，点击即导航；聚焦态用手型与描边表达 */
+.go-up-item, .go-up-row { cursor: pointer; }
+.go-up-item:focus-visible, .go-up-row:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+/* ".." 行跨满整行，不参与列对齐（它没有修改时间/大小/类型） */
+.list-row.go-up-row { display: flex; align-items: center; }
+.go-up-row .go-up-cell { display: inline-flex; align-items: center; gap: 10px; grid-column: 1 / -1; }
 
 /* --- 4. 列表与状态 ------------------------------------------------------- */
 .list-header,
@@ -599,7 +627,7 @@ body.sidebar-collapsed .sidebar { width: 0; flex-basis: 0; border-right: 0; over
 
    默认（两条紧凑行）：
      第 1 行  导航 · 品牌 · [弹性] · 刷新 · ＋ · 头像
-     第 2 行  面包屑（横向滚动） · 搜索 · 视图切换
+     第 2 行  搜索 · 视图切换          （面包屑在窄屏隐藏，节省空间）
    搜索展开（点放大镜后，整条工具栏变成单一搜索行）：
      [输入框占满] · ✕
    排序控件在窄屏收起（低频操作）；视图切换已合并为单一按钮，不额外占行。
@@ -630,17 +658,17 @@ body.sidebar-collapsed .sidebar { width: 0; flex-basis: 0; border-right: 0; over
   .user-menu-item { min-height: var(--tap-target); }
   .user-menu-avatar { width: 24px; height: 24px; }
 
-  /* 第 2 行：返回上级 + 面包屑 + 搜索图标 + 视图切换 */
-  .ribbon .nav-up { order: 4; width: 36px; height: 36px; }
-  .ribbon .address-bar {
-    order: 5;
-    flex: 1 1 auto;
-    width: auto;
-    min-width: 0;
-  }
-  .ribbon .file-tools { order: 6; flex: 0 0 auto; }
+  /* 面包屑在窄屏隐藏：仓库名 + 当前目录已由「..」行、仓库头与侧栏表达，
+     挤在顶栏只会压缩可用空间。子目录导航由列表内的 ".." 行承担。
+     order 一并声明：历史层在这里设了 order:3，虽然 display:none 下不影响布局，
+     但显式声明可以避免"关掉隐藏后位置突然不对"。 */
+  .ribbon .address-bar { display: none; order: 0; }
+
+  /* 第 2 行：搜索图标 + 视图切换（面包屑已隐藏） */
+  .ribbon .file-tools { order: 5; }
+  .ribbon .file-tools { flex: 0 0 auto; }
   /* 视图切换是单一按钮，与搜索图标并排放在第 2 行，不额外占行 */
-  .ribbon .view-toggle { order: 7; flex: 0 0 auto; }
+  .ribbon .view-toggle { order: 6; flex: 0 0 auto; }
   .ribbon .view-toggle .tool-btn { width: 36px; height: 36px; }
 
   /* 搜索平时只占一个图标 */
