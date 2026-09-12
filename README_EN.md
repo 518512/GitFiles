@@ -11,6 +11,34 @@
 
 </div>
 
+---
+
+## 🙏 Acknowledgements
+
+This project began from **[storage-hub](https://github.com/fi3ik-mme/storage-hub)** by
+**[Mykhailo Mikus](https://github.com/MishaMikusEleks)** ([@MishaMikusEleks](https://github.com/MishaMikusEleks)).
+
+storage-hub is a client-only, multi-backend file manager: it mounts Google Drive, browser
+local storage and GitHub repositories into one interface, drives them through a single
+Windows-Explorer-style UI, and supports cross-drive copy/paste, a built-in notepad and
+shareable path deep links — all in the browser, with no backend server.
+
+> **GitFiles would not exist without storage-hub.** This project's early application shell,
+> its multi-storage abstraction (`localdisk.js` / `drive.js`), the file-tree interaction,
+> the notepad and the PWA skeleton all originate from it.
+> Our sincere thanks and respect go to the original author.
+
+### Please credit upstream
+
+storage-hub is this project's upstream inspiration and code origin. When you use, cite or
+redistribute this work, please credit it too.
+
+> ⚠️ **Licensing note**: upstream currently declares **no LICENSE**, so all rights are
+> reserved by default. Do not redistribute this derivative until the original author grants
+> explicit permission. See [`docs/架构现状-20260912.md`](docs/架构现状-20260912.md) section 3.3.
+
+---
+
 ## About
 
 GitFiles treats a GitHub Repository as a reliable cloud file system. The browser calls only the same-origin Worker API; GitHub access tokens remain in Worker D1 sessions and are used through HttpOnly cookies. The Worker Git Data pipeline performs writes while preserving correct Tree, Commit, and branch-ref history.
@@ -18,15 +46,24 @@ GitFiles treats a GitHub Repository as a reliable cloud file system. The browser
 > **Project status**: see [`docs/状态总览-20260912.md`](docs/状态总览-20260912.md) (the single source of truth for what is done and what is planned).
 > **Documentation index**: see [`docs/README.md`](docs/README.md).
 
-### Relationship to upstream
+### Changes relative to upstream
 
-This project is derived from [fi3ik-mme/storage-hub](https://github.com/fi3ik-mme/storage-hub) by Mykhailo Mikus.
 Upstream is a **client-only** browser file manager (Google Drive centric, no backend).
-GitFiles adds a Cloudflare Worker + D1 backend, a Git Data mutation pipeline, and CAS,
-and moves the data model from Google Drive to Git objects. See
-[`docs/架构现状-20260912.md`](docs/架构现状-20260912.md) section 3.
+GitFiles shifts the focus to GitHub Repositories and adds a Cloudflare Worker + D1 backend,
+a Git Data mutation pipeline and CAS, moving the data model from Google Drive to Git
+objects (Blob / Tree / Commit / Ref):
 
-Upstream declares no LICENSE. Do not redistribute this derivative until licensing is clarified.
+| Dimension | storage-hub (upstream) | GitFiles |
+|---|---|---|
+| Backend | None (client-only + PAT) | Cloudflare Worker + D1 |
+| Auth | Google OAuth / GitHub PAT | GitHub OAuth + PKCE + HttpOnly cookie |
+| Token storage | In the browser | Worker / D1 only |
+| Data model | Google Drive centric | Git objects + CAS |
+| Deployment | GitHub Pages | Workers + Static Assets |
+| Tests | None | 77 |
+
+GitFiles has left the fork network and is maintained as a standalone repository. For the full
+diff and measured figures see [`docs/架构现状-20260912.md`](docs/架构现状-20260912.md) sections 2–3.
 
 ## Core capabilities
 
@@ -36,6 +73,7 @@ Upstream declares no LICENSE. Do not redistribute this derivative until licensin
 - Move, Rename, and Copy reuse Blob SHAs. A logical batch becomes one Tree, one Commit, and one non-force ref update.
 - CAS: the client submits `expectedHead`; the Worker rereads the remote HEAD and returns `409 Conflict` on mismatch.
 - Worker session status, a basic Conflict Center, mobile navigation drawer, and large touch targets.
+- A workspace-style home page (mounted storages + recent), and a repository README view with safe rendering.
 - PWA shell caching; the Service Worker never caches `/api/*`.
 
 ## Architecture
@@ -57,46 +95,73 @@ The browser neither stores GitHub tokens nor calls `api.github.com` directly. `w
 
 The only supported production deployment is **Cloudflare Workers + Static Assets**.
 
-1. Fork this repository, or use the Deploy to Cloudflare button above.
+1. Clone this repository, or use the Deploy to Cloudflare button above.
 2. In the Cloudflare Workers project, set the Build command:
 
    ```bash
    node scripts/build-config.mjs
    ```
 
-3. Set per-deployment D1 variables (the values stay in your Cloudflare deployment configuration and are not committed to this public repository):
+3. Create the D1 database and set per-deployment D1 variables (the values stay in your Cloudflare deployment configuration and are not committed to this public repository):
 
    ```text
    D1_DATABASE_NAME=your D1 database name
    D1_DATABASE_ID=your D1 database ID
    ```
 
-   Add both values as Build variables in Workers Builds, or as deployment variables in the Dashboard deployment settings. `wrangler.jsonc` uses them to create the fixed `DB` D1 binding. Apply the schema:
+   Add both values as Build variables in Workers Builds, or as deployment variables in the Dashboard deployment settings. `wrangler.jsonc` uses them to create the fixed `DB` D1 binding.
+
+4. Initialize the database schema (`workers/schema.sql`). Pick either path:
+
+   **Option A — Dashboard SQL console (no local tooling)**
+
+   Dashboard → Workers & Pages → D1 → select the database → **Console**, then paste the
+   full contents of `workers/schema.sql` and run it.
+
+   **Option B — wrangler CLI**
 
    ```bash
-   npx wrangler d1 execute <database-name> --file=workers/schema.sql
+   npx wrangler d1 execute <database-name> --remote --file=workers/schema.sql
    ```
 
-4. Set the Worker runtime secret:
+   > ⚠️ `--remote` is required. Without it wrangler targets a local `.wrangler/state/`
+   > copy instead of the production database.
+   >
+   > Pass the **database name**, not the binding name `DB`: binding names can change,
+   > database names cannot.
+
+   **Option C — incremental upgrade of an existing deployment**
+
+   If the database is already in use, do not run the whole `schema.sql` (its `DROP TABLE`
+   wipes sessions and forces every user to sign in again). Add only the new column:
+
+   ```sql
+   ALTER TABLE repository_access ADD COLUMN checked_at INTEGER;
+   ```
+
+   Existing rows keep `checked_at = NULL`, which is treated as stale, so the next access
+   re-validates that repository against GitHub once.
+
+5. Set the Worker runtime secret:
 
    ```bash
    npx wrangler secret put GITHUB_CLIENT_SECRET
    ```
 
-5. Set Build text variables:
+6. Set Build text variables:
 
    | Variable | Purpose |
    |---|---|
    | `CONFIG_GITHUB_CLIENT_ID` | GitHub OAuth App Client ID |
    | `CONFIG_BASE_PATH` | Optional site-path override |
 
-6. Register this callback in the GitHub OAuth App:
+7. Register this callback in the GitHub OAuth App:
 
    ```text
    https://<worker-domain>/github-oauth-callback.html
    ```
 
-7. After deployment, use `/api/me` to verify the session. Missing D1 or secret configuration produces `503`; the application never falls back to a browser token/PAT mode.
+8. After deployment, use `/api/me` to verify the session. Missing D1 or secret configuration produces `503`; the application never falls back to a browser token/PAT mode.
 
 `serve.py` remains only for static/OAuth development diagnostics. GitHub Pages, standalone token proxies, and browser PAT fallbacks are not supported secure production deployments.
 

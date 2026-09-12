@@ -910,7 +910,7 @@ Worker API (`workers/entry.js`)
 
 > 一个类似 GitHub Web 文件管理器的 PWA，将 GitHub Repository 作为可靠的云端文件系统，并通过 Cloudflare 实现多用户认证、权限和安全 API 层。
 
-## 33. 文档与提交规范（本 fork 强制）
+## 33. 文档与提交规范（本项目强制）
 
 ### 文档命名
 
@@ -951,6 +951,11 @@ Commit message 一律使用中文，格式：
 
 `README.md`（中文，主文档）与 `README_EN.md`（英文）内容必须保持同步，任何一处变更都要同时更新两个文件。
 
-### 上游
+### 上游与致谢
 
-本仓库禁止向上游（`fi3ik-mme/storage-hub`）提交 PR 或 Push；所有提交只推送到 `origin`。
+本项目源自 [storage-hub](https://github.com/fi3ik-mme/storage-hub)（作者 Mykhailo Mikus），
+已于 2026-09-12 通过 GitHub「Leave fork network」**脱离 fork 网络**，作为独立仓库维护。
+
+- `upstream` remote 保留为**只读参考**；禁止向上游提交 PR 或 Push，所有提交只推 `origin`。
+- **必须保留对原作者的署名**：`README.md` / `README_EN.md` 顶部的「致谢与致敬」一节不得删除。
+- 上游未声明 LICENSE，默认保留全部权利；**取得授权前不得再分发本项目**。
