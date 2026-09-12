@@ -417,21 +417,9 @@ body.sidebar-collapsed .sidebar { width: 0; flex-basis: 0; border-right: 0; over
    与普通项同构（复用 .list-row / .file-item），只换图标并略作弱化，
    保证在两种视图下都不显得突兀。
    ------------------------------------------------------------------------ */
-.go-up-icon-wrap { position: relative; display: inline-flex; }
-.go-up-icon-wrap .go-up-folder { color: var(--color-muted); }
-.go-up-icon-wrap .go-up-arrow {
-  position: absolute;
-  right: -4px;
-  bottom: -2px;
-  color: var(--color-accent);
-  background: var(--color-surface);
-  border-radius: 3px;
-  padding: 1px;
-}
+/* 图标沿用普通目录项的 emoji，因此这里只需要弱化文字、表明它不是可选中项 */
 .go-up-item .file-name,
 .go-up-row .list-name-text { color: var(--color-muted); font-weight: 600; }
-.go-up-item:hover .go-up-icon-wrap .go-up-folder,
-.go-up-row:hover .go-up-icon-wrap .go-up-folder { color: var(--color-accent); }
 /* 该行不是可选中项，点击即导航；聚焦态用手型与描边表达 */
 .go-up-item, .go-up-row { cursor: pointer; }
 .go-up-item:focus-visible, .go-up-row:focus-visible {
