@@ -1450,14 +1450,26 @@ body {
 
 .ctx-sheet-close {
   flex-shrink: 0;
-  width: 36px;
-  height: 36px;
+  /* 44px：这是移动端主要操作，必须达到触达尺寸下限（PROJECT_SPEC §7.1） */
+  width: 44px;
+  height: 44px;
   border: none;
   border-radius: 50%;
   background: #e8e8e8;
+  color: #1f2328;
   cursor: pointer;
-  font-size: 0.9rem;
+  /* 显式居中：✕ 字形此前依赖父级布局，位置/大小不稳定 */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.05rem;
+  line-height: 1;
+  padding: 0;
+  -webkit-appearance: none;
+  appearance: none;
 }
+.ctx-sheet-close:hover { background: #dcdcdc; }
+.ctx-sheet-close:focus-visible { outline: 2px solid var(--win-blue); outline-offset: 2px; }
 
 .ctx-sheet-body {
   max-height: min(60dvh, 420px);
