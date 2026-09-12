@@ -955,13 +955,14 @@ const App = (() => {
     return index === -1 ? 'root' : folderId.slice(0, index);
   }
 
-  /** 同步「返回上一级」按钮的可用状态：根目录下直接隐藏，不占位。 */
-  function updateNavUp() {
-    const button = $('#btn-nav-up');
-    if (!button) return;
-    const userId = state.currentUserId;
-    const available = state.level === 'drive' && !!userId && folderParentId(userId) !== null;
-    button.classList.toggle('hidden', !available);
+  /**
+   * 列表 / 网格顶部的「..」返回上级行。
+   *
+   * 抛给调用方的判断：只有位于子目录时才生成这一行。
+   * 在根目录不显示——避免一个永远不可点的入口。
+   */
+  function canGoUp() {
+    return state.level === 'drive' && !!state.currentUserId && folderParentId(state.currentUserId) !== null;
   }
 
   function goToParentFolder() {
@@ -1222,9 +1223,64 @@ const App = (() => {
     return '';
   }
 
+  /** 「..」在网格视图中的样式：与普通文件夹项同构，图标换成向上箭头 */
+  function buildGoUpGridItem() {
+    const item = document.createElement('div');
+    item.className = 'file-item go-up-item';
+    item.dataset.id = '__go_up__';
+    item.innerHTML = `
+      <div class="file-icon">${goUpIcon()}</div>
+      <span class="file-name">..</span>
+    `;
+    item.title = '返回上一级';
+    item.setAttribute('role', 'button');
+    item.tabIndex = 0;
+    item.addEventListener('click', () => goToParentFolder());
+    item.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); goToParentFolder(); }
+    });
+    return item;
+  }
+
+  /** 「..」在列表视图中的样式：与普通行同构，只保留名称列 */
+  function buildGoUpListRow() {
+    const row = document.createElement('div');
+    row.className = 'list-row go-up-row';
+    row.dataset.id = '__go_up__';
+    // 单单元格 + grid-column:1/-1：避免为对齐再补三个空单元格
+    row.innerHTML = `
+      <span class="col-name go-up-cell">
+        <span class="list-icon">${goUpIcon(18)}</span>
+        <span class="list-name-text">..</span>
+      </span>
+    `;
+    row.title = '返回上一级';
+    row.setAttribute('role', 'button');
+    row.tabIndex = 0;
+    row.addEventListener('click', () => goToParentFolder());
+    row.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); goToParentFolder(); }
+    });
+    return row;
+  }
+
+  /**
+   * 「..」的图标：文件夹 + 右上角向上箭头角标。
+   * 只用文件夹会与普通目录项难以区分，叠加箭头后才能一眼看出是"返回上级"。
+   */
+  function goUpIcon(size = 40) {
+    const badge = Math.max(12, Math.round(size * 0.5));
+    return `<span class="go-up-icon-wrap" style="--go-up-size:${size}px">
+      <svg class="go-up-folder" viewBox="0 0 16 16" width="${size}" height="${size}" aria-hidden="true"><path fill="currentColor" d="M1.75 1A1.75 1.75 0 0 0 0 2.75v10.5C0 14.216.784 15 1.75 15h12.5A1.75 1.75 0 0 0 16 13.25v-8.5A1.75 1.75 0 0 0 14.25 3H7.5a.25.25 0 0 1-.2-.1l-.9-1.2C6.07 1.26 5.55 1 5 1Z"/></svg>
+      <svg class="go-up-arrow" viewBox="0 0 16 16" width="${badge}" height="${badge}" aria-hidden="true"><path fill="currentColor" d="M7.78 12.53a.75.75 0 0 1-1.06 0L2.47 8.28a.75.75 0 0 1 0-1.06l4.25-4.25a.75.75 0 0 1 1.06 1.06L4.06 7.75h9.19a.75.75 0 0 1 0 1.5H4.06l3.72 3.72a.75.75 0 0 1 0 1.06Z"/></svg>
+    </span>`;
+  }
+
   function renderGrid() {
     const grid = $('#file-grid');
     grid.innerHTML = '';
+
+    if (canGoUp()) grid.appendChild(buildGoUpGridItem());
 
     visibleFiles().forEach((file) => {
       const item = document.createElement('div');
@@ -1252,6 +1308,8 @@ const App = (() => {
   function renderList() {
     const body = $('#file-list-body');
     body.innerHTML = '';
+
+    if (canGoUp()) body.appendChild(buildGoUpListRow());
 
     visibleFiles().forEach((file) => {
       const row = document.createElement('div');
@@ -1786,7 +1844,6 @@ const App = (() => {
     const isFileWorkspace = !isOverview && !isHistory && !isReadme;
     $('.file-tools')?.classList.toggle('hidden', !isFileWorkspace);
     $('.view-toggle')?.classList.toggle('hidden', !isFileWorkspace);
-    updateNavUp();
     // 面包屑在 README/历史下没有意义（它们始终作用于仓库根）。
     $('.address-bar')?.classList.toggle('hidden', isOverview || isHistory || isReadme);
     document.querySelectorAll('[data-repository-view]').forEach((button) => {
@@ -1815,7 +1872,9 @@ const App = (() => {
       // 首页自己负责零状态引导（#overview-empty 带主按钮）；
       // README/历史不是文件夹视图，不应出现「此文件夹为空」。
       hide($('#empty-state'));
-    } else if (state.files.length === 0) {
+    } else if (state.files.length === 0 && !canGoUp()) {
+      // 空目录但可以返回上级时不显示"此文件夹为空"——列表里已有 ".." 行，
+      // 空态会与之矛盾（且空态是独立容器，会把列表整个遮住）。
       renderEmptyState();
       show($('#empty-state'));
     } else {
@@ -3185,7 +3244,6 @@ const App = (() => {
       }
     });
 
-    $('#btn-nav-up')?.addEventListener('click', () => goToParentFolder());
     $('#btn-view-toggle')?.addEventListener('click', () => {
       viewPinnedByUser = true;
       setView(state.view === 'list' ? 'grid' : 'list');
