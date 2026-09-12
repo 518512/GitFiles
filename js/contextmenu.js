@@ -47,7 +47,15 @@ const ContextMenu = (() => {
       if (e.target.closest('#context-menu')) return;
     });
     window.addEventListener('resize', hide);
-    window.addEventListener('scroll', hide, true);
+    // 滚动关闭菜单时**必须排除菜单自身内部的滚动**：
+    // 否则在移动端 bottom sheet 里滑动选项列表，capture 阶段的 scroll
+    // 会先于 click 触发 hide()，表现为「还没选中菜单就消失了」。
+    // 只有页面/列表背景真的滚动时才收起菜单。
+    window.addEventListener('scroll', (e) => {
+      const target = e.target;
+      if (target instanceof Element && target.closest('#context-menu')) return;
+      hide();
+    }, true);
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Escape') hide();
     });
