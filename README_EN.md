@@ -62,7 +62,7 @@ objects (Blob / Tree / Commit / Ref):
 | Deployment | GitHub Pages | Workers + Static Assets |
 | Tests | None | 77 |
 
-GitFiles has left the fork network and is maintained as a standalone repository. For the full
+GitFiles is maintained as an independent project (note: the GitHub-level fork flag has not been detached yet). For the full
 diff and measured figures see [`docs/架构现状-20260912.md`](docs/架构现状-20260912.md) sections 2–3.
 
 ## Core capabilities

@@ -189,8 +189,34 @@ body {
 
 .toolbar-menu-toggle { display: inline-flex; }
 
-/* 搜索框：图标 + 输入；关闭按钮只在移动端展开态出现 */
-.search-box { display: inline-flex; align-items: center; gap: 6px; }
+/* 搜索框：图标 + 输入；关闭按钮只在移动端展开态出现。
+   style.css 给 .search-box / .sort-select 设了边框、圆角与白底（历史上它们是
+   独立工具条里的输入控件）。放进 ribbon 后这些装饰会显得与工具栏割裂，
+   这里统一改为扁平风格，只在 hover/focus 时给反馈。 */
+.search-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  min-width: 200px;
+}
+.search-box:hover { border-color: var(--color-border); }
+.search-box:focus-within { border-color: var(--color-accent); background: var(--color-surface); }
+.search-box input { min-height: 30px; font-size: 13px; }
+.sort-select {
+  height: 32px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 13px;
+}
+.sort-select:hover { border-color: var(--color-border); }
 .search-box-icon { color: var(--color-muted); }
 .search-box-close { display: none; border: 0; background: transparent; color: var(--color-muted); cursor: pointer; padding: 0 2px; }
 /* 移动端才需要「点图标才展开搜索」，桌面端常驻显示 */
@@ -240,6 +266,51 @@ body {
 @keyframes gf-spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+/* --- 2.1 历史元素迁移复位 ----------------------------------------------
+   `css/style.css` 里的以下元素是在**旧布局**下写的：
+     .file-tools   原为独立的一条工具栏（白底 + border-bottom）
+     .address-bar  原是带边框的地址输入框样式
+     .breadcrumbs  原为独立一行的路径条
+     .view-toggle / .nav-buttons  原为独立分组
+   它们现在都并入 `.ribbon`，旧的边框/底色/间距会形成"多余横线""割裂色块"。
+   这里集中做一次**显式复位**：即便某处特异性侥幸生效，也把意图写清楚，
+   避免以后调 layout 时又被历史属性咬到。
+   ------------------------------------------------------------------------ */
+.ribbon .address-bar {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 6px;
+  background: transparent;
+  /* border: 0 不会重置 border-radius：历史样式设了 6px，
+     虽然当前无边框看不出，但一旦将来加背景/描边就会冒出圆角。 */
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  min-height: 0;
+}
+.ribbon .breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+.ribbon .nav-buttons,
+.ribbon .view-toggle {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+.ribbon .tool-btn {
+  border-radius: var(--radius-sm);
 }
 
 /* --- 3. 主区域与侧栏 ----------------------------------------------------- */

@@ -936,7 +936,15 @@ const App = (() => {
     const container = $('#breadcrumbs');
     container.innerHTML = '';
 
-    state.breadcrumbs.forEach((crumb, i) => {
+    // 在 storage / 仓库内部时，面包屑的根条目（ROOT_NAME，即 "GitFiles"）
+    // 与工具栏左侧的品牌按钮完全重复，占位却不提供新信息。
+    // 品牌按钮本身就是「返回工作区首页」的入口（navigateToCrumb 的 ROOT_ID 分支），
+    // 因此这里把根条目从渲染中剔除；首页态下只剩根条目，则保持原样。
+    const crumbs = state.level !== 'home' && state.breadcrumbs[0]?.id === ROOT_ID
+      ? state.breadcrumbs.slice(1)
+      : state.breadcrumbs;
+
+    crumbs.forEach((crumb, i) => {
       if (i > 0) {
         const sep = document.createElement('span');
         sep.className = 'breadcrumb-sep';
@@ -944,7 +952,7 @@ const App = (() => {
         container.appendChild(sep);
       }
 
-      const isLast = i === state.breadcrumbs.length - 1;
+      const isLast = i === crumbs.length - 1;
       const el = document.createElement('span');
       el.className = isLast ? 'breadcrumb-current' : 'breadcrumb-item';
       el.textContent = crumb.name;

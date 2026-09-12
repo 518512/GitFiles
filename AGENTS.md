@@ -572,10 +572,15 @@ node scripts/build-logo-from-image.mjs --check
 
 ```bash
 node scripts/check-ui.mjs
+node scripts/audit-css.mjs
 ```
 
-它检查重复 id、JS 引用但已不存在的 id、三个页面的样式表层叠顺序，以及 CSS 类选择器的使用情况。
-`notepad.js` 中失效的对话框判断就是由它发现的。
+`check-ui.mjs` 检查重复 id、JS 引用但已不存在的 id、样式表层叠顺序、CSS 选择器使用情况。
+`audit-css.mjs` 审计**两层样式表的冲突**：列出给定类在 `style.css`（历史层）与
+`ui-v2.css`（V2 层）里的全部规则，并标出「历史层设置、V2 层未显式复位」的属性——
+这些就是"多余横线""割裂色块"这类问题的来源，必须逐条确认。
+它只做提示、不阻断构建，因为部分历史属性在新布局下依然正确。
+`notepad.js` 中失效的对话框判断就是由 `check-ui.mjs` 发现的。
 
 ### Step 8
 
@@ -961,7 +966,12 @@ Commit message 一律使用中文，格式：
 ### 上游与致谢
 
 本项目源自 [storage-hub](https://github.com/fi3ik-mme/storage-hub)（作者 Mykhailo Mikus），
-已于 2026-09-12 通过 GitHub「Leave fork network」**脱离 fork 网络**，作为独立仓库维护。
+按独立项目维护。
+
+> 状态核实：`https://api.github.com/repos/MbAIGC/GitFiles` 目前仍返回
+> `"fork": true` 且带 `parent`，说明**尚未真正脱离 fork 网络**。
+> 脱离需要在 GitHub 网页操作：Settings → General → Danger Zone → Leave fork network（不可逆）。
+> 未完成前，文档中不应宣称"已脱离"。
 
 - `upstream` remote 保留为**只读参考**；禁止向上游提交 PR 或 Push，所有提交只推 `origin`。
 - **必须保留对原作者的署名**：`README.md` / `README_EN.md` 顶部的「致谢与致敬」一节不得删除。
