@@ -44,9 +44,18 @@ export async function requireSession(request, env) {
   if (!env.DB) throw new ApiError(503, 'service_unavailable', 'D1 session storage is not configured');
   const id = cookieValue(request, COOKIE_NAME);
   if (!id) throw new ApiError(401, 'unauthorized', 'Sign in is required');
-  const row = await env.DB.prepare(
-    'SELECT id, github_login, access_token, expires_at FROM sessions WHERE id = ?'
-  ).bind(id).first();
+  // 先按最新 schema 查询；若目标库尚未执行 migration（缺 github_avatar 列），
+  // 回退到旧列集合，避免整个应用因一个可选字段而 500。
+  let row;
+  try {
+    row = await env.DB.prepare(
+      'SELECT id, github_login, github_avatar, access_token, expires_at FROM sessions WHERE id = ?'
+    ).bind(id).first();
+  } catch {
+    row = await env.DB.prepare(
+      'SELECT id, github_login, access_token, expires_at FROM sessions WHERE id = ?'
+    ).bind(id).first();
+  }
   if (!row || (row.expires_at && Number(row.expires_at) <= Date.now())) {
     throw new ApiError(401, 'unauthorized', 'Session has expired');
   }

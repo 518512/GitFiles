@@ -78,7 +78,9 @@ body {
   border-bottom: 1px solid var(--color-border);
   background: var(--color-surface);
   box-shadow: var(--shadow-sm);
-  overflow: hidden;
+  /* 不能是 hidden：账户菜单面板是绝对定位的弹出层，会被直接裁掉。
+     横向溢出改由内部的 .address-bar / .breadcrumbs 自己收敛。 */
+  overflow: visible;
 }
 
 .app-brand {
@@ -192,6 +194,13 @@ body {
 .user-menu-item-icon { display: inline-flex; width: 16px; justify-content: center; }
 
 .toolbar-menu-toggle { display: inline-flex; }
+
+/* 搜索框：图标 + 输入；关闭按钮只在移动端展开态出现 */
+.search-box { display: inline-flex; align-items: center; gap: 6px; }
+.search-box-icon { color: var(--color-muted); }
+.search-box-close { display: none; border: 0; background: transparent; color: var(--color-muted); cursor: pointer; padding: 0 2px; }
+/* 移动端才需要「点图标才展开搜索」，桌面端常驻显示 */
+.search-toggle { display: none; }
 
 /* 位置区是唯一的弹性区域，保证面包屑优先占用剩余宽度。 */
 .ribbon .address-bar {
@@ -467,55 +476,87 @@ body.sidebar-collapsed .sidebar { width: 0; flex-basis: 0; border-right: 0; over
 }
 
 /* --- 9. 移动端（独立布局，不是桌面缩放）--------------------------------
-   移动端两行结构：
-     第 1 行  导航开关 · 品牌 · [弹性] · 刷新 · 添加
-     第 2 行  面包屑（横向滚动）· 搜索 · 视图
-   排序控件在窄屏收起，用 44px 触达目标换取可读性；搜索仍可用。
+   目标：用最少的纵向空间容纳最多的操作。
+
+   默认（两条紧凑行）：
+     第 1 行  导航 · 品牌 · [弹性] · 刷新 · ＋ · 头像
+     第 2 行  面包屑（横向滚动） · 搜索 · 视图
+   搜索展开（点放大镜后，整条工具栏变成单一搜索行）：
+     搜索图标 · [输入框占满] · ✕
+   排序控件在窄屏收起（低频操作），换取纵向空间。
    ------------------------------------------------------------------------ */
 @media (max-width: 768px) {
   body { align-items: stretch; }
 
   .ribbon {
     flex-wrap: wrap;
-    gap: 6px;
+    gap: 4px;
     min-height: 0;
-    padding: 6px 10px;
+    padding: 4px 8px;
     overflow: visible;
   }
 
-  /* 第 1 行 */
-  .ribbon .toolbar-menu-toggle { order: 1; }
-  /* 账户菜单在移动端同样必须可达（退出登录的入口） */
-  .user-menu-panel { right: -4px; min-width: 200px; }
-  .user-menu-item { min-height: var(--tap-target); }
-  .user-menu-avatar { width: 26px; height: 26px; }
-  .ribbon .app-brand { order: 2; font-size: 15px; }
-  .ribbon .app-header-actions { order: 3; margin-left: auto; }
-  .ribbon .nav-buttons { order: 4; }
-  .ribbon .header-repo-state { display: none; }
+  /* 收窄所有工具按钮的留白，改用更小的触达尺寸但保持可点 */
+  .ribbon .tool-btn { width: 36px; height: 36px; }
 
-  /* 第 2 行 */
+  /* 第 1 行：导航 · 品牌 · 弹性 · 刷新 · ＋ · 头像 */
+  .ribbon .toolbar-menu-toggle { order: 1; width: 36px; height: 36px; }
+  .ribbon .app-brand { order: 2; font-size: 15px; padding: 6px 2px; }
+  .ribbon .nav-buttons { order: 3; margin-left: auto; }
+  .ribbon .app-header-actions { order: 4; margin-left: 0; gap: 2px; }
+  .ribbon .header-repo-state { display: none; }
+  .ribbon .header-action { width: 36px; min-width: 36px; height: 36px; font-size: 18px; }
+
+  /* 账户菜单在移动端必须可达（退出登录入口），且面板不被屏幕右缘裁切 */
+  .user-menu-panel { right: 0; min-width: 208px; max-width: min(86vw, 280px); }
+  .user-menu-item { min-height: var(--tap-target); }
+  .user-menu-avatar { width: 24px; height: 24px; }
+
+  /* 第 2 行：面包屑 + 搜索图标 + 视图切换 */
   .ribbon .address-bar {
     order: 5;
-    flex: 1 1 100%;
-    width: 100%;
-    min-width: 0;
-  }
-  .ribbon .file-tools {
-    order: 6;
     flex: 1 1 auto;
+    width: auto;
     min-width: 0;
   }
-  .ribbon .file-tools .search-box { flex: 1 1 auto; min-width: 0; }
+  .ribbon .file-tools { order: 6; flex: 0 0 auto; }
   .ribbon .view-toggle { order: 7; }
 
-  /* 排序在小屏收起，避免挤压搜索框。 */
+  /* 搜索平时只占一个图标 */
+  .ribbon .search-toggle { display: inline-flex; }
+  .ribbon .file-tools .search-box { display: none; }
+
+  /* 排序属于低频操作，小屏收起以节省空间 */
   .ribbon .file-tools .sort-select,
   .ribbon .file-tools #btn-sort-direction { display: none; }
 
-  /* 触达目标 ≥ 44px（AGENTS.md §15）。 */
-  .tool-btn,
-  .header-action,
+  /* ---- 搜索展开态：整条工具栏只保留搜索 ---- */
+  .ribbon.search-open { flex-wrap: nowrap; }
+  .ribbon.search-open > *:not(.file-tools) { display: none; }
+  .ribbon.search-open .file-tools {
+    order: 1;
+    flex: 1 1 100%;
+    width: 100%;
+    gap: 6px;
+  }
+  .ribbon.search-open .file-tools .search-toggle { display: none; }
+  .ribbon.search-open .file-tools .search-box {
+    display: inline-flex;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .ribbon.search-open .file-tools .search-box input { flex: 1 1 auto; min-width: 0; }
+  .ribbon.search-open .file-tools .search-box-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+
+  /* 侧栏与列表等主要触达目标仍保持 ≥ 44px（AGENTS.md §15）；
+     顶栏工具按钮是紧凑区，统一 36px 以避免两行工具栏过高。 */
   .sidebar-nav-item,
   .repository-tab {
     min-width: var(--tap-target);

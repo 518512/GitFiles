@@ -30,8 +30,8 @@ async function createSession(env, tokenPayload) {
   const id = crypto.randomUUID();
   const expiresAt = Date.now() + (Number(tokenPayload.expires_in || 60 * 60 * 24 * 7) * 1000);
   await env.DB.prepare(
-    'INSERT INTO sessions (id, github_login, access_token, expires_at) VALUES (?, ?, ?, ?)'
-  ).bind(id, user.login, tokenPayload.access_token, expiresAt).run();
+    'INSERT INTO sessions (id, github_login, github_avatar, access_token, expires_at) VALUES (?, ?, ?, ?, ?)'
+  ).bind(id, user.login, user.avatar_url || null, tokenPayload.access_token, expiresAt).run();
 
   return id;
 }
@@ -92,7 +92,12 @@ async function handleApi(request, env, url) {
     // Opportunistic cleanup: there is no cron binding, so expired sessions are
     // reaped on the cheap endpoint that every page load already calls.
     await purgeExpiredSessions(env);
-    return json({ login: session.github_login || null });
+    const login = session.github_login || null;
+    // Migrated rows have no github_avatar; fall back to the canonical avatar URL
+    // built from the login so the header still shows a real picture.
+    const avatar = session.github_avatar
+      || (login ? `https://avatars.githubusercontent.com/${encodeURIComponent(login)}` : null);
+    return json({ login, avatar });
   }
   if (url.pathname === '/api/repos') {
     if (request.method === 'GET') return handleRepoList(request, env);

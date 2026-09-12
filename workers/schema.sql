@@ -12,6 +12,8 @@ DROP TABLE IF EXISTS sessions;
 CREATE TABLE sessions (
   id TEXT PRIMARY KEY,
   github_login TEXT,
+  -- 用于顶栏账户菜单显示真实头像；旧行可能为 NULL，前端会回退到首字母
+  github_avatar TEXT,
   access_token TEXT NOT NULL,
   expires_at INTEGER NOT NULL,
   created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
