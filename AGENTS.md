@@ -94,6 +94,11 @@ new path → old blob SHA
 download → upload
 ```
 
+> 跨 GitHub 仓库的复制无法由 Git 提供原子单 commit，此时允许
+> 「只读收集 → 目标仓库一次批量写入」：目标侧仍是**一个 Tree + 一个 Commit**，
+> 且 Blob 内容只在目标仓库产生一次。见 `workers/operations.js` 与
+> `js/githubdisk.js` 的 `collectGithubItems` / `createBatchFromCollected`。
+
 ### Batch
 
 一组逻辑操作应尽可能产生：
@@ -157,20 +162,30 @@ Blob
 Commit
 ```
 
-推荐：
+**引擎在 Worker 侧，不在浏览器。** 当前模块划分（`workers/`）：
 
 ```text
-github/
-├── client.js
-├── repository.js
-├── reference.js
-├── tree.js
-├── blob.js
-├── commit.js
-└── operations.js
+workers/entry.js       唯一 HTTP 入口：路由分派、CORS、错误兜底
+workers/http.js        ApiError / json / assertSameOrigin / 路由解析
+workers/session.js     Cookie session、仓库 ACL（含 TTL 重校验）、过期清理
+workers/repos.js       仓库读取、列表、创建、文件下载入口
+workers/operations.js   Git Data 变更管线（CAS + 批量单 commit）
+workers/github.js      GitHub API 客户端（含流式下载）
+workers/schema.sql     D1 表结构（幂等，可重复执行）
+
+workers/github-oauth-token.js
+                       上游遗留的独立 OAuth 代理**安全替代件**：它故意拒绝所有请求，
+                       以防旧部署把它当作 token 出口而把 access token 泄露给浏览器。
+                       不要删除，也不要在其中实现功能。
 ```
 
-不要继续把所有 GitHub API 逻辑堆进一个超大文件。
+新增 GitHub API 调用必须放进 `workers/github.js`，变更语义放进
+`workers/operations.js`；不要把 API 逻辑堆进 `entry.js`。
+
+> ⚠️ `js/github/*.js`（约 1200 行）是**上游时代的浏览器端 Git 引擎**，
+> 既没有被任何页面加载，也被 `scripts/build-config.mjs` 排除出发布产物，
+> 仅被 `tests/github-engine.test.mjs` 使用。**不要在其中新增功能**；
+> 它属于待清理项（见 `docs/状态总览-20260912.md` P-03）。
 
 ## 6. Mutation Pipeline
 
@@ -282,13 +297,15 @@ Next
 
 ## 10. Authentication
 
-优先：
+目标（**尚未实现**，当前使用 OAuth user token + `repo` scope）：
 
 ```text
-GitHub App
+GitHub App + installation token
+细粒度仓库授权（替代全量 repo scope）
+session 轮换与主动吊销
 ```
 
-认证流程：
+现状流程：
 
 ```text
 Browser
@@ -320,22 +337,29 @@ Authorization
 
 ## 12. API
 
-推荐：
+当前实现（与 `workers/entry.js` / `workers/repos.js` 保持一致）：
 
 ```text
-GET  /api/me
-GET  /api/repos
+POST /api/github/oauth/token
+POST /api/logout
+GET  /api/me                                    → { login, avatar }
+GET  /api/repos[?refresh=1]                     → 仓库 ACL 列表
+POST /api/repos                                 创建私有仓库（需用户明确确认）
 GET  /api/repos/:owner/:repo
 GET  /api/repos/:owner/:repo/branches
-GET  /api/repos/:owner/:repo/tree/:branch
-GET  /api/repos/:owner/:repo/file
-GET  /api/repos/:owner/:repo/download
-GET  /api/repos/:owner/:repo/history
-
-POST /api/repos/:owner/:repo/operations
-POST /api/repos/:owner/:repo/commit
-POST /api/logout
+GET  /api/repos/:owner/:repo/tree?branch=main
+GET  /api/repos/:owner/:repo/file?branch=main&path=docs/a.md
+GET  /api/repos/:owner/:repo/history?branch=main
+POST /api/repos/:owner/:repo/operations        批量变更（CAS）
 ```
+
+说明：
+
+- `branch` / `path` 是**查询参数**，不是路径段。
+- 提交由 `operations` 一并完成（一个 Tree + 一个 Commit），**没有独立的 commit 路由**。
+- 也没有独立的 download 路由：文件字节流走 `file`，支持 `Range` 与 `206`。
+
+> 新增路由时必须同步本节与 `docs/PROJECT_SPEC.md` §4。
 
 API 必须：
 
@@ -360,6 +384,16 @@ API 必须：
 ```
 
 尤其 `409` 必须被 UI 识别为 Conflict。
+
+实现中另有：
+
+```text
+413 Payload Too Large    文件超过下载上限
+502 Bad Gateway          GitHub 上游不可用
+503 Service Unavailable  D1 或必需配置缺失（如未绑定 DB、无 GITHUB_CLIENT_SECRET）
+```
+
+缺少 D1 或 secret 时**必须返回 503，不得回退到浏览器 token / PAT 模式**。
 
 ## 14. UI 原则
 
@@ -424,27 +458,26 @@ icons
 standalone
 ```
 
-缓存：
+缓存（`sw.js` 的 SHELL_ASSETS）：
 
 ```text
-HTML
+HTML（index / notepad / 404 / 隐私 / 条款 / OAuth 回调）
 CSS
 JS
 icons
 manifest
 ```
 
-GitHub API：
+策略：
 
 ```text
-Network First
+HTML / CSS / JS / manifest → Network First（失败回落缓存）
+icons 等静态资源         → Cache First
+/api/*                   → 永不拦截、永不缓存
 ```
 
-不要缓存：
-
-```text
-/api/*
-```
+`CACHE_NAME` 由 `js/app-version.js` 的 `APP_VERSION` 组成；
+改动前端资源后运行 `node scripts/bump-cache.js` 让旧缓存失效。
 
 离线时不能假装已经 Commit。
 
@@ -484,23 +517,22 @@ GitHub API endpoint 应由服务端固定生成。
 
 ## 19. Tree Cache
 
-缓存键：
+浏览器端的仓库树缓存（`js/githubdisk.js`）按当前 HEAD 作键：
 
 ```text
 owner/repo/branch/head
 ```
 
-不要只缓存：
+不要只按 `owner/repo/branch` 缓存——HEAD 变了必须能拿到新树。
 
-```text
-owner/repo/branch
-```
-
-HEAD 改变：
+HEAD 改变时（提交成功、刷新、跨设备同步）：
 
 ```text
 invalidate TreeIndex
 ```
+
+> 注意：写操作的最终权威在 Worker。客户端的树缓存只是加速读取；
+> 服务端每次写入都会重新读取远端 HEAD 并做 CAS，不依赖客户端缓存是否新鲜。
 
 ## 20. 不要盲目重构
 
@@ -682,60 +714,59 @@ expectedHead=A
 409 Conflict
 ```
 
-## 23. SY-GSP 专项测试
+## 23. 集成与删除语义
 
-重点测试：
+### 23.1 删除语义（最容易被漏掉的一类 bug）
+
+**删除必须真正落到 Git Tree 上，不能在仓库里留下残留文件。**
+
+重点验证：
 
 ```text
-Siyuan
+仓库中已存在 old.md
 ↓
-SY-GSP
+通过应用删除它
 ↓
-Markdown
+Git Tree 中 old.md 必须消失
 ↓
-GitHub
+产生一个对应的 Commit
 ```
 
-尤其：
+判据：操作完成后重新拉取远端树，**不能仍能读到 `old.md`**。
+这一类问题的典型成因是提交时误用了 `base_tree`（GitHub 会把它当 patch，
+被省略的路径得以保留），见 §3 Batch 与 `workers/operations.js` 的注释。
+
+### 23.2 第三方工具 / 编辑器集成
+
+本应用常被其他工具当作 GitHub 仓库的后端使用（笔记软件导出 Markdown、
+同步工具、脚本等）。这类集成必须覆盖：
 
 ```text
-删除 Siyuan 笔记
+外部工具写入 → 应用内可见
+应用内修改   → 外部工具拉取后一致
+外部工具删除 → 应用内不再显示
+应用内删除   → 远端文件消失（见 23.1）
 ```
 
-如果已有：
+### 23.3 平台间往返
 
 ```text
-old.md
-```
-
-删除笔记后必须：
-
-```text
-old.md
-↓
-Git Tree deletion
-↓
-GitHub commit
-```
-
-不能留下 `old.md`。
-
-还必须测试：
-
-```text
-新建
-修改
-删除
-重命名
-移动
-批量删除
-Android ↔ NAS
+Android ↔ 服务端 / NAS
 NAS ↔ GitHub
 GitHub ↔ Android
-两台设备同时修改
-一端删除、一端修改
-一端移动、一端修改
 ```
+
+必须验证往返之后：
+
+```text
+文件内容一致
+文件名（含中文、空格、特殊字符）一致
+目录结构一致
+没有重复文件
+```
+
+> 文件名一致性尤其要注意 Unicode 规范化：路径入库前统一 NFC，
+> 同时兼容仓库中历史遗留的 NFD 名称（见 `workers/operations.js` 的 `pathOf`）。
 
 ## 24. 重点场景
 
@@ -778,7 +809,11 @@ Branch HEAD
 
 ## 26. Commit
 
-Commit message 应清晰，例如：
+> 注意区分两种「commit message」：本节指的是**写入 GitHub 仓库的 Git commit message**
+> （默认 `Batch file operations`，由 `workers/operations.js` 生成）；
+> 而**本仓库自身的 git commit** 必须用中文，规则见 §33。
+
+写入仓库的 commit message 应清晰，例如：
 
 ```text
 Create docs/a.md
