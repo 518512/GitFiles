@@ -57,7 +57,7 @@ GitHub Repository，并引入 Cloudflare Worker + D1 后端、Git Data 变更管
 | 部署 | GitHub Pages | Workers + Static Assets |
 | 测试 | 无 | 77 项 |
 
-GitFiles 已脱离 fork 网络，作为独立仓库维护。完整差异与实测数据见
+GitFiles 按独立项目维护（注：GitHub 平台层面的 fork 标记尚未解除）。完整差异与实测数据见
 [`docs/架构现状-20260912.md`](docs/架构现状-20260912.md) 第 2–3 节。
 
 ## 核心能力
