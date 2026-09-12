@@ -298,6 +298,8 @@ node --test tests/github-engine.test.mjs tests/worker-api.test.mjs tests/markdow
 
 ## 12. 当前状态与后续
 
-已实现：Workers static assets、D1 session/ACL 基础、HttpOnly session cookie、同源 repo API、Worker Git Data mutation、CAS、空仓库首次写入、前端同源 API、session 状态条、基础 Conflict Center。
+> **进度以 [`状态总览-20260912.md`](状态总览-20260912.md) 为唯一权威来源**，本节只做摘要，不再逐一维护。
 
-待完成：GitHub App installation token 替代 OAuth user token、session 轮换与清理任务、文本三方合并、跨仓库转移恢复、完整内容预览安全审计、真实 D1/Worker 端到端部署测试。
+已实现：Workers static assets、D1 session/ACL（含 TTL 重校验与写操作强制重校）、HttpOnly session cookie、同源 repo API、Worker Git Data mutation、CAS、空仓库首次写入、前端同源 API、session 状态条、基础 Conflict Center、OAuth 投递 origin 白名单、流式文件下载（Range）、批量 blob 并发、大仓库惰性子树遍历、NFC 路径规范化、首页工作区入口化、README 安全渲染（`js/markdown-lite.js`）。
+
+待完成（详见状态总览第 3 节）：Conflict Center 状态机与三方合并（P-01/P-06）、GitHub App installation token 与 session 轮换（P-02）、真实 D1/Worker 端到端部署验证（P-07）、UI V2 剩余信息架构（P-04）、死代码清理（P-03）。

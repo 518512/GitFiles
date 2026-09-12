@@ -15,6 +15,19 @@
 
 GitFiles treats a GitHub Repository as a reliable cloud file system. The browser calls only the same-origin Worker API; GitHub access tokens remain in Worker D1 sessions and are used through HttpOnly cookies. The Worker Git Data pipeline performs writes while preserving correct Tree, Commit, and branch-ref history.
 
+> **Project status**: see [`docs/状态总览-20260912.md`](docs/状态总览-20260912.md) (the single source of truth for what is done and what is planned).
+> **Documentation index**: see [`docs/README.md`](docs/README.md).
+
+### Relationship to upstream
+
+This project is derived from [fi3ik-mme/storage-hub](https://github.com/fi3ik-mme/storage-hub) by Mykhailo Mikus.
+Upstream is a **client-only** browser file manager (Google Drive centric, no backend).
+GitFiles adds a Cloudflare Worker + D1 backend, a Git Data mutation pipeline, and CAS,
+and moves the data model from Google Drive to Git objects. See
+[`docs/架构现状-20260912.md`](docs/架构现状-20260912.md) section 3.
+
+Upstream declares no LICENSE. Do not redistribute this derivative until licensing is clarified.
+
 ## Core capabilities
 
 - GitHub OAuth sign-in creates only a Worker session. It never automatically creates or mounts a repository.
@@ -130,4 +143,4 @@ node scripts/check-ui.mjs
 - README preview uses the built-in MarkdownLite (safety first: no tables, task lists or nested lists, and raw HTML is never emitted).
 - Local storage is text-only; binary uploads are rejected explicitly.
 
-See [docs/PROJECT_SPEC.md](docs/PROJECT_SPEC.md) for the complete specification. Chinese change records live in `docs/改造记录-*.md`.
+See [docs/PROJECT_SPEC.md](docs/PROJECT_SPEC.md) for the specification, [docs/状态总览-20260912.md](docs/状态总览-20260912.md) for project status, and [docs/README.md](docs/README.md) for the documentation index.
