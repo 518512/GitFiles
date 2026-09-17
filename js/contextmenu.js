@@ -8,6 +8,18 @@ const ContextMenu = (() => {
     return NEW_FILE_TYPES.find((t) => t.type === fileType);
   }
 
+  /**
+   * 多选（移动端底部操作条 / 批量）模式下的剪贴板写入。
+   *
+   * 单文件路径（case 'copy' / 'cut'）已经支持，但那是逐项的。
+   * 这里提供一次写入整组 items 的入口，供操作条多选调用，
+   * 避免"多选复制/移动请使用右键菜单"这种移动端走不通的提示。
+   */
+  function setClipboardMode(mode, userId, items, parentId) {
+    clipboard = { mode, userId, items, parentId: parentId || null };
+    app.showStatus(`${mode === 'cut' ? '已剪切' : '已复制'} ${items.length} 个项目，可粘贴`);
+  }
+
   function getClipboardSourceLabel() {
     if (!clipboard?.userId) return null;
     if (LocalDisk.isLocalId(clipboard.userId)) {
@@ -1644,5 +1656,5 @@ const ContextMenu = (() => {
     return executeAction(action);
   }
 
-  return { init, show, showContext, showAddDiskMenu, hide, getClipboard, runAction, transferItems };
+  return { init, show, showContext, showAddDiskMenu, hide, getClipboard, setClipboardMode, runAction, transferItems };
 })();

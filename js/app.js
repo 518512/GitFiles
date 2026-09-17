@@ -1298,7 +1298,7 @@ const App = (() => {
         <span class="file-name">${escapeHtml(file.name)}</span>
         ${statusHtml}
       `;
-      item.addEventListener('click', (event) => selectFile(file.id, event));
+      item.addEventListener('click', (event) => handleItemTap(event, file));
       item.addEventListener('dblclick', () => openFile(file));
       attachFileContextMenu(item, file);
       bindDragDropForWorkspaceItem(item, file);
@@ -1333,7 +1333,7 @@ const App = (() => {
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
         </button>
       `;
-      row.addEventListener('click', (event) => selectFile(file.id, event));
+      row.addEventListener('click', (event) => handleItemTap(event, file));
       row.addEventListener('dblclick', () => openFile(file));
       attachFileContextMenu(row, file);
       bindDragDropForWorkspaceItem(row, file);
@@ -1348,7 +1348,21 @@ const App = (() => {
     return div.innerHTML;
   }
 
+  /**
+   * 选中一个文件。
+   *
+   * 两个要点（交互排查后的修正）：
+   *
+   * 1. **增量更新，不整表重渲染**：原先每次点选都换 `renderCurrentView()`，
+   *    整个 grid/list 被 innerHTML 重建——多选、大目录下卡顿，滚动位置也被重置。
+   *    现在只切换被点项自己的 selected 类 + 更新操作条。
+   * 2. **归档项 `..` 不进入选中**：检查 `__go_up__` 与 `state.files` 存在性。
+   */
   function selectFile(id, event = null) {
+    if (id === '__go_up__') return;                    // D：返回上级行不是可选文件
+    const file = state.files.find((f) => f.id === id);
+    if (!file) return;                                 // 兜底：不存在的项不处理
+
     if (event?.ctrlKey || event?.metaKey || event?.shiftKey) {
       if (state.selectedIds.has(id)) state.selectedIds.delete(id);
       else state.selectedIds.add(id);
@@ -1356,10 +1370,54 @@ const App = (() => {
       state.selectedIds = new Set([id]);
     }
     state.selectedId = id;
+
+    // 增量更新：只切被点项的状态，不重建整个列表
+    updateItemSelectedState(id, state.selectedIds.has(id));
     updateSelectionBar();
-    renderCurrentView();
-    const file = state.files.find((f) => f.id === id);
-    $('#status-selected').textContent = file ? file.name : '';
+    $('#status-selected').textContent = file.name;
+  }
+
+  /** 只更新单个 grid/list 项的选中态，避免整表重绘（问题 B）。 */
+  /**
+   * 列表 / 网格单个项的 tap/click 分发。
+   *
+   * 桌面：单击选中（保持原有 dblclick 打开）。
+   * 移动端：单击即打开文件（见 openFileOnTap）。
+   */
+  function handleItemTap(event, file) {
+    // 修饰键多选用法保留：ctrl/shift 选中
+    if (event.ctrlKey || event.metaKey || event.shiftKey) {
+      selectFile(file.id, event);
+      return;
+    }
+    if (isMobileLayout()) {
+      openFileOnTap(event, file);
+      return;
+    }
+    selectFile(file.id, event);
+  }
+
+  function updateItemSelectedState(id, selected) {
+    [$('#file-grid'), $('#file-list')].forEach((root) => {
+      const el = root?.querySelector(`[data-id="${CSS.escape(id)}"]`);
+      el?.classList.toggle('selected', selected);
+    });
+  }
+
+  /**
+   * 轻点（移动端）打开文件。
+   *
+   * 交互模型（问题 A 修正）：
+   *   - 移动端：单击即打开（dblclick 在触屏上不可靠，之前"点不开文件"）。
+   *     长按仍弹上下文菜单（attachLongPress），两种手势不含糊。
+   *   - 桌面端：单击选中、双击打开保持不变（这里只被 click 的移动端分支调用）。
+   */
+  function openFileOnTap(event, file) {
+    if (event) {
+      // 点的是行内"更多"按钮等，不应触发打开（它们的处理器会 stopPropagation，防御性判断）
+      if (event.target.closest('.item-more-btn, .ctx-sheet-close, [data-selection-action]')) return;
+    }
+    openFile(file);
   }
 
   async function downloadLocalFile(file) {
@@ -3279,8 +3337,14 @@ const App = (() => {
           GithubDisk.deleteBatch(state.currentUserId, files, `Delete ${files.length} items`).catch(showError);
           return;
         }
+        // 多选（移动端底部操作条）：copy / cut 把整组写入剪贴板，paste 走批量拷贝。
+        // 原来这里提示"请使用右键菜单"，但移动端没有右键，等于死路。
+        if (files.length > 1 && (action === 'copy' || action === 'cut')) {
+          ContextMenu.setClipboardMode(action, state.currentUserId, files, state.currentFolderId);
+          return;
+        }
         if (files.length > 1) {
-          showStatus('多选复制和移动请使用右键菜单中的批量操作');
+          showStatus(`多选${action === 'delete' ? '删除' : '操作'}：请在文件上先打开批量操作。`);
           return;
         }
         ContextMenu.runAction(action, buildFileContext(file));
