@@ -5,7 +5,7 @@
 **A GitHub Repository file manager PWA powered by Cloudflare Workers**
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/MbAIGC/GitFiles)
-[![Tests](https://img.shields.io/badge/tests-77%20passing-2da44e)](tests/)
+[![Tests](https://img.shields.io/badge/tests-83%20passing-2da44e)](tests/)
 
 [简体中文](README.md) · English
 

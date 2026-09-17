@@ -1,5 +1,5 @@
 import { apiError, assertSameOrigin, json } from './http.js';
-import { clearSessionCookie, deleteSession, purgeExpiredSessions, requireSession, sessionCookie } from './session.js';
+import { clearSessionCookie, deleteSession, insertSession, purgeExpiredSessions, requireSession, sessionCookie } from './session.js';
 import { createRepository, handleRepoList, handleRepositoryApi } from './repos.js';
 import { githubRequest } from './github.js';
 
@@ -29,9 +29,15 @@ async function createSession(env, tokenPayload) {
   const { payload: user } = await githubRequest(session, '/user');
   const id = crypto.randomUUID();
   const expiresAt = Date.now() + (Number(tokenPayload.expires_in || 60 * 60 * 24 * 7) * 1000);
-  await env.DB.prepare(
-    'INSERT INTO sessions (id, github_login, github_avatar, access_token, expires_at) VALUES (?, ?, ?, ?, ?)'
-  ).bind(id, user.login, user.avatar_url || null, tokenPayload.access_token, expiresAt).run();
+  // insertSession 会在目标库尚无 github_avatar 列时自动退回旧列集合，
+  // 避免未执行 migration 的部署直接无法登录。
+  await insertSession(env, {
+    id,
+    login: user.login,
+    avatar: user.avatar_url || null,
+    accessToken: tokenPayload.access_token,
+    expiresAt,
+  });
 
   return id;
 }

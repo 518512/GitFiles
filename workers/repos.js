@@ -1,5 +1,5 @@
 import { ApiError, assertSameOrigin, parseRepoPath, readJson, json } from './http.js';
-import { requireRepositoryAccess, requireSession } from './session.js';
+import { requireRepositoryAccess, requireSession, upsertAclRow } from './session.js';
 import { branchState, githubRequest, repoPrefix, streamFile } from './github.js';
 import { executeOperations } from './operations.js';
 
@@ -96,9 +96,14 @@ export async function createRepository(request, env) {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ name, private: body.private !== false, auto_init: true }),
   });
-  await env.DB.prepare(
-    'INSERT OR REPLACE INTO repository_access (session_id, owner, repo, can_read, can_write, checked_at) VALUES (?, ?, ?, 1, 1, ?)'
-  ).bind(session.id, repository.owner.login, repository.name, Date.now()).run();
+  await upsertAclRow(env, {
+    sessionId: session.id,
+    owner: repository.owner.login,
+    repo: repository.name,
+    canRead: 1,
+    canWrite: 1,
+    checkedAt: Date.now(),
+  });
   return json({ repository }, 201);
 }
 
@@ -135,11 +140,17 @@ export async function handleRepoList(request, env) {
       can_write: repo.permissions?.push || repo.permissions?.admin ? 1 : 0,
     }];
   });
-  const checkedAt = Date.now();
-  const statements = shaped.map((repo) => env.DB.prepare(
-    'INSERT OR REPLACE INTO repository_access (session_id, owner, repo, can_read, can_write, checked_at) VALUES (?, ?, ?, ?, ?, ?)'
-  ).bind(session.id, repo.owner, repo.repo, repo.can_read, repo.can_write, checkedAt));
-  if (statements.length && typeof env.DB.batch === 'function') await env.DB.batch(statements);
-  else await Promise.all(statements.map((statement) => statement.run()));
+  // 逐条写入：upsertAclRow 负责在缺 checked_at 列的旧库上回退。
+  // 这批是拿用户的 token 校验过的结果，重新落库以刷新 TTL。
+  for (const repo of shaped) {
+    await upsertAclRow(env, {
+      sessionId: session.id,
+      owner: repo.owner,
+      repo: repo.repo,
+      canRead: repo.can_read,
+      canWrite: repo.can_write,
+      checkedAt: Date.now(),
+    });
+  }
   return json({ repositories: shaped.filter((repo) => repo.can_read), cached: false });
 }

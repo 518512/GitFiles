@@ -3,7 +3,7 @@ import test from 'node:test';
 import worker from '../workers/entry.js';
 import { executeOperations } from '../workers/operations.js';
 import { githubRequest } from '../workers/github.js';
-import { requireRepositoryAccess } from '../workers/session.js';
+import { __resetSessionColumnCache, insertSession, requireRepositoryAccess } from '../workers/session.js';
 
 function request(path, options = {}) {
   return new Request(`https://gitfiles.example${path}`, options);
@@ -672,6 +672,156 @@ test('deleting a pre-existing NFD path removes it instead of failing', async () 
       branch: 'main', expectedHead: 'head-A', operations: [{ type: 'delete', path: 'cafe\u0301.md' }],
     });
     assert.deepEqual(treeBody.tree.map((entry) => entry.path), ['keep.md']);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+// ---------------------------------------------------------------------------
+// 可选列兼容：sessions.github_avatar 是后加的列，未执行 migration 的部署
+// 必须仍能登录（INSERT 若引用不存在的列会让用户彻底无法登录）
+// ---------------------------------------------------------------------------
+
+/** 模拟「库中尚无 github_avatar 列」的 D1 */
+function dbWithoutAvatarColumn() {
+  const statements = [];
+  return {
+    statements,
+    DB: { prepare: makePrepare(statements) },
+  };
+  function makePrepare(list) {
+    return (sql) => {
+      return {
+        bind(...args) {
+          return {
+            async first() {
+              if (/github_avatar/.test(sql) && sql.startsWith('SELECT')) {
+                throw new Error('D1_ERROR: table sessions has no column named github_avatar: SQLITE_ERROR');
+              }
+              return null;
+            },
+            async run() {
+              if (/github_avatar/.test(sql)) {
+                throw new Error('D1_ERROR: table sessions has no column named github_avatar: SQLITE_ERROR');
+              }
+              list.push({ sql, args });
+              return { success: true };
+            },
+          };
+        },
+      };
+    };
+  }
+}
+
+test('insertSession falls back to the legacy column set when github_avatar is missing', async () => {
+  __resetSessionColumnCache();
+  const env = dbWithoutAvatarColumn();
+  await insertSession(env, { id: 's1', login: 'octo', avatar: 'https://example/a.png', accessToken: 't', expiresAt: 1 });
+  assert.equal(env.statements.length, 1, '应当只成功写入一次');
+  assert.ok(!/github_avatar/.test(env.statements[0].sql), '回退语句不得引用 github_avatar');
+  assert.deepEqual(env.statements[0].args, ['s1', 'octo', 't', 1]);
+});
+
+test('insertSession uses github_avatar when the column exists', async () => {
+  __resetSessionColumnCache();
+  const statements = [];
+  const env = {
+    DB: {
+      prepare(sql) {
+        return { bind(...args) { return { async run() { statements.push({ sql, args }); return { success: true }; } }; } };
+      },
+    },
+  };
+  await insertSession(env, { id: 's2', login: 'octo', avatar: 'https://example/a.png', accessToken: 't', expiresAt: 2 });
+  assert.equal(statements.length, 1);
+  assert.ok(/github_avatar/.test(statements[0].sql));
+  assert.deepEqual(statements[0].args, ['s2', 'octo', 'https://example/a.png', 't', 2]);
+});
+
+test('insertSession surfaces unrelated database errors instead of masking them', async () => {
+  __resetSessionColumnCache();
+  const env = {
+    DB: {
+      prepare() {
+        return { bind() { return { async run() { throw new Error('D1_ERROR: database is locked'); } }; } };
+      },
+    },
+  };
+  await assert.rejects(
+    () => insertSession(env, { id: 's3', login: 'o', avatar: null, accessToken: 't', expiresAt: 3 }),
+    /database is locked/
+  );
+});
+
+test('requireRepositoryAccess tolerates a database without repository_access.checked_at', async () => {
+  __resetSessionColumnCache();
+  const writes = [];
+  const env = {
+    DB: {
+      prepare(sql) {
+        return {
+          bind(...args) {
+            return {
+              async first() {
+                if (/checked_at/.test(sql)) {
+                  throw new Error('D1_ERROR: table repository_access has no column named checked_at: SQLITE_ERROR');
+                }
+                return null; // 旧库：无缓存行
+              },
+              async run() {
+                if (/checked_at/.test(sql)) {
+                  throw new Error('D1_ERROR: table repository_access has no column named checked_at: SQLITE_ERROR');
+                }
+                writes.push({ sql, args });
+                return { success: true };
+              },
+            };
+          },
+        };
+      },
+    },
+  };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ permissions: { pull: true, push: true } }), { status: 200 });
+  try {
+    const access = await requireRepositoryAccess(env, { id: 's1', access_token: 'secret' }, 'octo', 'repo', true);
+    assert.equal(access.can_write, 1);
+    assert.equal(writes.length, 1, '应当回退并成功写入一次');
+    assert.ok(!/checked_at/.test(writes[0].sql), '回退语句不得引用 checked_at');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('a repository_access row read from a legacy database counts as stale', async () => {
+  __resetSessionColumnCache();
+  let githubCalls = 0;
+  const env = {
+    DB: {
+      prepare(sql) {
+        return {
+          bind() {
+            return {
+              async first() {
+                if (/checked_at/.test(sql)) {
+                  throw new Error('D1_ERROR: table repository_access has no column named checked_at: SQLITE_ERROR');
+                }
+                // 旧库返回的行没有 checked_at
+                return { can_read: 1, can_write: 1 };
+              },
+              async run() { return { success: true }; },
+            };
+          },
+        };
+      },
+    },
+  };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => { githubCalls += 1; return new Response(JSON.stringify({ permissions: { pull: true, push: true } }), { status: 200 }); };
+  try {
+    await requireRepositoryAccess(env, { id: 's1', access_token: 'secret' }, 'octo', 'repo');
+    assert.equal(githubCalls, 1, '旧库行缺时间戳，必须回源校验一次');
   } finally {
     globalThis.fetch = originalFetch;
   }

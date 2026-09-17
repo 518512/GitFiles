@@ -5,7 +5,7 @@
 **基于 Cloudflare Workers 的 GitHub Repository 文件管理器（PWA）**
 
 [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/MbAIGC/GitFiles)
-[![Tests](https://img.shields.io/badge/tests-77%20passing-2da44e)](tests/)
+[![Tests](https://img.shields.io/badge/tests-83%20passing-2da44e)](tests/)
 
 [English](README_EN.md) · 简体中文
 
