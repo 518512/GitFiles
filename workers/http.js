@@ -11,7 +11,15 @@ export class ApiError extends Error {
 export function json(body, status = 200, headers = {}) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json; charset=utf-8', ...headers },
+    headers: {
+      'Content-Type': 'application/json; charset=utf-8',
+      // 所有 /api/* 响应都禁止任何形式的缓存：
+      // - 在 PWA 独立窗口里，浏览器 HTTP 缓存可能缓存 /api/me 的 401/200 响应，
+      //   重新打开时返回旧响应，导致"每次都要重新认证登录"
+      // - Cookie 会话的判定必须以服务端最新状态为准，不能被缓存层干扰
+      'Cache-Control': 'no-store',
+      ...headers,
+    },
   });
 }
 

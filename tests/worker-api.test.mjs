@@ -826,3 +826,15 @@ test('a repository_access row read from a legacy database counts as stale', asyn
     globalThis.fetch = originalFetch;
   }
 });
+
+test('API responses carry Cache-Control: no-store so PWA reopen never uses a stale cookie state', async () => {
+  const env = { DB: dbWith({ session: { id: 's1', github_login: 'octo', access_token: 'secret', expires_at: Date.now() + 100000 } }) };
+  const response = await worker.fetch(request('/api/me', { headers: { Cookie: 'gitfiles_session=s1' } }), env);
+  assert.equal(response.headers.get('cache-control'), 'no-store');
+  // 文件字节流之外的 JSON 端点（含设置会话 Cookie 的登录响应）也一律禁止缓存
+  const login = await worker.fetch(
+    new Request('https://gitfiles.example/api/github/oauth/token', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://gitfiles.example' }, body: '{}' }),
+    { GITHUB_CLIENT_SECRET: 'x', DB: dbWith() }
+  );
+  assert.equal(login.headers.get('cache-control'), 'no-store');
+});
