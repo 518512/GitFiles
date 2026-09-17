@@ -3,7 +3,7 @@ import test from 'node:test';
 import worker from '../workers/entry.js';
 import { executeOperations } from '../workers/operations.js';
 import { githubRequest } from '../workers/github.js';
-import { __resetSessionColumnCache, insertSession, requireRepositoryAccess } from '../workers/session.js';
+import { __resetSessionColumnCache, clearSessionCookie, insertSession, requireRepositoryAccess, sessionCookie } from '../workers/session.js';
 
 function request(path, options = {}) {
   return new Request(`https://gitfiles.example${path}`, options);
@@ -892,4 +892,26 @@ test('API responses carry Cache-Control: no-store so PWA reopen never uses a sta
     { GITHUB_CLIENT_SECRET: 'x', DB: dbWith() }
   );
   assert.equal(login.headers.get('cache-control'), 'no-store');
+});
+
+test('session cookie declares Max-Age as its own attribute (was silently a session cookie)', () => {
+  // 登录响应的 Set-Cookie 必须把 Max-Age 解析为独立属性。
+  // 曾经 cookieAttributes 缺尾分号，SameSite=Lax 与 Max-Age 被并成一个非法
+  // 属性整体丢弃 → Max-Age 从未生效 → Cookie 退化为会话级
+  // → PWA 每次关闭重开都要重新登录。
+  for (const secure of [true, false]) {
+    const request = new Request(secure ? 'https://x.example/' : 'http://x.example/');
+    const setCookie = sessionCookie('abc123', 604800, request);
+    const attrs = setCookie.split(';').map((a) => a.trim());
+    const maxAge = attrs.find((a) => a.startsWith('Max-Age='));
+    assert.ok(maxAge, `Max-Age 必须是独立属性，实际: ${setCookie}`);
+    assert.equal(maxAge, 'Max-Age=604800');
+    const sameSite = attrs.find((a) => a.startsWith('SameSite='));
+    assert.equal(sameSite, 'SameSite=Lax', 'SameSite 属性值不得混入其他内容');
+    assert.ok(attrs.includes('HttpOnly'), 'HttpOnly 必须齐备');
+    assert.equal(attrs.includes('Secure'), secure, 'Secure 应随协议出现');
+  }
+  // 注销 Cookie 同样必须能独立声明 Max-Age
+  const cleared = clearSessionCookie(new Request('https://x.example/'));
+  assert.ok(cleared.split(';').some((a) => a.trim() === 'Max-Age=0'));
 });

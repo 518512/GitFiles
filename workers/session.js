@@ -18,7 +18,11 @@ function cookieValue(request, name) {
 
 function cookieAttributes(request) {
   const isHttps = !request || new URL(request.url).protocol === 'https:';
-  return `Path=/; HttpOnly;${isHttps ? ' Secure;' : ''} SameSite=Lax`;
+  // 末尾必须带分号：拼接处是 `${cookieAttributes} Max-Age=...`，
+  // 曾经漏掉这个分号，导致 SameSite 与 Max-Age 被浏览器解析成同一个
+  // 非法属性 —— Max-Age 从未生效，Cookie 退化为会话级，
+  // PWA 每次关闭重开都会丢失登录态。
+  return `Path=/; HttpOnly;${isHttps ? ' Secure;' : ''} SameSite=Lax;`;
 }
 
 export function sessionCookie(sessionId, maxAge = 60 * 60 * 24 * 7, request = null) {
