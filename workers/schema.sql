@@ -14,6 +14,12 @@ CREATE TABLE sessions (
   github_login TEXT,
   -- 用于顶栏账户菜单显示真实头像；旧行可能为 NULL，前端会回退到首字母
   github_avatar TEXT,
+  -- GitHub App 的 user access token 8 小时过期，refresh_token 约 6 个月。
+  -- 会话由 requireSession 静默续期（见 AGENTS.md §10 与改造记录），两者缺一不可。
+  refresh_token TEXT,
+  refresh_expires_at INTEGER,
+  -- refresh_token 续期时必须携带 client_id；登录时落库，避免新增运行时配置
+  client_id TEXT,
   access_token TEXT NOT NULL,
   expires_at INTEGER NOT NULL,
   created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)

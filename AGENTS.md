@@ -297,15 +297,25 @@ Next
 
 ## 10. Authentication
 
-目标（**尚未实现**，当前使用 OAuth user token + `repo` scope）：
+**现状**：OAuth user token + `repo` scope。**refresh_token 静默续期已实现**——
+用户的 Client ID 是 GitHub App（Ov23 前缀），user access token 默认 8 小时过期，
+会话若不续期，隔夜重开 PWA 必然要求重新登录：
 
 ```text
-GitHub App + installation token
-细粒度仓库授权（替代全量 repo scope）
-session 轮换与主动吊销
+登录时把 refresh_token / refresh_expires_at / client_id 落库
+session 过期时 requireSession 用 refresh_token 向 GitHub 换新 token 并写回
+（GitHub 会轮换 refresh_token，新值必须持久化）
+Cookie 寿命对齐 refresh 有效期（最长 180 天）
 ```
 
-现状流程：
+仍属目标（未实现）：
+
+```text
+GitHub App installation token（仓库级授权，替代 user token + repo scope）
+session 主动吊销与管理界面
+```
+
+流程：
 
 ```text
 Browser

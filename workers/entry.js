@@ -28,18 +28,26 @@ async function createSession(env, tokenPayload) {
   // is intentionally lazy and runs when the repository picker is opened.
   const { payload: user } = await githubRequest(session, '/user');
   const id = crypto.randomUUID();
-  const expiresAt = Date.now() + (Number(tokenPayload.expires_in || 60 * 60 * 24 * 7) * 1000);
-  // insertSession 会在目标库尚无 github_avatar 列时自动退回旧列集合，
-  // 避免未执行 migration 的部署直接无法登录。
+  const expiresAt = Date.now() + Number(tokenPayload.expires_in || 60 * 60 * 24 * 7) * 1000;
+  // GitHub App 的交换响应会带 refresh_token（约 6 个月）与 expires_in（约 8 小时）。
+  // 必须把两者都落库：access token 过期后由 requireSession 静默续期，
+  // 否则用户隔夜重开 PWA 就要重新走一遍 OAuth。
+  const refreshExpiresAt = tokenPayload.refresh_token_expires_in
+    ? Date.now() + Number(tokenPayload.refresh_token_expires_in) * 1000
+    : null;
+  // insertSession 只写目标库实际存在的列，未执行 migration 的部署也不会登录失败。
   await insertSession(env, {
     id,
     login: user.login,
     avatar: user.avatar_url || null,
     accessToken: tokenPayload.access_token,
     expiresAt,
+    refreshToken: tokenPayload.refresh_token || null,
+    refreshExpiresAt,
+    clientId: tokenPayload.clientId || null,
   });
 
-  return id;
+  return { id, refreshExpiresAt };
 }
 
 async function handleTokenExchange(request, env) {
@@ -74,8 +82,16 @@ async function handleTokenExchange(request, env) {
     return json({ error: 'github_oauth_error', message: tokenPayload.error_description || tokenPayload.error || 'GitHub OAuth exchange failed' }, upstream.status || 502);
   }
   try {
-    const sessionId = await createSession(env, tokenPayload);
-    return json({ ok: true }, 200, { 'Set-Cookie': sessionCookie(sessionId, undefined, request) });
+    // client_id 是后续 refresh_token 续期的必要参数（GitHub App 流程），
+    // 记进 session 行，避免为此新增运行时配置。
+    const result = await createSession(env, { ...tokenPayload, clientId: body.client_id || null });
+    // Cookie 寿命对齐 refresh token：有则最长 180 天，否则维持 7 天。
+    // 之前固定 7 天，而 GitHub App 的 refresh 可用 6 个月 —— Cookie 先过期
+    // 会把"已续期的会话"重新打回登录页。
+    const maxAge = result.refreshExpiresAt
+      ? Math.min(60 * 60 * 24 * 180, Math.max(60 * 60 * 24 * 7, Math.round((result.refreshExpiresAt - Date.now()) / 1000)))
+      : undefined;
+    return json({ ok: true }, 200, { 'Set-Cookie': sessionCookie(result.id, maxAge, request) });
   } catch (error) {
     return json({ error: 'service_unavailable', message: error.message }, 503);
   }

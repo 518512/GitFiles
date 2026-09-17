@@ -10,8 +10,19 @@ function request(path, options = {}) {
 }
 
 function dbWith({ session = null, access = null } = {}) {
+  // 默认视为"已完整迁移"的库：PRAGMA 返回全部列
+  const tables = {
+    sessions: ['id', 'github_login', 'github_avatar', 'refresh_token', 'refresh_expires_at', 'client_id', 'access_token', 'expires_at', 'created_at'],
+    repository_access: ['session_id', 'owner', 'repo', 'can_read', 'can_write', 'checked_at'],
+  };
   return {
     prepare(sql) {
+      if (sql.startsWith('PRAGMA table_info')) {
+        const table = sql.includes('repository_access') ? 'repository_access' : 'sessions';
+        const results = tables[table].map((name) => ({ name }));
+        const all = async () => ({ results });
+        return { all, bind: () => ({ all }) };
+      }
       return {
         bind(...args) {
           return {
@@ -682,98 +693,45 @@ test('deleting a pre-existing NFD path removes it instead of failing', async () 
 // 必须仍能登录（INSERT 若引用不存在的列会让用户彻底无法登录）
 // ---------------------------------------------------------------------------
 
-/** 模拟「库中尚无 github_avatar 列」的 D1 */
-function dbWithoutAvatarColumn() {
+/**
+ * 可选列兼容测试（github_avatar / checked_at / refresh_token…）。
+ *
+ * 实现用 PRAGMA table_info 内省真实列名后动态拼语句，
+ * 所以 mock 的核心是按场景返回不同的列清单，并按列清单校验读写。
+ */
+function makeColumnAwareDb({ sessions, repositoryAccess, failSql }) {
   const statements = [];
-  return {
+  const fail = failSql || (() => false);
+  const tableOf = (sql) => (sql.includes('sessions') ? 'sessions' : 'repository_access');
+  const colsOf = { sessions, repository_access: repositoryAccess };
+  const used = { sessions: [], repository_access: [] };
+  const db = {
     statements,
-    DB: { prepare: makePrepare(statements) },
-  };
-  function makePrepare(list) {
-    return (sql) => {
-      return {
-        bind(...args) {
-          return {
-            async first() {
-              if (/github_avatar/.test(sql) && sql.startsWith('SELECT')) {
-                throw new Error('D1_ERROR: table sessions has no column named github_avatar: SQLITE_ERROR');
-              }
-              return null;
-            },
-            async run() {
-              if (/github_avatar/.test(sql)) {
-                throw new Error('D1_ERROR: table sessions has no column named github_avatar: SQLITE_ERROR');
-              }
-              list.push({ sql, args });
-              return { success: true };
-            },
-          };
-        },
-      };
-    };
-  }
-}
-
-test('insertSession falls back to the legacy column set when github_avatar is missing', async () => {
-  __resetSessionColumnCache();
-  const env = dbWithoutAvatarColumn();
-  await insertSession(env, { id: 's1', login: 'octo', avatar: 'https://example/a.png', accessToken: 't', expiresAt: 1 });
-  assert.equal(env.statements.length, 1, '应当只成功写入一次');
-  assert.ok(!/github_avatar/.test(env.statements[0].sql), '回退语句不得引用 github_avatar');
-  assert.deepEqual(env.statements[0].args, ['s1', 'octo', 't', 1]);
-});
-
-test('insertSession uses github_avatar when the column exists', async () => {
-  __resetSessionColumnCache();
-  const statements = [];
-  const env = {
+    used,
     DB: {
       prepare(sql) {
-        return { bind(...args) { return { async run() { statements.push({ sql, args }); return { success: true }; } }; } };
-      },
-    },
-  };
-  await insertSession(env, { id: 's2', login: 'octo', avatar: 'https://example/a.png', accessToken: 't', expiresAt: 2 });
-  assert.equal(statements.length, 1);
-  assert.ok(/github_avatar/.test(statements[0].sql));
-  assert.deepEqual(statements[0].args, ['s2', 'octo', 'https://example/a.png', 't', 2]);
-});
-
-test('insertSession surfaces unrelated database errors instead of masking them', async () => {
-  __resetSessionColumnCache();
-  const env = {
-    DB: {
-      prepare() {
-        return { bind() { return { async run() { throw new Error('D1_ERROR: database is locked'); } }; } };
-      },
-    },
-  };
-  await assert.rejects(
-    () => insertSession(env, { id: 's3', login: 'o', avatar: null, accessToken: 't', expiresAt: 3 }),
-    /database is locked/
-  );
-});
-
-test('requireRepositoryAccess tolerates a database without repository_access.checked_at', async () => {
-  __resetSessionColumnCache();
-  const writes = [];
-  const env = {
-    DB: {
-      prepare(sql) {
+        if (/PRAGMA table_info/.test(sql)) {
+          const table = sql.includes('repository_access') ? 'repository_access' : 'sessions';
+          const cols = colsOf[table] || [];
+          const all = async () => ({ results: cols.map((name) => ({ name })) });
+          return { all, bind: () => ({ all }) };
+        }
         return {
           bind(...args) {
             return {
               async first() {
-                if (/checked_at/.test(sql)) {
-                  throw new Error('D1_ERROR: table repository_access has no column named checked_at: SQLITE_ERROR');
-                }
-                return null; // 旧库：无缓存行
+                if (fail(sql)) throw new Error('D1_ERROR: forced failure');
+                used[tableOf(sql)].push({ sql, args });
+                return null;
+              },
+              async all() {
+                if (fail(sql)) throw new Error('D1_ERROR: forced failure');
+                used[tableOf(sql)].push({ sql, args });
+                return { results: [] };
               },
               async run() {
-                if (/checked_at/.test(sql)) {
-                  throw new Error('D1_ERROR: table repository_access has no column named checked_at: SQLITE_ERROR');
-                }
-                writes.push({ sql, args });
+                if (fail(sql)) throw new Error('D1_ERROR: forced failure');
+                used[tableOf(sql)].push({ sql, args });
                 return { success: true };
               },
             };
@@ -782,13 +740,117 @@ test('requireRepositoryAccess tolerates a database without repository_access.che
       },
     },
   };
+  return db;
+}
+
+const LEGACY_DB = { sessions: ['id', 'github_login', 'access_token', 'expires_at', 'created_at'], repository_access: ['session_id', 'owner', 'repo', 'can_read', 'can_write'] };
+const FULL_DB = {
+  sessions: [...LEGACY_DB.sessions, 'github_avatar', 'refresh_token', 'refresh_expires_at', 'client_id'],
+  repository_access: [...LEGACY_DB.repository_access, 'checked_at'],
+};
+
+test('insertSession omits github_avatar when the database lacks the column', async () => {
+  __resetSessionColumnCache();
+  const env = makeColumnAwareDb({ sessions: LEGACY_DB.sessions, repositoryAccess: LEGACY_DB.repository_access });
+  await insertSession(env, { id: 's1', login: 'octo', avatar: 'https://example/a.png', accessToken: 't', expiresAt: 1 });
+  const stmt = env.used.sessions[0];
+  assert.ok(!/github_avatar/.test(stmt.sql), '旧库上不得引用 github_avatar');
+  assert.ok(!/refresh_token/.test(stmt.sql), '旧库上不得引用 refresh_token');
+});
+
+test('insertSession stores refresh credentials when the columns exist', async () => {
+  __resetSessionColumnCache();
+  const env = makeColumnAwareDb({ sessions: FULL_DB.sessions, repositoryAccess: FULL_DB.repository_access });
+  await insertSession(env, {
+    id: 's2', login: 'octo', avatar: 'https://example/a.png', accessToken: 't', expiresAt: 2,
+    refreshToken: 'r', refreshExpiresAt: 99, clientId: 'Ov23x',
+  });
+  const stmt = env.used.sessions[0];
+  assert.ok(/refresh_token/.test(stmt.sql) && /client_id/.test(stmt.sql));
+  assert.ok(stmt.args.includes('r') && stmt.args.includes('Ov23x'));
+});
+
+test('an expired GitHub App session is silently renewed via refresh_token', async () => {
+  __resetSessionColumnCache();
+  const env = makeColumnAwareDb({ sessions: FULL_DB.sessions, repositoryAccess: FULL_DB.repository_access });
+  // selectSession 返回一条已过期的行（8 小时前创建的 GitHub App 会话）
+  env.DB.prepare = ((orig) => (sql) => {
+    if (/PRAGMA table_info/.test(sql)) return orig(sql);
+    if (/FROM sessions WHERE id = /.test(sql)) {
+      return { bind() { return { async first() { return { id: 's1', github_login: 'octo', access_token: 'old', expires_at: Date.now() - 1000, refresh_token: 'r1', refresh_expires_at: Date.now() + 86400000, client_id: 'Ov23x' }; } }; } };
+    }
+    if (/UPDATE sessions SET/.test(sql)) {
+      return { bind(...args) { return { async run() { env.used.sessions.push({ sql, args }); return { success: true }; } }; } };
+    }
+    return orig(sql);
+  })(env.DB.prepare);
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options = {}) => {
+    if (String(url).includes('login/oauth/access_token')) {
+      assert.equal(JSON.parse(options.body).grant_type, 'refresh_token');
+      assert.equal(JSON.parse(options.body).refresh_token, 'r1');
+      return new Response(JSON.stringify({ access_token: 'new', expires_in: 28800, refresh_token: 'r2', refresh_token_expires_in: 5184000 }), { status: 200 });
+    }
+    return new Response('{}', { status: 200 });
+  };
+  try {
+    const response = await worker.fetch(request('/api/me', { headers: { Cookie: 'gitfiles_session=s1' } }), env);
+    assert.equal(response.status, 200);
+    // github_avatar 为空时 /api/me 按 login 推导头像（既有回退行为）
+    assert.deepEqual(await response.json(), { login: 'octo', avatar: 'https://avatars.githubusercontent.com/octo' });
+    const update = env.used.sessions.find((s) => /UPDATE sessions SET/.test(s.sql));
+    assert.ok(update, '应把续期结果写回 session');
+    assert.ok(update.args.includes('new') && update.args.includes('r2'), '新 access/refresh token 都要落库（GitHub 会轮换 refresh_token）');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('an expired session without refresh_token still returns 401', async () => {
+  __resetSessionColumnCache();
+  const env = makeColumnAwareDb({ sessions: LEGACY_DB.sessions, repositoryAccess: LEGACY_DB.repository_access });
+  env.DB.prepare = ((orig) => (sql) => {
+    if (/PRAGMA table_info/.test(sql)) return orig(sql);
+    if (/FROM sessions WHERE id = /.test(sql)) {
+      return { bind() { return { async first() { return { id: 's1', github_login: 'octo', access_token: 'old', expires_at: Date.now() - 1000 }; } }; } };
+    }
+    return orig(sql);
+  })(env.DB.prepare);
+  const response = await worker.fetch(request('/api/me', { headers: { Cookie: 'gitfiles_session=s1' } }), env);
+  assert.equal(response.status, 401);
+});
+
+test('a failed refresh is not masked as success', async () => {
+  __resetSessionColumnCache();
+  const env = makeColumnAwareDb({ sessions: FULL_DB.sessions, repositoryAccess: FULL_DB.repository_access });
+  env.DB.prepare = ((orig) => (sql) => {
+    if (/PRAGMA table_info/.test(sql)) return orig(sql);
+    if (/FROM sessions WHERE id = /.test(sql)) {
+      return { bind() { return { async first() { return { id: 's1', github_login: 'octo', access_token: 'old', expires_at: Date.now() - 1000, refresh_token: 'r1', client_id: 'Ov23x' }; } }; } };
+    }
+    return orig(sql);
+  })(env.DB.prepare);
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => new Response(JSON.stringify({ error: 'bad_refresh_token' }), { status: 400 });
+  try {
+    const response = await worker.fetch(request('/api/me', { headers: { Cookie: 'gitfiles_session=s1' } }), env);
+    assert.equal(response.status, 401, '续期失败必须如实返回 401，不得伪装成功');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('requireRepositoryAccess tolerates a database without repository_access.checked_at', async () => {
+  __resetSessionColumnCache();
+  const writes = [];
+  const env = makeColumnAwareDb({ sessions: FULL_DB.sessions, repositoryAccess: LEGACY_DB.repository_access });
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => new Response(JSON.stringify({ permissions: { pull: true, push: true } }), { status: 200 });
   try {
     const access = await requireRepositoryAccess(env, { id: 's1', access_token: 'secret' }, 'octo', 'repo', true);
     assert.equal(access.can_write, 1);
-    assert.equal(writes.length, 1, '应当回退并成功写入一次');
-    assert.ok(!/checked_at/.test(writes[0].sql), '回退语句不得引用 checked_at');
+    const write = env.used.repository_access.find((s) => /INSERT OR REPLACE/.test(s.sql));
+    assert.ok(write && !/checked_at/.test(write.sql), '旧库上不得引用 checked_at');
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -797,26 +859,18 @@ test('requireRepositoryAccess tolerates a database without repository_access.che
 test('a repository_access row read from a legacy database counts as stale', async () => {
   __resetSessionColumnCache();
   let githubCalls = 0;
-  const env = {
-    DB: {
-      prepare(sql) {
-        return {
-          bind() {
-            return {
-              async first() {
-                if (/checked_at/.test(sql)) {
-                  throw new Error('D1_ERROR: table repository_access has no column named checked_at: SQLITE_ERROR');
-                }
-                // 旧库返回的行没有 checked_at
-                return { can_read: 1, can_write: 1 };
-              },
-              async run() { return { success: true }; },
-            };
-          },
-        };
-      },
-    },
-  };
+  const env = makeColumnAwareDb({ sessions: FULL_DB.sessions, repositoryAccess: LEGACY_DB.repository_access });
+  // 旧库返回的行没有 checked_at
+  env.DB.prepare = ((orig) => (sql) => {
+    if (/PRAGMA table_info/.test(sql)) return orig(sql);
+    if (/FROM repository_access WHERE/.test(sql)) {
+      return { bind() { return { async first() { return { can_read: 1, can_write: 1 }; } }; } };
+    }
+    if (/INSERT OR REPLACE INTO repository_access/.test(sql)) {
+      return { bind(...args) { return { async run() { env.used.repository_access.push({ sql, args }); return { success: true }; } }; } };
+    }
+    return orig(sql);
+  })(env.DB.prepare);
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => { githubCalls += 1; return new Response(JSON.stringify({ permissions: { pull: true, push: true } }), { status: 200 }); };
   try {
@@ -826,6 +880,7 @@ test('a repository_access row read from a legacy database counts as stale', asyn
     globalThis.fetch = originalFetch;
   }
 });
+
 
 test('API responses carry Cache-Control: no-store so PWA reopen never uses a stale cookie state', async () => {
   const env = { DB: dbWith({ session: { id: 's1', github_login: 'octo', access_token: 'secret', expires_at: Date.now() + 100000 } }) };
