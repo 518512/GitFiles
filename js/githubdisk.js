@@ -962,6 +962,36 @@ const GithubDisk = (() => {
     return disks.slice();
   }
 
+  /**
+   * 当前 Worker 会话对应的 GitHub 登录名（小写）。
+   *
+   * 挂载记录是**按账号保留**的：退出登录不再删除它们，重新登录同一账号后
+   * 会自动重新出现；换账号时属于别人的挂载不会展示，但仍留在 localStorage，
+   * 等原账号回来即可恢复。
+   */
+  let activeAccountLogin = null;
+
+  /** app.js 在 /api/me 成功后调用；退出登录时传 null。 */
+  function setActiveAccount(login) {
+    activeAccountLogin = login ? String(login).toLowerCase() : null;
+  }
+
+  /**
+   * 当前账号可见的挂载（`getDisks()` 仍是不过滤的全量列表，供卸载/持久化使用）。
+   *
+   * 账号未知时不过滤：`/api/me` 暂时不可用（unavailable）时不应该让用户
+   * 看不到自己的存储，真正的访问控制始终由 Worker 侧 ACL 兜底。
+   */
+  function getVisibleDisks() {
+    const login = activeAccountLogin;
+    if (!login) return disks.slice();
+    return disks.filter((disk) => {
+      const owner = String(disk.accountLogin || '').toLowerCase();
+      // 早期记录没有 accountLogin，无法归属，按可见处理
+      return !owner || owner === login;
+    });
+  }
+
   function getDisk(diskId) {
     return disks.find((d) => d.id === diskId) || null;
   }
@@ -2275,6 +2305,8 @@ const GithubDisk = (() => {
     setTransferListener,
     getFileSaveState,
     getDisks,
+    getVisibleDisks,
+    setActiveAccount,
     getDisk,
     getDiskByName,
     removeDisk,

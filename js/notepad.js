@@ -473,7 +473,7 @@ const Notepad = (() => {
     LocalDisk.getDisks().forEach((disk) => {
       options.push({ kind: 'local', id: disk.id, label: `${disk.name}（本地存储）` });
     });
-    GithubDisk.getDisks().forEach((disk) => {
+    GithubDisk.getVisibleDisks().forEach((disk) => {
       options.push({ kind: 'github', id: disk.id, label: `${disk.name}（GitHub 仓库）` });
     });
     Auth.getUsers().forEach((user) => {

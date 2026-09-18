@@ -166,7 +166,7 @@ const ContextMenu = (() => {
   function buildRootMenuItems() {
     const userCount = Auth.getUsers().length;
     const localCount = LocalDisk.getDisks().length;
-    const githubCount = GithubDisk.getDisks().length;
+    const githubCount = GithubDisk.getVisibleDisks().length;
     return [
       { action: 'open', label: `打开 ${typeof SITE !== 'undefined' ? SITE.name : 'GitFiles'}`, icon: '🏠' },
       { sep: true },
@@ -511,7 +511,8 @@ const ContextMenu = (() => {
 
   async function buildRootMetricsRows() {
     const localDisks = LocalDisk.getDisks();
-    const githubDisks = GithubDisk.getDisks();
+    // 只统计当前账号可见的仓库；其它账号的挂载仍保留在本地但不计入界面
+    const githubDisks = GithubDisk.getVisibleDisks();
     const localProfile = LocalUser.getProfile();
     const mountCount = localDisks.length + githubDisks.length;
     const rows = [
@@ -676,8 +677,9 @@ const ContextMenu = (() => {
           const disk = getContextLocalDisk(ctx);
           if (!disk) break;
           if (await Dialog.confirm(
-            `Eject (Remove) "${disk.name}"? All files stored in this volume will be deleted.`,
-            { title: 'Eject (Remove)', confirmLabel: 'Remove', danger: true }
+            `确定要移除本地存储「${disk.name}」吗？\n\n其中保存的所有文件都会被永久删除，无法恢复。\n` +
+            '（若只是想退出登录，请用账户菜单里的「退出登录」——那不会删除任何数据。）',
+            { title: '移除本地存储', confirmLabel: '永久删除', danger: true }
           )) {
             await app.ejectLocalDisk?.(disk.id);
           }
@@ -699,8 +701,9 @@ const ContextMenu = (() => {
           const disk = getContextGithubDisk(ctx);
           if (!disk) break;
           if (await Dialog.confirm(
-            `Eject "${disk.name}"? GitHub token and mounted storage metadata will be removed.`,
-            { title: 'Eject GitHub storage', confirmLabel: 'Eject', danger: true }
+            `确定要卸载 GitHub 仓库「${disk.name}」吗？\n\n只会移除本应用里的挂载记录；` +
+            'GitHub 上的仓库内容不受影响，重新登录后仍可再次挂载。',
+            { title: '卸载 GitHub 存储', confirmLabel: '卸载', danger: true }
           )) {
             await app.ejectGithubDisk?.(disk.id);
           }
@@ -712,7 +715,9 @@ const ContextMenu = (() => {
           const hasGithub = GithubDisk.getDisks().length > 0;
           if (!hasUsers && !hasLocal && !hasGithub) break;
           if (await Dialog.confirm(
-            '确定要移除所有存储吗？已登录的账号会退出，本地和 GitHub 存储挂载也会移除。',
+            '确定要移除所有存储吗？\n\n已登录的账号会退出，所有挂载都会被移除；' +
+            '本地存储中的文件数据会被永久删除（GitHub 仓库内容不受影响）。\n' +
+            '若只想退出登录并保留挂载，请用账户菜单里的「退出登录」。',
             { title: '移除所有存储', confirmLabel: '全部移除', danger: true }
           )) {
             await app.ejectAllDrives?.();

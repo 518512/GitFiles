@@ -163,7 +163,7 @@ const App = (() => {
     const stateEl = $('#user-menu-state');
     const avatar = $('#user-menu-avatar');
     const signOutBtn = $('#btn-user-sign-out');
-    const disk = GithubDisk.getDisks()[0] || null;
+    const disk = GithubDisk.getVisibleDisks()[0] || null;
     const label = githubLogin || disk?.accountLogin || disk?.accountName || null;
     if (login) login.textContent = label ? `@${label}` : '未登录';
     if (stateEl) {
@@ -239,17 +239,62 @@ const App = (() => {
     });
   }
 
+  /**
+   * 退出 GitHub 登录。
+   *
+   * 只结束会话：**不卸载任何存储**。旧实现调用 `ejectAllDrives()`，会把 GitHub
+   * 挂载记录删掉，而且 `LocalDisk.removeDisk()` 内部还有 `deleteAllForDisk()`——
+   * 连本地存储的 IndexedDB 数据一起清空，等于「退出登录 = 清空数据」。
+   *
+   * 现在挂载记录继续留在 localStorage：重新登录同一账号后自动恢复显示；
+   * 换账号时属于别人的挂载不会展示（见 GithubDisk.getVisibleDisks），
+   * 但仍保留着，等原账号回来即可。
+   */
   async function signOutGithub() {
     try {
       await GithubApi.request('/api/logout', { method: 'POST', body: {} });
     } catch {
-      // Local drive sign-out still proceeds if the Worker session is unavailable.
+      // 即使 Worker 会话不可用，也要在本地结束登录态
     }
     githubLogin = null;
     githubAvatar = null;
     state.githubSession = 'expired';
+    GithubDisk.setActiveAccount(null);
+    resetSessionScopedState();
+    // 退出后不保留原来的深链地址，否则重新登录时 URL 与实际视图不一致
+    Router.syncUrl([], false);
     renderGithubSessionState();
-    ejectAllDrives();
+    showLogin();
+  }
+
+  /**
+   * 结束会话时清掉**与会话绑定的内存状态**。
+   *
+   * 刻意不碰持久化数据：localStorage 中的挂载记录与本地存储的 IndexedDB 内容
+   * 都必须保留，否则重新登录后挂载（甚至本地数据）就没了。
+   */
+  function resetSessionScopedState() {
+    state.level = 'home';
+    state.currentUserId = null;
+    state.currentFolderId = DRIVE_ROOT_ID;
+    state.section = 'my-drive';
+    state.files = [];
+    state.breadcrumbs = [{ id: ROOT_ID, name: ROOT_NAME }];
+    state.history = [{ level: 'home', userId: null, folderId: null, section: 'my-drive' }];
+    state.historyIndex = 0;
+    state.selectedId = null;
+    state.selectedIds.clear();
+    state.searchQuery = '';
+    state.expandedUsers.clear();
+    state.expandedFolders.clear();
+    state.treeChildren = {};
+    state.treeVisibleCount = {};
+    state.userQuotas = {};
+    state.processingItemIds.clear();
+    state.repositoryView = 'files';
+    quotaFetchedAt.clear();
+    // 释放按仓库缓存的树（可能包含上一个会话读到的内容）
+    for (const disk of GithubDisk.getDisks()) GithubDisk.invalidateRepoTree(disk.id);
   }
 
   let sessionCheckPromise = null;
@@ -265,10 +310,20 @@ const App = (() => {
         state.githubSession = 'connected';
         githubLogin = me?.login || null;
         githubAvatar = me?.avatar || null;
+        // 让挂载列表知道「当前是谁」：只有这样重新登录同一账号时，
+        // 之前挂载的仓库才会自动重新出现（见 GithubDisk.getVisibleDisks）。
+        GithubDisk.setActiveAccount(githubLogin);
         return true;
       })
       .catch((err) => {
         state.githubSession = err?.status === 401 ? 'expired' : 'unavailable';
+        // 只有明确未登录才清账号归属；unavailable 只是连不上 Worker，
+        // 保留现状以免把用户的挂载"藏"起来（真正的权限由 Worker ACL 兜底）。
+        if (state.githubSession === 'expired') {
+          githubLogin = null;
+          githubAvatar = null;
+          GithubDisk.setActiveAccount(null);
+        }
         return false;
       })
       .finally(() => {
@@ -945,7 +1000,8 @@ const App = (() => {
   }
 
   function githubDisksAsFileItems() {
-    return GithubDisk.getDisks().map((disk) => ({
+    // 只列出属于当前登录账号的仓库；其它账号的挂载保留在本地但不在界面出现
+    return GithubDisk.getVisibleDisks().map((disk) => ({
       id: `github:${disk.id}`,
       name: disk.name,
       isFolder: true,
@@ -966,7 +1022,9 @@ const App = (() => {
   async function refreshUserQuotas({ force = false } = {}) {
     const now = Date.now();
     const localDisks = LocalDisk.getDisks();
-    const githubDisks = GithubDisk.getDisks();
+    // 未连接 GitHub 时不请求仓库配额：退出登录后仍会走到这里（navigateToHome），
+    // 否则会为每个仓库发一次注定 401 的请求。已缓存的标签继续显示。
+    const githubDisks = state.githubSession === 'connected' ? GithubDisk.getVisibleDisks() : [];
     // 目录导航每次都会调到这里，而配额只是侧栏/首页的一个文本标签。
     // TTL 内复用已有值；用户显式刷新（按钮 / 属性面板）传 { force: true }。
     const isFresh = (disk) => !force
@@ -1909,7 +1967,7 @@ const App = (() => {
    */
   function renderOverview() {
     const local = LocalDisk.getDisks();
-    const github = GithubDisk.getDisks();
+    const github = GithubDisk.getVisibleDisks();
     const list = $('#overview-storage-list');
     if (!list) return;
 
@@ -2579,7 +2637,7 @@ const App = (() => {
       list.appendChild(li);
     });
 
-    GithubDisk.getDisks().forEach((disk) => {
+    GithubDisk.getVisibleDisks().forEach((disk) => {
       const expanded = isUserExpanded(disk.id);
       const diskNav = `github:${toGithubNavId(disk.id)}`;
 
@@ -3057,7 +3115,7 @@ const App = (() => {
   }
 
   function hasMountedDrives() {
-    return LocalDisk.getDisks().length > 0 || GithubDisk.getDisks().length > 0;
+    return LocalDisk.getDisks().length > 0 || GithubDisk.getVisibleDisks().length > 0;
   }
 
   function showLogin() {
@@ -3092,8 +3150,10 @@ const App = (() => {
       // 登录只负责认证（Authentication）：不创建仓库、不挂载存储（Mutation）。
       // 无挂载存储时由 explorer 的欢迎空态引导用户添加 Repository。
       await GithubDisk.acquireAccessToken();
-      state.githubSession = 'connected';
-      renderGithubSessionState();
+      // 主动回读 /api/me：既确认 HttpOnly Cookie 已生效，也拿到 login/avatar
+      // 并设置「当前账号」。只有设了账号，之前挂载的仓库才会自动重新出现。
+      const connected = await refreshGithubSessionState();
+      if (!connected) throw new Error('登录已完成，但未能确认应用会话，请重试');
       await showExplorer();
       renderSidebarTree();
     } catch (err) {
