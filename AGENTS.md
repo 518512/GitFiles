@@ -182,10 +182,10 @@ workers/github-oauth-token.js
 新增 GitHub API 调用必须放进 `workers/github.js`，变更语义放进
 `workers/operations.js`；不要把 API 逻辑堆进 `entry.js`。
 
-> ⚠️ `js/github/*.js`（约 1200 行）是**上游时代的浏览器端 Git 引擎**，
-> 既没有被任何页面加载，也被 `scripts/build-config.mjs` 排除出发布产物，
-> 仅被 `tests/github-engine.test.mjs` 使用。**不要在其中新增功能**；
-> 它属于待清理项（见 `docs/状态总览-20260912.md` P-03）。
+> 浏览器端**不存在**第二套 Git 引擎。上游时代的 `js/github/*.js`（约 1146 行）
+> 已于 2026-09-18 删除：它从未被任何页面加载，其 §22 场景覆盖已迁移到
+> `workers/operations.js` 的测试（见 `tests/worker-api.test.mjs`）。
+> 不要重新引入浏览器端引擎。
 
 ## 6. Mutation Pipeline
 
@@ -368,6 +368,9 @@ POST /api/repos/:owner/:repo/operations        批量变更（CAS）
 - `branch` / `path` 是**查询参数**，不是路径段。
 - 提交由 `operations` 一并完成（一个 Tree + 一个 Commit），**没有独立的 commit 路由**。
 - 也没有独立的 download 路由：文件字节流走 `file`，支持 `Range` 与 `206`。
+- `operations` 的内容字段支持 `encoding`：省略或 `"utf-8"` 表示文本，
+  `"base64"` 表示**二进制**（客户端直接发 base64，Worker 校验后原样透传，
+  避免把 `Uint8Array` 展开成数字数组）。契约见 `docs/PROJECT_SPEC.md` §4.1。
 
 > 新增路由时必须同步本节与 `docs/PROJECT_SPEC.md` §4。
 
@@ -527,13 +530,17 @@ GitHub API endpoint 应由服务端固定生成。
 
 ## 19. Tree Cache
 
-浏览器端的仓库树缓存（`js/githubdisk.js`）按当前 HEAD 作键：
+浏览器端的仓库树缓存（`js/githubdisk.js`）以 **`diskId + branch`** 作键，
+以「**缓存里的 head === `disk.head`**」作为命中条件：
 
 ```text
-owner/repo/branch/head
+命中条件：cached.head === disk.head
+写成功   ：disk.head = 新 HEAD  → 旧缓存自动失配 → 下次读回源
+显式刷新 ：invalidateRepoTree(diskId)  → 只删缓存，不动 disk.head
 ```
 
-不要只按 `owner/repo/branch` 缓存——HEAD 变了必须能拿到新树。
+不要把 `head` 放进键：首次加载时 `head` 可能是 `null`，放进去会永远 miss。
+也不要只按「有缓存就用」——HEAD 变了必须能拿到新树。
 
 HEAD 改变时（提交成功、刷新、跨设备同步）：
 
@@ -543,6 +550,7 @@ invalidate TreeIndex
 
 > 注意：写操作的最终权威在 Worker。客户端的树缓存只是加速读取；
 > 服务端每次写入都会重新读取远端 HEAD 并做 CAS，不依赖客户端缓存是否新鲜。
+> 「远端是否已出现/已消失」的确认轮询必须用 `{ force: true }` 穿透缓存。
 
 ## 20. 不要盲目重构
 
@@ -600,9 +608,14 @@ git status
 运行测试。
 
 ```bash
-node --test tests/github-engine.test.mjs tests/worker-api.test.mjs tests/markdown-lite.test.mjs
-node tests/github-engine.test.mjs
+node --test tests/worker-api.test.mjs tests/markdown-lite.test.mjs \
+  tests/github-tree-cache.test.mjs tests/githubdisk-utils.test.mjs
 ```
+
+> 说明：`tests/worker-api.test.mjs` 覆盖 Worker 的全部管线（含 §22 的
+> move/copy/mkdir/批处理/CAS 场景）；`tests/github-tree-cache.test.mjs` 与
+> `tests/githubdisk-utils.test.mjs` 覆盖浏览器端的仓库树缓存、文本判定、
+> 批量上传与路径助手（`js/github-paths.js`）。
 
 改动图标资源后还要运行：
 

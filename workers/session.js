@@ -108,14 +108,28 @@ async function selectAclRow(env, sessionId, owner, repo) {
   return row ? { ...row, checked_at: row.checked_at ?? null } : row;
 }
 
+/**
+ * 构造 ACL 写入语句（不执行），只写目标库实际存在的列。
+ *
+ * 单独暴露给 repos.js 是为了把整批仓库的 ACL 用 `env.DB.batch()` 一次提交：
+ * 之前每次 `/api/repos?refresh=1` 都要对最多 1000 个仓库逐个 await 一次 D1
+ * 往返（AGENTS.md §27：避免无意义的大量请求）。
+ */
+export async function buildAclUpsertStatements(env, rows) {
+  if (!rows.length) return [];
+  const cols = await pickColumns(env, 'repository_access', ['session_id', 'owner', 'repo', 'can_read', 'can_write', 'checked_at']);
+  const placeholders = cols.map(() => '?').join(', ');
+  const sql = `INSERT OR REPLACE INTO repository_access (${cols.join(', ')}) VALUES (${placeholders})`;
+  return rows.map((row) => {
+    const wanted = { session_id: row.sessionId, owner: row.owner, repo: row.repo, can_read: row.canRead, can_write: row.canWrite, checked_at: row.checkedAt };
+    return env.DB.prepare(sql).bind(...cols.map((c) => wanted[c]));
+  });
+}
+
 /** 写入 ACL 行；只写目标库实际存在的列。导出供 repos.js 复用。 */
 export async function upsertAclRow(env, row) {
-  const wanted = { session_id: row.sessionId, owner: row.owner, repo: row.repo, can_read: row.canRead, can_write: row.canWrite, checked_at: row.checkedAt };
-  const cols = await pickColumns(env, 'repository_access', Object.keys(wanted));
-  const placeholders = cols.map(() => '?').join(', ');
-  await env.DB.prepare(
-    `INSERT OR REPLACE INTO repository_access (${cols.join(', ')}) VALUES (${placeholders})`
-  ).bind(...cols.map((c) => wanted[c])).run();
+  const [statement] = await buildAclUpsertStatements(env, [row]);
+  await statement.run();
 }
 
 /** 查询 session；只 SELECT 目标库实际存在的列。 */

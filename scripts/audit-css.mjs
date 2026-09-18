@@ -299,6 +299,27 @@ for (const r of results) {
 }
 if (!shownAllowed) console.log('  （无）');
 
+// ---------------------------------------------------------------------------
+// 层内重复：同一选择器在同**一**层里被定义多次（与跨层覆盖无关）。
+// 这是历史层多代样式叠加留下的痕迹，跨层审计看不到，因此单独报告。
+// 仅作提示、不参与 --strict 判定：历史遗留量较大，清理需要专门排期。
+// ---------------------------------------------------------------------------
+for (const [layerName, rules] of [['历史层', baseRules], ['V2 覆盖层', v2Rules]]) {
+  const linesBySel = new Map();
+  for (const rule of rules) {
+    if (rule.media) continue; // 媒体查询里的重设通常是有意的断点覆盖
+    if (!linesBySel.has(rule.sel)) linesBySel.set(rule.sel, new Set());
+    linesBySel.get(rule.sel).add(rule.line);
+  }
+  const duplicates = [...linesBySel.entries()].filter(([, lines]) => lines.size > 1);
+  console.log(`\n层内重复（${layerName}）：${duplicates.length} 个选择器在同一层被定义多次`);
+  for (const [sel, lines] of duplicates.slice(0, 15)) {
+    const nums = [...lines];
+    console.log(`  ${nums.length}x ${sel} @ ${nums.join(', ')}`);
+  }
+  if (duplicates.length > 15) console.log(`  … 其余 ${duplicates.length - 15} 个`);
+}
+
 console.log(`\n未处理 ${leakCount} 条；已登记 ${allowedCount} 条；已被 V2 层接管 ${handledCount} 条。`);
 if (STRICT && leakCount) {
   console.error('\n--strict: 存在未处理的样式泄漏，视为失败。');

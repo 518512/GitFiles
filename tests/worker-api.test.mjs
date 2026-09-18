@@ -45,6 +45,59 @@ async function responseJson(path, env, options) {
   return { response, body: await response.json() };
 }
 
+/**
+ * 用内存 mock 跑一次 executeOperations（真实 Worker 管线）。
+ *
+ * 这些用例是把原先只覆盖 `js/github/*`（已删除的历史引擎）的 §22 场景
+ * （move/copy 子树复用 Blob、mkdir、混合批处理、100 条批处理、空操作跳过提交）
+ * 迁移到**生产实际使用的** `workers/operations.js` 上。
+ */
+async function runMutation({
+  treeEntries = [],
+  treeSha = 'tree-A',
+  head = 'head-A',
+  branch = 'main',
+  operations,
+  expectedHead = head,
+} = {}) {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  let blobs = 0;
+  globalThis.fetch = async (url, options = {}) => {
+    const path = new URL(url).pathname;
+    calls.push({ path, method: options.method || 'GET', body: options.body });
+    const payload = path.endsWith(`/branches/${branch}`)
+      ? { commit: { sha: head, commit: { tree: { sha: treeSha } } } }
+      : path.endsWith(`/git/trees/${head}`) ? { sha: treeSha, tree: treeEntries }
+        : path.endsWith('/git/blobs') ? { sha: `blob-new-${++blobs}` }
+          : path.endsWith('/git/trees') ? { sha: 'tree-B' }
+            : path.endsWith('/git/commits') ? { sha: 'head-B' }
+              : {};
+    return new Response(JSON.stringify(payload), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  try {
+    const result = await executeOperations({ access_token: 'secret' }, 'octo', 'repo', {
+      branch, expectedHead, operations,
+    });
+    const treeCall = calls.find((call) => call.path.endsWith('/git/trees') && call.method === 'POST');
+    return {
+      result,
+      calls,
+      blobsCreated: blobs,
+      tree: treeCall ? JSON.parse(treeCall.body).tree : null,
+      commitCalls: calls.filter((call) => call.path.endsWith('/git/commits')),
+      refCalls: calls.filter((call) => call.path.includes('/git/refs')),
+    };
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+}
+
+const blobsOf = (tree) => tree.filter((entry) => entry.type === 'blob');
+const jsonResponse = (payload, status = 200) => new Response(JSON.stringify(payload), {
+  status, headers: { 'Content-Type': 'application/json' },
+});
+
 test('GitHub requests include the required User-Agent header', async () => {
   const originalFetch = globalThis.fetch;
   let headers;
@@ -409,6 +462,117 @@ test('Worker encodes large byte arrays in chunks and rejects invalid bytes', asy
   }
 });
 
+test('Worker accepts pre-encoded base64 content and forwards it unchanged', async () => {
+  // 客户端二进制上传改为 base64 + encoding:'base64'（避免把 Uint8Array 展开成
+  // 数字数组）。Worker 必须原样透传，而不是把 base64 文本再当 utf-8 编码一遍。
+  const originalFetch = globalThis.fetch;
+  const blobBodies = [];
+  globalThis.fetch = async (url, options = {}) => {
+    const path = new URL(url).pathname;
+    if (path.endsWith('/branches/main')) return new Response(JSON.stringify({ commit: { sha: 'head-A', commit: { tree: { sha: 'tree-A' } } } }), { status: 200 });
+    if (path.endsWith('/git/trees/head-A')) return new Response(JSON.stringify({ sha: 'tree-A', tree: [] }), { status: 200 });
+    if (path.endsWith('/git/blobs')) { blobBodies.push(JSON.parse(options.body)); return new Response(JSON.stringify({ sha: 'blob-A' }), { status: 201 }); }
+    return new Response(JSON.stringify({ sha: 'tree-B' }), { status: 200 });
+  };
+  const bytes = Buffer.from([0, 1, 2, 250, 255]);
+  const encoded = bytes.toString('base64');
+  try {
+    await executeOperations({ access_token: 'secret' }, 'octo', 'repo', {
+      branch: 'main', expectedHead: 'head-A',
+      operations: [{ type: 'create', path: 'blob.bin', content: encoded, encoding: 'base64' }],
+    });
+    assert.equal(blobBodies.length, 1);
+    assert.equal(blobBodies[0].encoding, 'base64');
+    assert.equal(blobBodies[0].content, encoded, 'base64 内容必须原样透传');
+    assert.deepEqual([...Buffer.from(blobBodies[0].content, 'base64')], [...bytes]);
+    // 带换行的 base64（常见于多行编码）应被规范化后接受
+    await executeOperations({ access_token: 'secret' }, 'octo', 'repo', {
+      branch: 'main', expectedHead: 'head-A',
+      operations: [{ type: 'create', path: 'wrapped.bin', content: `${encoded.slice(0, 4)}\n${encoded.slice(4)}`, encoding: 'base64' }],
+    });
+    assert.equal(blobBodies[1].content, encoded);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Worker rejects malformed or unsupported content encodings with 422', async () => {
+  const originalFetch = globalThis.fetch;
+  let blobCalls = 0;
+  globalThis.fetch = async (url, options = {}) => {
+    const path = new URL(url).pathname;
+    if (path.endsWith('/git/blobs')) blobCalls += 1;
+    if (path.endsWith('/branches/main')) return new Response(JSON.stringify({ commit: { sha: 'head-A', commit: { tree: { sha: 'tree-A' } } } }), { status: 200 });
+    if (path.endsWith('/git/trees/head-A')) return new Response(JSON.stringify({ sha: 'tree-A', tree: [] }), { status: 200 });
+    return new Response(JSON.stringify({ sha: 'blob-A' }), { status: 201 });
+  };
+  try {
+    // 非法字符
+    await assert.rejects(
+      () => executeOperations({ access_token: 'secret' }, 'octo', 'repo', {
+        branch: 'main', expectedHead: 'head-A',
+        operations: [{ type: 'create', path: 'bad.bin', content: 'not*base64', encoding: 'base64' }],
+      }),
+      (error) => error.status === 422
+    );
+    // 长度不是 4 的倍数
+    await assert.rejects(
+      () => executeOperations({ access_token: 'secret' }, 'octo', 'repo', {
+        branch: 'main', expectedHead: 'head-A',
+        operations: [{ type: 'create', path: 'bad2.bin', content: 'AAAAA', encoding: 'base64' }],
+      }),
+      (error) => error.status === 422
+    );
+    // 未知 encoding
+    await assert.rejects(
+      () => executeOperations({ access_token: 'secret' }, 'octo', 'repo', {
+        branch: 'main', expectedHead: 'head-A',
+        operations: [{ type: 'create', path: 'bad3.bin', content: 'AAAA', encoding: 'utf-16' }],
+      }),
+      (error) => error.status === 422
+    );
+    // base64 非字符串
+    await assert.rejects(
+      () => executeOperations({ access_token: 'secret' }, 'octo', 'repo', {
+        branch: 'main', expectedHead: 'head-A',
+        operations: [{ type: 'create', path: 'bad4.bin', content: [1, 2, 3], encoding: 'base64' }],
+      }),
+      (error) => error.status === 422
+    );
+    assert.equal(blobCalls, 0, '非法内容不得产生任何 Blob 上传');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('Worker enforces the 25 MB limit on decoded base64 before calling GitHub', async () => {
+  const originalFetch = globalThis.fetch;
+  let blobCalls = 0;
+  globalThis.fetch = async (url) => {
+    const path = new URL(url).pathname;
+    if (path.endsWith('/git/blobs')) blobCalls += 1;
+    if (path.endsWith('/branches/main')) return new Response(JSON.stringify({ commit: { sha: 'head-A', commit: { tree: { sha: 'tree-A' } } } }), { status: 200 });
+    if (path.endsWith('/git/trees/head-A')) return new Response(JSON.stringify({ sha: 'tree-A', tree: [] }), { status: 200 });
+    return new Response(JSON.stringify({ sha: 'blob-A' }), { status: 201 });
+  };
+  // 26MB 原始字节 → base64 长度 4/3，全为 'A' 也是合法 base64
+  const oversized = 'A'.repeat(Math.ceil((26 * 1024 * 1024) / 3) * 4);
+  try {
+    await assert.rejects(
+      () => executeOperations({ access_token: 'secret' }, 'octo', 'repo', {
+        branch: 'main', expectedHead: 'head-A',
+        operations: [{ type: 'create', path: 'huge.bin', content: oversized, encoding: 'base64' }],
+      }),
+      (error) => error.status === 422 && /25 MB/.test(error.message)
+    );
+    assert.equal(blobCalls, 0, '超限内容必须在调用 GitHub 之前就失败');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+
+  const originalFetch = globalThis.fetch;
 test('Worker delete sends a complete tree without the deleted path', async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];
@@ -915,3 +1079,359 @@ test('session cookie declares Max-Age as its own attribute (was silently a sessi
   const cleared = clearSessionCookie(new Request('https://x.example/'));
   assert.ok(cleared.split(';').some((a) => a.trim() === 'Max-Age=0'));
 });
+
+// ---------------------------------------------------------------------------
+// Blob 去重：字节数组只按长度分组，内容必须复核后才允许合并
+// ---------------------------------------------------------------------------
+
+/** 用固定的树跑一次 executeOperations，返回所有上游调用，便于断言 Blob 数量。 */
+async function runByteBatch(operations) {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  let blobCount = 0;
+  globalThis.fetch = async (url, options = {}) => {
+    const path = new URL(url).pathname;
+    calls.push({ path, method: options.method || 'GET', body: options.body });
+    const payload = path.endsWith('/branches/main') ? { commit: { sha: 'head-A', commit: { tree: { sha: 'tree-A' } } } }
+      : path.endsWith('/git/trees/head-A') ? { sha: 'tree-A', tree: [] }
+        : path.endsWith('/git/blobs') ? { sha: `blob-${++blobCount}` }
+          : path.endsWith('/git/trees') ? { sha: 'tree-B' }
+            : path.endsWith('/git/commits') ? { sha: 'head-B' }
+              : {};
+    return new Response(JSON.stringify(payload), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  try {
+    await executeOperations({ access_token: 'secret' }, 'octo', 'repo', {
+      branch: 'main', expectedHead: 'head-A', operations,
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+  const treeCall = calls.find((call) => call.path.endsWith('/git/trees') && call.method === 'POST');
+  return { calls, tree: JSON.parse(treeCall.body).tree };
+}
+
+test('byte arrays of equal length but different content never share a Blob', async () => {
+  // 去重键只带长度（避免 join 造出上百 MB 字符串），因此内容必须复核：
+  // 一旦误合并，两个文件会指向同一个 Blob SHA —— 静默数据损坏。
+  const { calls, tree } = await runByteBatch([
+    { type: 'create', path: 'a.bin', content: [1, 2, 3] },
+    { type: 'create', path: 'b.bin', content: [4, 5, 6] },
+  ]);
+  assert.equal(calls.filter((call) => call.path.endsWith('/git/blobs')).length, 2);
+  const shas = tree.filter((entry) => entry.type === 'blob').map((entry) => entry.sha);
+  assert.equal(new Set(shas).size, 2, '内容不同的同长度文件必须得到不同的 Blob');
+});
+
+test('identical byte arrays still dedupe to a single Blob upload', async () => {
+  const { calls, tree } = await runByteBatch([
+    { type: 'create', path: 'a.bin', content: [7, 8, 9] },
+    { type: 'create', path: 'b.bin', content: [7, 8, 9] },
+  ]);
+  assert.equal(calls.filter((call) => call.path.endsWith('/git/blobs')).length, 1);
+  const shas = tree.filter((entry) => entry.type === 'blob').map((entry) => entry.sha);
+  assert.equal(new Set(shas).size, 1, '内容相同的文件仍应复用同一个 Blob');
+});
+
+// ---------------------------------------------------------------------------
+// ACL 刷新：整批仓库必须一次 batch 落库，而不是逐条 D1 往返
+// ---------------------------------------------------------------------------
+
+test('repository ACL refresh persists every repository in one D1 batch', async () => {
+  // session.js 的列内省是模块级缓存，会被前面的「缺列旧库」用例污染。
+  __resetSessionColumnCache();
+  const batches = [];
+  const columns = {
+    sessions: ['id', 'github_login', 'github_avatar', 'refresh_token', 'refresh_expires_at', 'client_id', 'access_token', 'expires_at', 'created_at'],
+    repository_access: ['session_id', 'owner', 'repo', 'can_read', 'can_write', 'checked_at'],
+  };
+  const env = {
+    DB: {
+      prepare(sql) {
+        if (sql.startsWith('PRAGMA table_info')) {
+          const table = sql.includes('repository_access') ? 'repository_access' : 'sessions';
+          const all = async () => ({ results: columns[table].map((name) => ({ name })) });
+          return { all, bind: () => ({ all }) };
+        }
+        return {
+          bind(...args) {
+            return {
+              sql,
+              args,
+              async first() {
+                if (sql.startsWith('SELECT id, github_login')) {
+                  return { id: 's1', github_login: 'octo', access_token: 'secret', expires_at: Date.now() + 60_000 };
+                }
+                return null;
+              },
+              async all() { return { results: [] }; },
+              async run() { return { success: true }; },
+            };
+          },
+        };
+      },
+      async batch(statements) { batches.push(statements); return []; },
+    },
+  };
+
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    const path = new URL(url).pathname;
+    if (path === '/user/repos') {
+      return new Response(JSON.stringify([
+        { name: 'alpha', owner: { login: 'octo' }, permissions: { pull: true, push: true } },
+        { name: 'beta', owner: { login: 'octo' }, permissions: { pull: true, push: false } },
+      ]), { status: 200, headers: { 'Content-Type': 'application/json' } });
+    }
+    return new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } });
+  };
+  try {
+    const { response, body } = await responseJson('/api/repos?refresh=1', env, {
+      headers: { Cookie: 'gitfiles_session=s1' },
+    });
+    assert.equal(response.status, 200);
+    assert.equal(body.repositories.length, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(batches.length, 1, '两个仓库应合并为一次 batch');
+  assert.equal(batches[0].length, 2, '每个仓库一条语句');
+  for (const statement of batches[0]) {
+    assert.match(statement.sql, /INSERT OR REPLACE INTO repository_access/);
+    assert.equal(statement.args.length, 6);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// §22 场景迁移：这些行为原先只被 js/github/*（历史引擎）的独立测试覆盖，
+// 引擎删除后必须由生产实现 workers/operations.js 自己保证。
+// ---------------------------------------------------------------------------
+
+test('move rewrites a whole subtree and reuses every original Blob SHA', async () => {
+  const { tree, blobsCreated, commitCalls, refCalls } = await runMutation({
+    treeEntries: [
+      { path: 'docs/a.md', mode: '100644', type: 'blob', sha: 'blob-a' },
+      { path: 'docs/sub/b.md', mode: '100644', type: 'blob', sha: 'blob-b' },
+      { path: 'keep.md', mode: '100644', type: 'blob', sha: 'blob-k' },
+    ],
+    operations: [{ type: 'move', from: 'docs', to: 'archive/docs' }],
+  });
+  assert.equal(blobsCreated, 0, 'Move 不得重新创建 Blob');
+  assert.equal(commitCalls.length, 1, '批量 = 一个 commit');
+  assert.equal(refCalls.length, 1);
+  assert.deepEqual(tree.map((entry) => [entry.path, entry.sha]), [
+    ['archive/docs/a.md', 'blob-a'],
+    ['archive/docs/sub/b.md', 'blob-b'],
+    ['keep.md', 'blob-k'],
+  ]);
+});
+
+test('copy duplicates a subtree with the same Blob SHAs and keeps the source', async () => {
+  const { tree, blobsCreated, commitCalls } = await runMutation({
+    treeEntries: [
+      { path: 'docs/a.md', mode: '100644', type: 'blob', sha: 'blob-a' },
+      { path: 'docs/sub/b.md', mode: '100644', type: 'blob', sha: 'blob-b' },
+    ],
+    operations: [{ type: 'copy', from: 'docs', to: 'docs-copy' }],
+  });
+  assert.equal(blobsCreated, 0, 'Copy 必须复用 Blob SHA');
+  assert.equal(commitCalls.length, 1);
+  assert.deepEqual(tree.map((entry) => [entry.path, entry.sha]), [
+    ['docs-copy/a.md', 'blob-a'],
+    ['docs-copy/sub/b.md', 'blob-b'],
+    ['docs/a.md', 'blob-a'],
+    ['docs/sub/b.md', 'blob-b'],
+  ]);
+});
+
+test('mkdir creates folder/.keep as an empty Blob', async () => {
+  const { tree, blobsCreated } = await runMutation({
+    treeEntries: [],
+    operations: [{ type: 'mkdir', path: 'newdir' }],
+  });
+  assert.equal(blobsCreated, 1);
+  assert.deepEqual(tree.map((entry) => [entry.path, entry.sha]), [['newdir/.keep', 'blob-new-1']]);
+});
+
+test('mkdir reuses the well-known empty Blob SHA when the repository already has it', async () => {
+  // e69de29... 是 Git 空 Blob 的内容寻址 SHA，全局唯一；仓库里已存在时
+  // 不应再为空 .keep 上传一次 Blob。
+  const empty = 'e69de29bb2d1d6434b8b29ae775ad8c2e48c5391';
+  const { tree, blobsCreated } = await runMutation({
+    treeEntries: [{ path: 'old/.keep', mode: '100644', type: 'blob', sha: empty }],
+    operations: [{ type: 'mkdir', path: 'newdir' }],
+  });
+  assert.equal(blobsCreated, 0, '空 Blob 已存在时不应再上传');
+  assert.deepEqual(tree.map((entry) => [entry.path, entry.sha]), [
+    ['newdir/.keep', empty],
+    ['old/.keep', empty],
+  ]);
+});
+
+test('delete of a directory removes every descendant in one commit', async () => {
+  const { tree, commitCalls } = await runMutation({
+    treeEntries: [
+      { path: 'docs/a.md', mode: '100644', type: 'blob', sha: 'blob-a' },
+      { path: 'docs/sub/b.md', mode: '100644', type: 'blob', sha: 'blob-b' },
+      { path: 'keep.md', mode: '100644', type: 'blob', sha: 'blob-k' },
+    ],
+    operations: [{ type: 'delete', path: 'docs' }],
+  });
+  assert.deepEqual(tree.map((entry) => entry.path), ['keep.md']);
+  assert.equal(commitCalls.length, 1);
+});
+
+test('create, update and rename inside an existing directory are allowed', async () => {
+  // 回归：早先 taken() 把祖先的「目录前缀」当成冲突，导致往**已存在**的目录里
+  // 新建/重命名文件一律 422（`docs/new.md`、`docs/a.md → docs/b.md` 都失败），
+  // 只有顶层文件或写入一个全新目录才能成功。目录只是前缀、不是条目。
+  const created = await runMutation({
+    treeEntries: [{ path: 'docs/a.md', mode: '100644', type: 'blob', sha: 'blob-a' }],
+    operations: [{ type: 'create', path: 'docs/new.md', content: 'x' }],
+  });
+  assert.deepEqual(created.tree.map((entry) => entry.path), ['docs/a.md', 'docs/new.md']);
+
+  const renamed = await runMutation({
+    treeEntries: [{ path: 'docs/a.md', mode: '100644', type: 'blob', sha: 'blob-a' }],
+    operations: [{ type: 'rename', from: 'docs/a.md', to: 'docs/b.md' }],
+  });
+  assert.deepEqual(renamed.tree.map((entry) => [entry.path, entry.sha]), [['docs/b.md', 'blob-a']]);
+  assert.equal(renamed.blobsCreated, 0, 'Rename 必须复用 Blob SHA');
+});
+
+test('a file ancestor still blocks writes beneath it', async () => {
+  // 反向：祖先若是一个**文件**（条目），就不能在它下面建东西。
+  await assert.rejects(
+    () => runMutation({
+      treeEntries: [{ path: 'a.md', mode: '100644', type: 'blob', sha: 'blob-a' }],
+      operations: [{ type: 'create', path: 'a.md/child.md', content: 'x' }],
+    }),
+    (error) => error.status === 422
+  );
+});
+
+test('a mixed batch applies sequentially and produces exactly one commit', async () => {
+  const { tree, commitCalls, refCalls } = await runMutation({
+    treeEntries: [
+      { path: 'a.md', mode: '100644', type: 'blob', sha: 'blob-a' },
+      { path: 'docs/b.md', mode: '100644', type: 'blob', sha: 'blob-b' },
+      { path: 'old.md', mode: '100644', type: 'blob', sha: 'blob-old' },
+    ],
+    operations: [
+      { type: 'delete', path: 'old.md' },
+      { type: 'copy', from: 'a.md', to: 'a-copy.md' },
+      { type: 'rename', from: 'docs/b.md', to: 'docs/c.md' },
+      { type: 'create', path: 'new.md', content: 'hello' },
+    ],
+  });
+  assert.equal(commitCalls.length, 1, '混合批处理必须只产生一个 commit');
+  assert.equal(refCalls.length, 1);
+  assert.deepEqual(tree.map((entry) => entry.path), ['a-copy.md', 'a.md', 'docs/c.md', 'new.md']);
+  // copy 复用原 SHA，只有 create 需要新 Blob
+  assert.equal(tree.find((entry) => entry.path === 'a-copy.md').sha, 'blob-a');
+  assert.equal(tree.find((entry) => entry.path === 'docs/c.md').sha, 'blob-b');
+});
+
+test('a 100-operation batch still produces one commit', async () => {
+  const operations = Array.from({ length: 100 }, (_, index) => ({
+    type: 'create',
+    path: `bulk/f${index}.txt`,
+    content: `content-${index}`,
+  }));
+  const { tree, commitCalls, blobsCreated } = await runMutation({ treeEntries: [], operations });
+  assert.equal(commitCalls.length, 1, '100 个文件必须只有一个 commit（AGENTS §3）');
+  assert.equal(tree.length, 100);
+  assert.equal(blobsCreated, 100, '内容各不相同 → 100 个 Blob');
+});
+
+test('create then update of the same path in one batch uploads the Blob once', async () => {
+  const { tree, blobsCreated } = await runMutation({
+    treeEntries: [],
+    operations: [
+      { type: 'create', path: 'draft.md', content: 'first' },
+      { type: 'update', path: 'draft.md', content: 'second' },
+    ],
+  });
+  assert.equal(blobsCreated, 1, '同一路径的中间态不应上传 Blob');
+  assert.equal(tree.length, 1);
+  assert.equal(tree[0].path, 'draft.md');
+});
+
+test('a no-op batch (move onto itself) skips the commit entirely', async () => {
+  const { result, commitCalls, calls } = await runMutation({
+    treeEntries: [{ path: 'a.md', mode: '100644', type: 'blob', sha: 'blob-a' }],
+    operations: [{ type: 'move', from: 'a.md', to: 'a.md' }],
+  });
+  assert.equal(result.skipped, true);
+  assert.equal(commitCalls.length, 0, '无变化不得产生 commit');
+  assert.equal(calls.filter((call) => call.path.endsWith('/git/blobs')).length, 0);
+});
+
+test('batch operations apply sequentially: copying an earlier-renamed source fails', async () => {
+  await assert.rejects(
+    () => runMutation({
+      treeEntries: [{ path: 'a.md', mode: '100644', type: 'blob', sha: 'blob-a' }],
+      operations: [
+        { type: 'rename', from: 'a.md', to: 'b.md' },
+        { type: 'copy', from: 'a.md', to: 'c.md' },
+      ],
+    }),
+    (error) => error.status === 422 && /not found/i.test(error.message)
+  );
+});
+
+test('delete then recreate the same path in one batch is allowed', async () => {
+  const { tree, blobsCreated } = await runMutation({
+    treeEntries: [{ path: 'x.md', mode: '100644', type: 'blob', sha: 'blob-old' }],
+    operations: [
+      { type: 'delete', path: 'x.md' },
+      { type: 'create', path: 'x.md', content: 'fresh' },
+    ],
+  });
+  assert.deepEqual(tree.map((entry) => entry.path), ['x.md']);
+  assert.equal(tree[0].sha, 'blob-new-1');
+  assert.equal(blobsCreated, 1);
+});
+
+test('copying a file created earlier in the same batch reuses its deferred Blob', async () => {
+  const { tree, blobsCreated } = await runMutation({
+    treeEntries: [],
+    operations: [
+      { type: 'create', path: 'n.md', content: 'shared' },
+      { type: 'copy', from: 'n.md', to: 'n2.md' },
+    ],
+  });
+  assert.equal(blobsCreated, 1, '同一批内新建并复制只应上传一次 Blob');
+  assert.equal(tree.length, 2);
+  assert.equal(new Set(tree.map((entry) => entry.sha)).size, 1);
+});
+
+test('a 422 fast-forward ref update is reported as a conflict, not a validation error', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (url, options = {}) => {
+    const path = new URL(url).pathname;
+    if (path.endsWith('/branches/main')) return jsonResponse({ commit: { sha: 'head-A', commit: { tree: { sha: 'tree-A' } } } });
+    if (path.endsWith('/git/trees/head-A')) return jsonResponse({ sha: 'tree-A', tree: [] });
+    if (path.endsWith('/git/blobs')) return jsonResponse({ sha: 'blob-new-1' }, 201);
+    if (path.endsWith('/git/trees') && options.method === 'POST') return jsonResponse({ sha: 'tree-B' });
+    if (path.endsWith('/git/commits')) return jsonResponse({ sha: 'head-B' });
+    if (path.includes('/git/refs/heads/main')) {
+      return jsonResponse({ message: 'Update is not a fast forward' }, 422);
+    }
+    return jsonResponse({});
+  };
+  try {
+    await assert.rejects(
+      () => executeOperations({ access_token: 'secret' }, 'octo', 'repo', {
+        branch: 'main', expectedHead: 'head-A',
+        operations: [{ type: 'create', path: 'x.md', content: 'x' }],
+      }),
+      (error) => error.status === 409 && error.code === 'conflict'
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+

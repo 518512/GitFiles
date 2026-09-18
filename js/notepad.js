@@ -15,7 +15,10 @@ const Notepad = (() => {
   let redoBtn = null;
   let loadingEl = null;
   let app = null;
-  let isStandalone = false;
+
+  // 记事本只有一个运行形态：`notepad.html` 独立页（`#notepad-app`）。
+  // 上游的内嵌对话框形态（`#notepad-dialog` + `init(handlers)`）从未被任何页面
+  // 使用过，2026-09-18 已删除——`isStandalone` 恒真，相关分支不会再出现。
 
   const findState = {
     open: false,
@@ -123,7 +126,7 @@ const Notepad = (() => {
   }
 
   function syncBrowserUrl() {
-    if (!isStandalone || !state.filePath) return;
+    if (!state.filePath) return;
     const pathAndQuery = buildEditorPath(state.filePath);
     const current = location.pathname + location.search;
     if (current !== pathAndQuery) {
@@ -132,7 +135,7 @@ const Notepad = (() => {
   }
 
   async function updateFilePathInUrl() {
-    if (!isStandalone || !state.userId || !state.fileId) return;
+    if (!state.userId || !state.fileId) return;
     if (LocalDisk.isLocalId(state.userId)) {
       state.filePath = await LocalDisk.buildNotepadFilePath(state.userId, {
         id: state.fileId,
@@ -165,8 +168,7 @@ const Notepad = (() => {
 
   function init(handlers) {
     app = handlers;
-    rootEl = document.getElementById('notepad-app') || document.getElementById('notepad-dialog');
-    isStandalone = Boolean(document.getElementById('notepad-app'));
+    rootEl = document.getElementById('notepad-app');
     editorEl = document.getElementById('notepad-editor');
     titleEl = document.getElementById('notepad-title');
     modifiedEl = document.getElementById('notepad-modified');
@@ -186,11 +188,14 @@ const Notepad = (() => {
     initFindBar();
 
     rootEl?.querySelector('.notepad-close')?.addEventListener('click', () => close());
-    if (!isStandalone) {
-      rootEl?.addEventListener('click', (e) => {
-        if (e.target === rootEl) close();
-      });
-    }
+    // 独立记事本页没有应用内「关闭」按钮可点，用户直接 Ctrl+W / 关标签页
+    // 会绕过 close() 的未保存检查而静默丢失内容。这里补一个原生拦截。
+    window.addEventListener('beforeunload', (event) => {
+      if (!state.dirty) return;
+      event.preventDefault();
+      // 部分浏览器仍要求设置 returnValue 才会弹确认框。
+      event.returnValue = '';
+    });
 
     editorEl?.addEventListener('input', () => {
       if (editHistory.applying) return;
@@ -647,7 +652,7 @@ const Notepad = (() => {
   }
 
   function isActive() {
-    return isStandalone || (rootEl && !rootEl.classList.contains('hidden'));
+    return Boolean(rootEl && !rootEl.classList.contains('hidden'));
   }
 
   function handleKeydown(e) {
@@ -1142,7 +1147,6 @@ const Notepad = (() => {
     setLoading(true);
     modifiedEl.textContent = '';
     positionEl.textContent = '第 1 行，第 1 列';
-    if (!isStandalone) rootEl.classList.remove('hidden');
     setWordWrap(state.wordWrap);
 
     try {
@@ -1327,20 +1331,8 @@ const Notepad = (() => {
       }
     }
 
-    if (isStandalone) {
-      window.close();
-      return;
-    }
-    hide();
-  }
-
-  function hide() {
-    closeAllMenus();
-    hideBanner();
-    rootEl?.classList.add('hidden');
-    state.fileId = null;
-    state.dirty = false;
-    editorEl.value = '';
+    window.close();
+    return;
   }
 
   async function runAction(action) {
@@ -1388,5 +1380,6 @@ const Notepad = (() => {
     }
   }
 
-  return { init, initStandalone, open, openInTab, isOpen: isActive, close };
+  // 外部只用到这两个入口：独立页自举（notepad.html）与从文件列表打开新标签页。
+  return { initStandalone, openInTab };
 })();

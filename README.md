@@ -178,11 +178,11 @@ POST /api/repos/:owner/:repo/operations
 ## 开发与测试
 
 ```bash
-node --test tests/github-engine.test.mjs tests/worker-api.test.mjs tests/markdown-lite.test.mjs
+node --test tests/worker-api.test.mjs tests/markdown-lite.test.mjs tests/github-tree-cache.test.mjs tests/githubdisk-utils.test.mjs
 node scripts/build-config.mjs
 ```
 
-当前测试覆盖 Git 操作、Blob SHA 复用、批量单 commit、CAS、空仓库初始 ref、D1/session/ACL 拒绝与陈旧 ACL 重校验、同源写入、OAuth token 不泄漏、OAuth 回调投递域名白名单、路径 NFC 规范化、非法 UTF-16 内容拒绝、429 退避信息透传、文件下载的流式透传与 Range，以及 Markdown 渲染的 XSS 防护。
+当前测试覆盖 Git 操作（含目录 move/copy、mkdir、混合批处理与批量单 commit）、Blob SHA 复用、base64 二进制传输与去重、CAS、空仓库初始 ref、D1/session/ACL 拒绝与陈旧 ACL 重校验、同源写入、OAuth token 不泄漏、OAuth 回调投递域名白名单、路径 NFC 规范化、非法 UTF-16 内容拒绝、429 退避信息透传、文件下载的流式透传与 Range、浏览器端仓库树缓存，以及 Markdown 渲染的 XSS 防护。
 
 UI 结构另有静态校验（重复 id、JS 引用的 id 是否存在、样式表层叠顺序、CSS 选择器使用情况）：
 

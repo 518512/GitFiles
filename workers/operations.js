@@ -30,11 +30,20 @@ function typeOf(operation) {
   return type;
 }
 
+const CONTENT_ENCODINGS = new Set(['utf-8', 'base64']);
+
 function operationOf(raw) {
   const type = typeOf(raw);
   if (['create', 'update', 'upload'].includes(type)) {
     if (!Object.hasOwn(raw, 'content')) throw new ApiError(422, 'validation_error', `${type} requires content`);
-    return { type, path: pathOf(raw.path), content: raw.content };
+    // encoding 省略时按 utf-8 处理（历史行为，纯文本客户端不受影响）。
+    // base64 供二进制使用：客户端不必把 Uint8Array 展开成数字数组再 JSON 化
+    // （那是约 3.6 倍体积、且会产生上千万元素的数组）。
+    const encoding = raw.encoding == null ? 'utf-8' : String(raw.encoding).toLowerCase();
+    if (!CONTENT_ENCODINGS.has(encoding)) {
+      throw new ApiError(422, 'validation_error', `Unsupported content encoding: ${raw.encoding}`);
+    }
+    return { type, path: pathOf(raw.path), content: raw.content, encoding };
   }
   if (type === 'mkdir' || type === 'delete') return { type, path: pathOf(raw.path) };
   const from = pathOf(raw.from || raw.path);
@@ -42,7 +51,30 @@ function operationOf(raw) {
   return { type, from, to };
 }
 
-function encodeContent(content) {
+/**
+ * 校验客户端已编码好的 base64 内容。
+ *
+ * 严格校验字符集与长度，并按解码后的字节数执行 25MB 上限
+ * ——否则一个超长字符串会先被送进 GitHub 才失败（AGENTS.md §25）。
+ */
+function validateBase64(content) {
+  if (typeof content !== 'string') {
+    throw new ApiError(422, 'validation_error', 'Base64 content must be a string');
+  }
+  const normalized = content.replace(/\s+/g, '');
+  if (!/^[A-Za-z0-9+/]*={0,2}$/.test(normalized) || normalized.length % 4 !== 0) {
+    throw new ApiError(422, 'validation_error', 'Content is not valid base64');
+  }
+  const padding = normalized.endsWith('==') ? 2 : normalized.endsWith('=') ? 1 : 0;
+  const size = (normalized.length / 4) * 3 - padding;
+  if (size > MAX_BINARY_BYTES) {
+    throw new ApiError(422, 'validation_error', `File content must be no larger than ${Math.floor(MAX_BINARY_BYTES / (1024 * 1024))} MB`);
+  }
+  return normalized;
+}
+
+function encodeContent(content, encoding = 'utf-8') {
+  if (encoding === 'base64') return validateBase64(content);
   if (typeof content === 'string') {
     // TextEncoder replaces the legacy btoa(unescape(encodeURIComponent(...)))
     // chain, which threw URIError (and therefore a 500) on any lone surrogate.
@@ -94,16 +126,25 @@ function hasLoneSurrogate(text) {
   return false;
 }
 
-/** Dedupe key for a pending blob; keeps identical content to a single upload. */
-function contentKeyOf(content) {
-  return typeof content === 'string' ? `text:${content}` : `bytes:${content.join(',')}`;
+/**
+ * Dedupe key for a pending blob; keeps identical content to a single upload.
+ *
+ * · utf-8 字符串按内容精确分组；
+ * · base64 字符串同样按内容精确分组（值本身已是字符串，不会额外放大）；
+ * · 字节数组**只按长度分组**：`join(',')` 会为 25MB 的数组造出上百 MB 的临时
+ *   字符串（Worker 内存上限约 128MB）。长度相同但内容不同的情况由 applyOperations
+ *   里的 `sameContent` 复核后另起分组，因此不会把两份不同内容合并成同一个 Blob。
+ */
+function contentKeyOf(content, encoding = 'utf-8') {
+  if (typeof content !== 'string') return `bytes:${content.length}`;
+  return encoding === 'base64' ? `base64:${content}` : `text:${content}`;
 }
 
-async function createBlob(session, owner, repo, content) {
+async function createBlob(session, owner, repo, content, encoding = 'utf-8') {
   const { payload } = await githubRequest(session, `${repoPrefix(owner, repo)}/git/blobs`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ content: encodeContent(content), encoding: 'base64' }),
+    body: JSON.stringify({ content: encodeContent(content, encoding), encoding: 'base64' }),
   });
   return payload.sha;
 }
@@ -180,18 +221,27 @@ function ancestorPrefixes(path) {
   return prefixes;
 }
 
-/** All distinct directory prefixes occupied by the index (plus "" for root). */
-function buildPrefixIndex(index) {
-  const prefixes = new Set(['']);
-  for (const entry of index.values()) {
-    prefixes.add(entry.path);
-    for (const prefix of ancestorPrefixes(entry.path)) prefixes.add(prefix);
+/**
+ * 内容是否完全相同。
+ *
+ * 字节数组的去重键只带长度（见 contentKeyOf），因此合并到同一分组前必须复核，
+ * 否则「长度相同、内容不同」的两个文件会共享同一个 Blob SHA —— 数据损坏。
+ */
+function sameContent(left, right) {
+  if (typeof left === 'string' || typeof right === 'string') return left === right;
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return false;
   }
-  return prefixes;
+  return true;
 }
 
 /**
  * Apply the logical operation list to the tree index in memory.
+ *
+ * 派生结构（NFC 路径表、目录前缀计数）是**增量维护**的。早先版本每执行一个
+ * 操作就 `buildPrefixIndex` + 重建两个 Map/Set，一次 1000 条操作的批处理会做
+ * 1000 次 O(条目数) 的全量重建，在 Worker 的 CPU 预算里非常昂贵（AGENTS.md §27）。
  *
  * Mutates and returns `index` (path → entry). Returns the set of paths that
  * disappeared from the tree so the caller can report a truthful no-op instead
@@ -201,44 +251,94 @@ function applyOperations(entries, rawOperations) {
   const index = new Map(entries);
   const deleted = new Set();
   const operations = rawOperations.map(operationOf);
-  let prefixes = buildPrefixIndex(index);
+
   // Operations arrive NFC-normalized (see pathOf). Repositories written before
   // that change may still hold NFD paths, so match and split on the NFC form
   // while always emitting the real stored path.
-  let nfcPaths = new Map([...index.keys()].map((path) => [path.normalize('NFC'), path]));
-  let nfcPrefixes = new Set([...prefixes].map((prefix) => prefix.normalize('NFC')));
+  const nfcPaths = new Map();
+  // 某个 NFC 路径被多少条目占用（自身 + 作为其祖先）。计数 > 0 等价于旧实现
+  // 的 `nfcPrefixes.has()`，但删除时只需递减，不必全量重建。
+  const prefixCount = new Map();
 
-  const existsAtOrUnder = (path) => nfcPrefixes.has(path);
-  const taken = (path) => nfcPrefixes.has(path) || ancestorPrefixes(path).some((prefix) => nfcPrefixes.has(prefix));
-  const reindex = () => {
-    prefixes = buildPrefixIndex(index);
-    nfcPaths = new Map([...index.keys()].map((path) => [path.normalize('NFC'), path]));
-    nfcPrefixes = new Set([...prefixes].map((prefix) => prefix.normalize('NFC')));
+  const addDerived = (path) => {
+    const nfc = path.normalize('NFC');
+    nfcPaths.set(nfc, path);
+    prefixCount.set(nfc, (prefixCount.get(nfc) || 0) + 1);
+    for (const prefix of ancestorPrefixes(nfc)) {
+      prefixCount.set(prefix, (prefixCount.get(prefix) || 0) + 1);
+    }
+  };
+
+  const removeDerived = (path) => {
+    const nfc = path.normalize('NFC');
+    if (nfcPaths.get(nfc) === path) nfcPaths.delete(nfc);
+    const decrement = (prefix) => {
+      const next = (prefixCount.get(prefix) || 0) - 1;
+      if (next > 0) prefixCount.set(prefix, next);
+      else prefixCount.delete(prefix);
+    };
+    decrement(nfc);
+    for (const prefix of ancestorPrefixes(nfc)) decrement(prefix);
+  };
+
+  for (const path of index.keys()) addDerived(path);
+
+  const occupied = (nfcPath) => (prefixCount.get(nfcPath) || 0) > 0;
+  // 条目（blob / gitlink）才有 nfcPaths 记录；目录在前缀计数里，但不是条目。
+  const isEntry = (nfcPath) => nfcPaths.has(nfcPath);
+  /**
+   * 目标路径是否已被占用。
+   *
+   * 关键区别：**祖先仅仅作为"目录前缀"存在不构成冲突**——往已存在的
+   * `docs/` 里新建 `docs/a.md` 是正常操作。只有某个祖先是**条目（文件/子模块）**
+   * 时才不能落在它下面。
+   *
+   * 早先的实现对祖先一律查"前缀集合"，于是「在已存在的目录里新建或重命名文件」
+   * 全部被 422 拒绝（`docs/new.md`、`docs/a.md → docs/b.md` 都失败），
+   * 只有新建顶层文件或写进一个**全新**目录才能成功。
+   */
+  const taken = (path) => {
+    const nfc = path.normalize('NFC');
+    if (occupied(nfc)) return true;
+    return ancestorPrefixes(nfc).some(isEntry);
+  };
+  const setEntry = (path, entry) => {
+    if (!index.has(path)) addDerived(path);
+    index.set(path, entry);
+  };
+  const removeEntry = (path) => {
+    if (!index.has(path)) return;
+    index.delete(path);
+    removeDerived(path);
   };
 
   for (const op of operations) {
     if (op.type === 'create') {
       if (taken(op.path)) throw new ApiError(422, 'validation_error', `Path already exists: ${op.path}`);
-      index.set(op.path, { path: op.path, mode: '100644', type: 'blob', deferred: op.content });
+      setEntry(op.path, { path: op.path, mode: '100644', type: 'blob', deferred: op.content, deferredEncoding: op.encoding });
     } else if (op.type === 'update' || op.type === 'upload') {
-      const target = nfcPaths.get(op.path);
+      const target = nfcPaths.get(op.path.normalize('NFC'));
       if (!target || index.get(target).type !== 'blob') {
         throw new ApiError(422, 'validation_error', `File not found: ${op.path}`);
       }
-      index.set(target, { path: target, mode: '100644', type: 'blob', deferred: op.content });
+      // 路径不变，派生结构无需改动。
+      index.set(target, { path: target, mode: '100644', type: 'blob', deferred: op.content, deferredEncoding: op.encoding });
     } else if (op.type === 'mkdir') {
       if (taken(op.path)) throw new ApiError(422, 'validation_error', `Path already exists: ${op.path}`);
-      index.set(`${op.path}/.keep`, { path: `${op.path}/.keep`, mode: '100644', type: 'blob', deferred: '' });
+      const keepPath = `${op.path}/.keep`;
+      setEntry(keepPath, { path: keepPath, mode: '100644', type: 'blob', deferred: '', deferredEncoding: 'utf-8' });
     } else if (op.type === 'delete') {
       // Match on the NFC form so a path typed in NFC also removes a stored NFD
       // path. Fall back to the raw path so an exactly-matching NFD delete still
       // works even if normalization ever changes the string.
-      const forms = [op.path, nfcPaths.get(op.path)].filter(Boolean).map((form) => form.normalize('NFC'));
+      const forms = [op.path, nfcPaths.get(op.path.normalize('NFC'))]
+        .filter(Boolean)
+        .map((form) => form.normalize('NFC'));
       let removed = 0;
       for (const entry of [...index.values()]) {
         const stored = entry.path.normalize('NFC');
         if (forms.some((form) => isUnder(stored, form))) {
-          index.delete(entry.path);
+          removeEntry(entry.path);
           removed += 1;
         }
       }
@@ -261,19 +361,37 @@ function applyOperations(entries, rawOperations) {
         const nextPath = suffix ? `${op.to}/${suffix}` : op.to;
         consumed.add(entry.path);
         // copy keeps the source entry and adds the new one
-        index.set(nextPath, { ...entry, path: nextPath });
+        setEntry(nextPath, { ...entry, path: nextPath });
       }
-      if (op.type !== 'copy') for (const path of consumed) index.delete(path);
+      if (op.type !== 'copy') for (const path of consumed) removeEntry(path);
     }
-    reindex();
   }
 
   const pending = new Map();
   for (const entry of index.values()) {
     if (!Object.hasOwn(entry, 'deferred')) continue;
-    const key = contentKeyOf(entry.deferred);
-    if (!pending.has(key)) pending.set(key, { content: entry.deferred, entries: [] });
-    pending.get(key).entries.push(entry);
+    const encoding = entry.deferredEncoding || 'utf-8';
+    const key = contentKeyOf(entry.deferred, encoding);
+    let group = pending.get(key);
+    // 字节数组的 key 只带长度；同长度但内容不同时必须另起分组，
+    // 绝不能共享 Blob（否则写进仓库的是另一份内容）。
+    if (group && !sameContent(group.content, entry.deferred)) {
+      let ordinal = 1;
+      let altKey = `${key}#${ordinal}`;
+      while (pending.has(altKey) && !sameContent(pending.get(altKey).content, entry.deferred)) {
+        ordinal += 1;
+        altKey = `${key}#${ordinal}`;
+      }
+      group = pending.get(altKey);
+      if (!group) {
+        group = { content: entry.deferred, encoding, entries: [] };
+        pending.set(altKey, group);
+      }
+    } else if (!group) {
+      group = { content: entry.deferred, encoding, entries: [] };
+      pending.set(key, group);
+    }
+    group.entries.push(entry);
   }
   return { index, pending, deleted };
 }
@@ -293,11 +411,12 @@ async function createBlobs(session, owner, repo, pending) {
       const group = groups[cursor];
       cursor += 1;
       try {
-        const sha = await createBlob(session, owner, repo, group.content);
+        const sha = await createBlob(session, owner, repo, group.content, group.encoding || 'utf-8');
         created += 1;
         for (const entry of group.entries) {
           entry.sha = sha;
           delete entry.deferred;
+          delete entry.deferredEncoding;
         }
       } catch (error) {
         failures.push(error);
@@ -307,6 +426,12 @@ async function createBlobs(session, owner, repo, pending) {
   await Promise.all(workers);
   if (failures.length) throw failures[0];
   return { created, total: groups.length };
+}
+
+/** 内容是否为空（空字符串 / 空字节数组）。空 base64 也是空字符串。 */
+function isEmptyContent(content) {
+  if (typeof content === 'string') return content === '';
+  return Array.isArray(content) && content.length === 0;
 }
 
 function sameTree(before, after) {
@@ -332,6 +457,23 @@ export async function executeOperations(session, owner, repo, { branch, expected
     ? await readTreeIndex(session, owner, repo, state.head)
     : { treeSha: null, index: new Map() };
   const { index, pending, deleted: missingPaths } = applyOperations(current.index, operations);
+
+  // 空内容直接复用 Git 的著名空 Blob（SHA 由内容唯一决定，是全局常量）。
+  // 前提是它确实存在于当前仓库 —— 否则 GitHub 建 tree 时引用一个不存在的
+  // blob。第一次 mkdir 仍会正常上传一次空的 .keep，之后所有空文件都免费。
+  const knownShas = new Set();
+  for (const entry of current.index.values()) knownShas.add(entry.sha);
+  if (knownShas.has(EMPTY_BLOB_SHA)) {
+    for (const [key, group] of [...pending]) {
+      if (!isEmptyContent(group.content)) continue;
+      for (const entry of group.entries) {
+        entry.sha = EMPTY_BLOB_SHA;
+        delete entry.deferred;
+        delete entry.deferredEncoding;
+      }
+      pending.delete(key);
+    }
+  }
 
   if (state && sameTree(current.index, index)) {
     return {

@@ -7,20 +7,44 @@ const GithubDisk = (() => {
   const OAUTH_MESSAGE_SOURCE = 'storage-hub-github-oauth';
   // GitHub docs: repos above ~100 GB may be blocked.
   const MAX_REPO_SIZE_BYTES = 100 * 1024 * 1024 * 1024;
+  // 单文件上传上限必须与 Worker 侧 workers/operations.js 的 MAX_BINARY_BYTES
+  // 一致，否则用户要等整包上传完才收到 422。两边都是 25 MB。
+  const MAX_UPLOAD_BYTES = 25 * 1024 * 1024;
+
+  /**
+   * 文本类文件的**单一判定来源**。
+   *
+   * 之前 isTextFileMime / isNotepadFile / inferMimeType / app.js 的 isTextMime
+   * 各维护一份扩展名表，已经漂移出 bug：`.markdown` 在 isTextFileMime 里不是文本，
+   * 于是 createFileFromBlob 把它当二进制走 arrayBuffer 分支。
+   */
+  const TEXT_LIKE_MIME_RE = /^(text\/|application\/(json|xml|javascript|x-yaml|yaml))/i;
+  const TEXT_EXTENSION_RE = /\.(txt|md|markdown|csv|log|xml|yml|yaml|html?|css|js|ts|tsx|jsx|py|sh|bat|sql|json)$/i;
 
   let disks = [];
   const pendingByFolder = new Map();
   const saveStateByPath = new Map();
   const deleteStateByPath = new Map();
   const moveStateByPath = new Map();
-  const pendingConfirmTimers = new Map();
   const saveConfirmTimers = new Map();
-  const moveConfirmTimers = new Map();
-  const deleteConfirmTimers = new Map();
   let listChangeListener = null;
   let saveStateListener = null;
   let conflictListener = null;
   let transferListener = null;
+
+  /**
+   * 仓库树缓存（AGENTS.md §19）。
+   *
+   * 键是 `diskId + branch`，命中前提是「缓存里的 head 与 disk.head 相等」：
+   *   · 写操作成功后 disk.head 变成新的 commit SHA → 旧缓存自动失配 → 下次读回源；
+   *   · 因此不需要每次写入都清空缓存，也不会读到写前的旧树。
+   *
+   * 注意键里**不放 head**：请求之前 head 可能还是 null（首次加载），
+   * 放进去会导致永远 miss。改为读时校验 head 相等。
+   */
+  const repoTreeCache = new Map();
+  /** 并发去重：同一 disk+branch 的多个读共享同一次在途请求。 */
+  const repoTreeInflight = new Map();
 
   function setTransferListener(listener) {
     transferListener = typeof listener === 'function' ? listener : null;
@@ -93,8 +117,30 @@ const GithubDisk = (() => {
     listChangeListener = typeof listener === 'function' ? listener : null;
   }
 
+  /**
+   * 列表变化通知的合并窗口。
+   *
+   * 一次写操作会经 addPending / resolvePending / 函数尾各通知一次（同一 diskId），
+   * 而监听方每次都会 `refreshGithubFolderView({ reloadTree: true })` —— 完整重拉
+   * 文件列表 + 侧栏树。实测一次上传能因此触发 3 次重叠刷新。这里按 diskId 合并
+   * 到一个很短的时间窗里只派发一次；窗口足够小，用户感知不到延迟。
+   */
+  const LIST_CHANGE_COALESCE_MS = 120;
+  const pendingListNotices = new Set();
+  let listNoticeTimer = null;
+
+  function flushListNotices() {
+    listNoticeTimer = null;
+    const ids = [...pendingListNotices];
+    pendingListNotices.clear();
+    for (const id of ids) listChangeListener?.(id);
+  }
+
   function notifyListChange(diskId) {
-    listChangeListener?.(diskId);
+    if (!diskId || !listChangeListener) return;
+    pendingListNotices.add(diskId);
+    if (listNoticeTimer) clearTimeout(listNoticeTimer);
+    listNoticeTimer = setTimeout(flushListNotices, LIST_CHANGE_COALESCE_MS);
   }
 
   async function requireDisk(diskId) {
@@ -151,14 +197,29 @@ const GithubDisk = (() => {
     return false;
   }
 
+  /** 分块把字节数组编码成 base64，避免 `String.fromCharCode(...big)` 撑爆调用栈。 */
+  function bytesToBase64(bytes) {
+    const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    let binary = '';
+    const chunk = 0x8000;
+    for (let offset = 0; offset < view.length; offset += chunk) {
+      binary += String.fromCharCode(...view.subarray(offset, offset + chunk));
+    }
+    return btoa(binary);
+  }
+
   /**
    * Run one logical group of operations as ONE tree + ONE commit
    * (Git Data API, CAS-protected).
+   *
+   * 二进制内容以 base64 + `encoding: 'base64'` 过界：JSON 没有 typed array，
+   * 早先展开成数字数组会带来约 3.6 倍体积和上千万元素的数组；base64 只有 4/3，
+   * Worker 侧直接透传给 GitHub，不再需要重新编码（见 workers/operations.js）。
    */
   function serializeOperations(operations) {
     return operations.map((operation) => {
       if (!operation || !(operation.content instanceof Uint8Array)) return operation;
-      return { ...operation, content: Array.from(operation.content) };
+      return { ...operation, content: bytesToBase64(operation.content), encoding: 'base64' };
     });
   }
 
@@ -170,7 +231,9 @@ const GithubDisk = (() => {
     const serializedOperations = serializeOperations(operations);
     // Read the current server head immediately before mutation. The Worker
     // repeats this comparison before it writes the ref, providing CAS.
-    if (!disk.head) await getRepoTreeState(disk, { force: true });
+    // 只在本 disk 从未读到过 head 时回源；写成功后 head 由下面的 result.head 更新，
+    // 因此不会每次写都重新拉一次整棵树（AGENTS.md §3 CAS 基线由服务端重读，客户端偏旧只会拿到 409）。
+    if (!disk.head) disk.head = (await getRepoTreeState(disk)).head;
     try {
       const result = await GithubApi.request(
         `/api/repos/${encodeURIComponent(disk.owner)}/${encodeURIComponent(disk.repo)}/operations`,
@@ -184,6 +247,7 @@ const GithubDisk = (() => {
           },
         }
       );
+      // 先更新 HEAD 基线再丢树缓存：新 head 与旧缓存必然失配，下一次读自然回源。
       disk.head = result.head;
       invalidateRepoTree(diskId);
       return result;
@@ -217,10 +281,12 @@ const GithubDisk = (() => {
   }
 
   function invalidateRepoTree(diskId) {
-    // Worker reads are authoritative. Keep this hook for UI refresh callers;
-    // no browser-side Git tree cache or credential exists to clear.
+    // 只丢缓存，**不清 disk.head**：head 是 CAS 的客户端基线，写成功后由
+    // executeOperations 更新为服务端返回的新 HEAD（AGENTS.md §3 CAS）。
+    // 之前这里把 head 置空，导致每次写前都要重新拉一次整棵树来「找 head」，
+    // 而且 executeOperations 里紧随其后的 `disk.head = result.head` 当场被覆盖。
     const disk = getDisk(diskId);
-    if (disk) disk.head = null;
+    if (disk) repoTreeCache.delete(repoTreeCacheKey(disk));
   }
 
   function pendingFolderKey(diskId, parentId) {
@@ -409,86 +475,7 @@ const GithubDisk = (() => {
     if (moveState.destPendingId) resolvePending(moveState.destPendingId);
     trackOperationFinish(normalizePath(sourcePath), true);
     moveStateByPath.delete(key);
-    moveConfirmTimers.delete(key);
     notifyListChange(diskId);
-  }
-
-  function isSourcePathGoneFromTree(tree, sourcePath, isFolder) {
-    const path = normalizePath(sourcePath);
-    if (!path) return true;
-    if (isFolder) {
-      return !tree.some((entry) => {
-        const entryPath = entry.path || '';
-        return entryPath === path
-          || entryPath === `${path}/.keep`
-          || entryPath.startsWith(`${path}/`);
-      });
-    }
-    return !tree.some((entry) => entry.type === 'blob' && entry.path === path);
-  }
-
-  async function confirmMoveOnServer(diskId, sourcePath) {
-    const key = moveStateKey(diskId, sourcePath);
-    const moveState = moveStateByPath.get(key);
-    if (!moveState || (moveState.status !== 'pending' && moveState.status !== 'moving')) return false;
-
-    const disk = getDisk(diskId);
-    if (!disk) {
-      resolveMove(diskId, sourcePath);
-      return true;
-    }
-
-    const destPath = normalizePath(moveState.destPath);
-    try {
-      const tree = await getRepoTree(disk, { force: true });
-      const destVisible = isPathVisibleInTree(tree, destPath, moveState.isFolder);
-      const sourceGone = isSourcePathGoneFromTree(tree, moveState.sourcePath, moveState.isFolder);
-      if (destVisible && sourceGone) {
-        resolveMove(diskId, sourcePath);
-        invalidateRepoTree(diskId);
-        return true;
-      }
-    } catch {
-      // GitHub may still be updating — keep polling.
-    }
-    return false;
-  }
-
-  function scheduleMoveConfirmation(diskId, sourcePath) {
-    const key = moveStateKey(diskId, sourcePath);
-    if (moveConfirmTimers.has(key)) return;
-
-    let attempts = 0;
-    const maxAttempts = 90;
-
-    const tick = async () => {
-      attempts += 1;
-      const moveState = moveStateByPath.get(key);
-      if (!moveState || (moveState.status !== 'pending' && moveState.status !== 'moving')) {
-        moveConfirmTimers.delete(key);
-        return;
-      }
-
-      const confirmed = await confirmMoveOnServer(diskId, sourcePath);
-      if (confirmed) {
-        moveConfirmTimers.delete(key);
-        return;
-      }
-
-      if (attempts >= maxAttempts) {
-        moveState.status = 'error';
-        moveState.error = 'Timed out waiting for GitHub to confirm the move';
-        if (moveState.destPendingId) failPending(moveState.destPendingId, moveState.error);
-        trackOperationFinish(normalizePath(sourcePath), false);
-        notifyListChange(diskId);
-        moveConfirmTimers.delete(key);
-        return;
-      }
-
-      moveConfirmTimers.set(key, setTimeout(tick, 2000));
-    };
-
-    moveConfirmTimers.set(key, setTimeout(tick, 1000));
   }
 
   async function runPendingMove(diskId, sourcePath, toParentId, meta, action) {
@@ -606,7 +593,8 @@ const GithubDisk = (() => {
 
     if (!isFolder) {
       try {
-        await getFileContentMeta(disk, path);
+        // 「远端是否已删除」必须看最新状态，不能被树缓存挡住。
+        await getFileContentMeta(disk, path, { force: true });
         return false;
       } catch (err) {
         return isMissingGitHubPathError(err);
@@ -627,73 +615,9 @@ const GithubDisk = (() => {
     const key = saveStateKey(diskId, path);
     if (!deleteStateByPath.has(key)) return;
     deleteStateByPath.delete(key);
-    deleteConfirmTimers.delete(key);
     trackOperationFinish(path, true);
     invalidateRepoTree(diskId);
     notifyListChange(diskId);
-  }
-
-  async function confirmDeleteOnServer(diskId, filePath, isFolder) {
-    const path = normalizePath(filePath);
-    const key = saveStateKey(diskId, path);
-    const state = deleteStateByPath.get(key);
-    if (!state || state.status !== 'pending') return false;
-
-    const disk = getDisk(diskId);
-    if (!disk) {
-      resolveDeleteState(diskId, path);
-      return true;
-    }
-
-    try {
-      if (await isDeletedOnServer(disk, path, isFolder)) {
-        resolveDeleteState(diskId, path);
-        return true;
-      }
-    } catch {
-      // GitHub may still be updating — keep polling.
-    }
-    return false;
-  }
-
-  function scheduleDeleteConfirmation(diskId, filePath, isFolder) {
-    const path = normalizePath(filePath);
-    const key = saveStateKey(diskId, path);
-    if (deleteConfirmTimers.has(key)) return;
-
-    let attempts = 0;
-    const maxAttempts = 90;
-
-    const tick = async () => {
-      attempts += 1;
-      const state = deleteStateByPath.get(key);
-      if (!state || state.status !== 'pending') {
-        deleteConfirmTimers.delete(key);
-        return;
-      }
-
-      const confirmed = await confirmDeleteOnServer(diskId, path, isFolder);
-      if (confirmed) {
-        deleteConfirmTimers.delete(key);
-        return;
-      }
-
-      if (attempts >= maxAttempts) {
-        deleteStateByPath.set(key, {
-          ...state,
-          status: 'error',
-          error: 'Timed out waiting for GitHub to confirm the delete',
-        });
-        trackOperationFinish(path, false);
-        notifyListChange(diskId);
-        deleteConfirmTimers.delete(key);
-        return;
-      }
-
-      deleteConfirmTimers.set(key, setTimeout(tick, 2000));
-    };
-
-    deleteConfirmTimers.set(key, setTimeout(tick, 1000));
   }
 
   async function runPendingDelete(diskId, filePath, meta, action) {
@@ -774,7 +698,7 @@ const GithubDisk = (() => {
     const path = normalizePath(filePath);
     try {
       if (saveState.expectedSha) {
-        const meta = await getFileContentMeta(disk, path);
+        const meta = await getFileContentMeta(disk, path, { force: true });
         if (meta?.sha === saveState.expectedSha) {
           resolveFileSave(diskId, filePath);
           invalidateRepoTree(diskId);
@@ -923,74 +847,6 @@ const GithubDisk = (() => {
       });
     }
     return tree.some((entry) => entry.type === 'blob' && entry.path === path);
-  }
-
-  async function confirmPendingOnServer(diskId, tempId) {
-    const located = findPendingEntry(tempId);
-    if (!located || located.entry.status !== 'pending') return false;
-
-    const disk = getDisk(diskId);
-    if (!disk) {
-      resolvePending(tempId);
-      return true;
-    }
-
-    const expectedPath = located.entry.expectedPath || buildExpectedPath(located.parentId, located.entry.name);
-    try {
-      const tree = await getRepoTree(disk, { force: true });
-      if (isPathVisibleInTree(tree, expectedPath, located.entry.isFolder)) {
-        resolvePending(tempId);
-        invalidateRepoTree(diskId);
-        notifyListChange(diskId);
-        return true;
-      }
-    } catch {
-      // GitHub may still be updating — keep polling.
-    }
-    return false;
-  }
-
-  function schedulePendingConfirmation(diskId, tempId) {
-    if (pendingConfirmTimers.has(tempId)) return;
-
-    let attempts = 0;
-    const maxAttempts = 90;
-
-    const tick = async () => {
-      attempts += 1;
-      const located = findPendingEntry(tempId);
-      if (!located || located.entry.status !== 'pending') {
-        pendingConfirmTimers.delete(tempId);
-        return;
-      }
-
-      const confirmed = await confirmPendingOnServer(diskId, tempId);
-      if (confirmed) {
-        pendingConfirmTimers.delete(tempId);
-        return;
-      }
-
-      if (attempts >= maxAttempts) {
-        failPending(tempId, 'Timed out waiting for GitHub to list this item');
-        pendingConfirmTimers.delete(tempId);
-        return;
-      }
-
-      pendingConfirmTimers.set(tempId, setTimeout(tick, 2000));
-    };
-
-    pendingConfirmTimers.set(tempId, setTimeout(tick, 1000));
-  }
-
-  function markPendingAwaitingConfirmation(tempId, expectedPath, isFolder) {
-    const located = findPendingEntry(tempId);
-    if (!located) return;
-    located.entry.status = 'pending';
-    located.entry.expectedPath = normalizePath(expectedPath);
-    located.entry.isFolder = !!isFolder;
-    notifyListChange(located.diskId);
-    schedulePendingConfirmation(located.diskId, tempId);
-    confirmPendingOnServer(located.diskId, tempId);
   }
 
   async function runPendingMutation(diskId, parentId, meta, action) {
@@ -1227,12 +1083,6 @@ const GithubDisk = (() => {
       '  3. Register this callback URL in your GitHub OAuth App:\n' +
       `     ${getOAuthRedirectUri()}`
     );
-  }
-
-  function prefersPatSignIn() {
-    if (CONFIG.GITHUB_USE_PAT) return true;
-    if (CONFIG.GITHUB_TOKEN_EXCHANGE_URL) return false;
-    return isIdePreviewServer();
   }
 
   function buildPopupClosedError() {
@@ -1603,7 +1453,6 @@ const GithubDisk = (() => {
       name: repo.name,
       owner,
       repo: repo.name,
-      repo: repo.name,
       branch: repo.default_branch || 'main',
       accountLogin: profile.login,
       accountName: profile.name || profile.login,
@@ -1747,49 +1596,9 @@ const GithubDisk = (() => {
       .join('/');
   }
 
-  function b64EncodeUtf8(text) {
-    const bytes = new TextEncoder().encode(text || '');
-    return b64EncodeBytes(bytes);
-  }
-
-  function b64EncodeBytes(bytes) {
-    const view = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-    let out = '';
-    const chunk = 0x8000;
-    for (let i = 0; i < view.length; i += chunk) {
-      out += String.fromCharCode(...view.subarray(i, i + chunk));
-    }
-    return btoa(out);
-  }
-
   function isTextFileMime(mimeType = '', name = '') {
-    const mime = String(mimeType).toLowerCase();
-    const lower = String(name).toLowerCase();
-    if (mime.startsWith('text/') || mime === 'application/json') return true;
-    return /\.(txt|md|csv|json|log|xml|yml|yaml|html|htm|css|js|ts|tsx|jsx|py|sh|bat|sql)$/i.test(lower);
-  }
-
-  function b64DecodeUtf8(input) {
-    const bytes = b64DecodeBytes(input);
-    return new TextDecoder().decode(bytes);
-  }
-
-  function b64DecodeBytes(input) {
-    const binary = atob((input || '').replace(/\n/g, ''));
-    return Uint8Array.from(binary, (c) => c.charCodeAt(0));
-  }
-
-  async function readJsonResponse(res) {
-    const contentType = (res.headers.get('content-type') || '').toLowerCase();
-    if (contentType.includes('json') || contentType.includes('javascript')) {
-      return res.json();
-    }
-    const text = await res.text();
-    try {
-      return JSON.parse(text);
-    } catch {
-      throw new Error(`GitHub API returned non-JSON response (${contentType || 'unknown'})`);
-    }
+    if (TEXT_LIKE_MIME_RE.test(String(mimeType).toLowerCase())) return true;
+    return TEXT_EXTENSION_RE.test(String(name).toLowerCase());
   }
 
   function getParentPath(path) {
@@ -1804,11 +1613,9 @@ const GithubDisk = (() => {
   }
 
   function inferMimeType(name = '') {
-    const lower = name.toLowerCase();
+    const lower = String(name).toLowerCase();
     if (lower.endsWith('.json')) return 'application/json';
-    if (/\.(txt|md|markdown|csv|log|xml|yml|yaml|html|htm|css|js|ts|tsx|jsx|py|sh|bat|sql)$/i.test(lower)) {
-      return 'text/plain';
-    }
+    if (TEXT_EXTENSION_RE.test(lower)) return 'text/plain';
     if (lower.endsWith('.png')) return 'image/png';
     if (lower.endsWith('.jpg') || lower.endsWith('.jpeg')) return 'image/jpeg';
     if (lower.endsWith('.pdf')) return 'application/pdf';
@@ -1831,17 +1638,65 @@ const GithubDisk = (() => {
     return new Date(ts).toLocaleString();
   }
 
+  function repoTreeCacheKey(disk) {
+    return `${disk.id}\0${disk.branch || 'main'}`;
+  }
+
+  function buildTreeByPath(tree) {
+    const byPath = new Map();
+    for (const entry of tree) {
+      if (entry?.path) byPath.set(entry.path, entry);
+    }
+    return byPath;
+  }
+
+  /**
+   * 命中缓存时返回 `{ head, treeSha, updatedAt, tree, byPath }`。
+   * 只有「缓存的 head 恰好等于 disk.head」才可信 —— 两者可能同为 null
+   * （空仓库），这也是合法结果，因此不能用 `!disk.head` 直接排除。
+   */
+  function readCachedRepoTree(disk, { force = false } = {}) {
+    if (force) return null;
+    const entry = repoTreeCache.get(repoTreeCacheKey(disk));
+    if (!entry || entry.head !== disk.head) return null;
+    return entry;
+  }
+
   async function getRepoTreeState(disk, { force = false } = {}) {
-    const data = await GithubApi.request(
-      `/api/repos/${encodeURIComponent(disk.owner)}/${encodeURIComponent(disk.repo)}/tree?branch=${encodeURIComponent(disk.branch || 'main')}`
-    );
-    disk.head = data.head;
-    return { head: data.head, treeSha: data.treeSha, updatedAt: data.updatedAt || null, tree: data.tree || [] };
+    const cached = readCachedRepoTree(disk, { force });
+    if (cached) return cached;
+
+    const key = repoTreeCacheKey(disk);
+    // 并发去重：listFiles 与 loadTreeChildren 常在同一个 tick 里各读一次，
+    // 共享一次在途请求而不是各发一次完整递归树。
+    const inflight = repoTreeInflight.get(key);
+    if (inflight) return inflight;
+
+    const request = (async () => {
+      const data = await GithubApi.request(
+        `/api/repos/${encodeURIComponent(disk.owner)}/${encodeURIComponent(disk.repo)}/tree?branch=${encodeURIComponent(disk.branch || 'main')}`
+      );
+      disk.head = data.head;
+      const entry = {
+        head: data.head,
+        treeSha: data.treeSha,
+        updatedAt: data.updatedAt || null,
+        tree: data.tree || [],
+        byPath: buildTreeByPath(data.tree || []),
+      };
+      repoTreeCache.set(key, entry);
+      return entry;
+    })().finally(() => {
+      repoTreeInflight.delete(key);
+    });
+    repoTreeInflight.set(key, request);
+    return request;
   }
 
   /**
    * Full recursive tree of the current branch HEAD.
-   * Cached per owner/repo/branch/head — a moved HEAD re-keys the cache.
+   * 结果按 disk+branch 缓存，写操作改变 head 后自动失配回源；
+   * `force: true` 时跳过缓存（轮询确认远端状态时使用）。
    */
   async function getRepoTree(disk, { force = false } = {}) {
     const state = await getRepoTreeState(disk, { force });
@@ -1956,17 +1811,23 @@ const GithubDisk = (() => {
     }));
   }
 
-  async function listTrash() {
-    return [];
-  }
-
-  async function getFileContentMeta(disk, path) {
-    const treeState = await getRepoTreeState(disk, { force: true });
+  /**
+   * 单文件的元数据。
+   *
+   * 默认走树缓存（打开文件/属性面板前通常刚读过同一棵树，可省一次完整递归树）；
+   * 「远端是否已出现/已消失」的确认轮询必须传 `{ force: true }` 看最新状态。
+   * 返回 `updatedAt` 供调用方复用，避免再单独请求一次分支。
+   */
+  async function getFileContentMeta(disk, path, { force = false } = {}) {
+    const treeState = await getRepoTreeState(disk, { force });
     const tree = treeState.tree;
-    const entry = tree.find((item) => item.type === 'blob' && item.path === path);
+    const indexed = treeState.byPath?.get(path);
+    const entry = indexed?.type === 'blob' ? indexed : tree.find((item) => item.type === 'blob' && item.path === path);
+    const updatedAt = treeState.updatedAt || null;
     if (!entry) {
-      const isDirectory = tree.some((item) => item.path.startsWith(`${path}/`));
-      if (isDirectory) return { type: 'dir', path, name: path.split('/').pop() || path };
+      const isDirectory = indexed?.type === 'tree'
+        || tree.some((item) => item.path.startsWith(`${path}/`));
+      if (isDirectory) return { type: 'dir', path, name: path.split('/').pop() || path, updatedAt };
       const error = new Error(`File not found: ${path}`);
       error.status = 404;
       throw error;
@@ -1977,12 +1838,13 @@ const GithubDisk = (() => {
       path,
       sha: entry.sha,
       size: entry.size ?? null,
+      updatedAt,
     };
   }
 
   function assertUploadSize(bytes) {
-    if (bytes.length > 100 * 1024 * 1024) {
-      throw new Error('GitHub 存储支持的单文件大小上限为 100 MB');
+    if (bytes.length > MAX_UPLOAD_BYTES) {
+      throw new Error(`GitHub 存储支持的单文件大小上限为 ${Math.floor(MAX_UPLOAD_BYTES / (1024 * 1024))} MB`);
     }
   }
 
@@ -2040,6 +1902,49 @@ const GithubDisk = (() => {
     });
   }
 
+  /**
+   * 多文件上传：**一次 Tree + 一次 Commit**（AGENTS.md §3 Batch）。
+   *
+   * 单个文件仍走 createFileFromBlob（保留 pending 行与进度反馈）；只有多选上传
+   * 走这里 —— 之前是一个文件一次 commit，100 个文件就是 100 个 commit。
+   *
+   * 命名冲突沿用 "(copy)" 规则自动改名而**不覆盖**同名文件；批量为空也返回结果，
+   * 失败的文件通过 `failures` 如实上报，不静默吞掉（AGENTS.md §25）。
+   */
+  async function createFilesFromBlobs(diskId, parentId, files) {
+    const disk = await requireDisk(diskId);
+    const parentPath = normalizePath(parentId);
+    const tree = await getRepoTree(disk);
+    const taken = new Set();
+    const operations = [];
+    const failures = [];
+
+    for (const file of files) {
+      try {
+        const name = file.name;
+        const mimeType = file.type || inferMimeType(name);
+        const target = parentPath ? `${parentPath}/${name}` : name;
+        const uniquePath = GithubPaths.makeUniquePath(tree, target, taken);
+        taken.add(uniquePath);
+        const content = isTextFileMime(mimeType, name)
+          ? await file.text()
+          : new Uint8Array(await file.arrayBuffer());
+        if (content instanceof Uint8Array) assertUploadSize(content);
+        operations.push({ type: 'create', path: uniquePath, content });
+      } catch (err) {
+        failures.push({ name: file.name, message: err?.message || String(err) });
+      }
+    }
+
+    if (!operations.length) return { created: 0, failures };
+    const result = await executeOperations(
+      diskId,
+      operations,
+      `Upload ${operations.length} file${operations.length === 1 ? '' : 's'}`
+    );
+    return { created: operations.length, failures, head: result?.head || disk.head };
+  }
+
   async function replaceFile(diskId, parentId, name, mimeType, content = '') {
     return runPendingMutation(
       diskId,
@@ -2071,9 +1976,8 @@ const GithubDisk = (() => {
     const path = normalizePath(fileId);
     const meta = await getFileContentMeta(disk, path);
     if (meta.type !== 'file') throw new Error('项目不是文件');
-    if (meta.encoding === 'base64' && typeof meta.content === 'string') {
-      return b64DecodeUtf8(meta.content);
-    }
+    // getFileContentMeta 只返回 type/name/path/sha/size/updatedAt，从不返回
+    // encoding/content，因此原先「base64 分支」永远不会命中（已删除）。
     const blob = await downloadFile(diskId, fileId);
     return blob.text();
   }
@@ -2113,22 +2017,6 @@ const GithubDisk = (() => {
         await executeOperations(diskId, [{ type: 'rename', from: oldPath, to: newPath }], `Rename ${oldPath} → ${newPath}`);
       }
     );
-  }
-
-  async function isGithubFolder(diskId, path) {
-    const normalized = normalizePath(path);
-    if (!normalized) return false;
-    const disk = await requireDisk(diskId);
-    const tree = await getRepoTree(disk);
-    return GithubPaths.isFolderPath(tree, normalized);
-  }
-
-  async function makeUniqueCopyName(diskId, parentId, name, takenPaths = null) {
-    const disk = await requireDisk(diskId);
-    const tree = await getRepoTree(disk);
-    const targetPath = GithubPaths.joinPath(normalizePath(parentId), name);
-    const uniquePath = GithubPaths.makeUniquePath(tree, targetPath, takenPaths);
-    return GithubPaths.getBaseName(uniquePath);
   }
 
   /**
@@ -2175,103 +2063,8 @@ const GithubDisk = (() => {
     });
   }
 
-  async function trashFile(diskId, fileId) {
-    await deleteFile(diskId, fileId);
-  }
-
   async function restoreFile(_diskId, _fileId) {
     throw new Error('GitHub 存储不支持从回收站恢复');
-  }
-
-  function getTreeEntrySize(tree, path) {
-    const entry = tree.find((item) => item.type === 'blob' && item.path === path);
-    return entry?.size || 0;
-  }
-
-  /**
-   * Copy a file or a whole directory subtree as ONE tree rewrite + ONE commit.
-   * Reuses the source Blob SHAs — content is never re-uploaded
-   * (PROJECT_SPEC §2 Copy).
-   */
-  async function copyFile(diskId, fileId, parentId) {
-    const disk = await requireDisk(diskId);
-    const sourcePath = normalizePath(fileId);
-    const destParent = normalizePath(parentId);
-    const sourceName = sourcePath.split('/').pop();
-
-    const tree = await getRepoTree(disk);
-    if (!GithubPaths.isFolderInTree(tree, sourcePath)
-      && !GithubPaths.isPathVisible(tree, sourcePath, false)) {
-      throw new Error(`Path not found on GitHub: ${sourcePath}`);
-    }
-    const isFolder = GithubPaths.isFolderPath(tree, sourcePath);
-
-    const targetPath = destParent ? `${destParent}/${sourceName}` : sourceName;
-    const destPath = GithubPaths.makeUniquePath(tree, targetPath);
-    const destName = GithubPaths.getBaseName(destPath);
-    const size = isFolder
-      ? GithubPaths.collectDescendants(tree, sourcePath)
-        .filter((entry) => entry.type === 'blob')
-        .reduce((sum, entry) => sum + (entry.size || 0), 0)
-      : getTreeEntrySize(tree, sourcePath);
-
-    return runPendingMutation(
-      diskId,
-      parentId,
-      { name: destName, mimeType: isFolder ? FOLDER_MIME : inferMimeType(destName), size, isFolder },
-      async () => {
-        await executeOperations(
-          diskId,
-          [{ type: 'copy', from: sourcePath, to: destPath }],
-          `Copy ${sourcePath} to ${destPath}`
-        );
-        return {
-          id: destPath,
-          name: destName,
-          isFolder,
-          mimeType: isFolder ? FOLDER_MIME : inferMimeType(destName),
-          parents: [destParent || ROOT_ID],
-          parentId: destParent || ROOT_ID,
-          viewUrl: isFolder ? undefined : getFileViewUrl(diskId, destPath),
-          webViewLink: getItemWebUrl(diskId, destPath, isFolder),
-        };
-      }
-    );
-  }
-
-  /**
-   * Move/Rename via Git Tree path rewrite: descendants keep their Blob SHAs,
-   * one tree + one commit (PROJECT_SPEC §2 Move/Rename).
-   */
-  async function moveFile(diskId, fileId, fromParentId, toParentId, explicitTargetPath = null) {
-    const disk = await requireDisk(diskId);
-    const sourcePath = normalizePath(fileId);
-    const toParent = normalizePath(toParentId);
-    const sourceName = sourcePath.split('/').pop();
-    const targetPath = explicitTargetPath || (toParent ? `${toParent}/${sourceName}` : sourceName);
-
-    const tree = await getRepoTree(disk);
-    const isFolder = GithubPaths.isFolderPath(tree, sourcePath);
-
-    return runPendingMove(
-      diskId,
-      sourcePath,
-      toParentId,
-      {
-        name: sourceName,
-        isFolder,
-        mimeType: isFolder ? FOLDER_MIME : inferMimeType(sourceName),
-        size: isFolder ? 0 : getTreeEntrySize(tree, sourcePath),
-        destPath: targetPath,
-      },
-      async () => {
-        await executeOperations(
-          diskId,
-          [{ type: 'move', from: sourcePath, to: targetPath }],
-          `Move ${sourcePath} to ${targetPath}`
-        );
-      }
-    );
   }
 
   /**
@@ -2341,6 +2134,8 @@ const GithubDisk = (() => {
     const disk = getDisk(diskId);
     if (!disk) throw new Error('找不到 GitHub 存储');
     const path = normalizePath(fileId);
+    // 一次树读取同时拿到 meta 与 updatedAt：之前这里在读 meta 之后又
+    // getRepoTreeState(force) 拉了一次完整递归树，只为取 Modified。
     const meta = await getFileContentMeta(disk, path);
     const isFolder = meta.type === 'dir';
     let githubLink = '—';
@@ -2355,7 +2150,7 @@ const GithubDisk = (() => {
       ['Path', meta.path || path],
       ['Type', isFolder ? 'Folder' : 'File'],
       ['Size', meta.size != null ? formatSize(meta.size) : '—'],
-      ['Modified', formatDate((await getRepoTreeState(disk, { force: true })).updatedAt)],
+      ['Modified', formatDate(meta.updatedAt)],
       ['SHA', meta.sha || '—'],
       ['Storage', `${disk.owner}/${disk.repo}`],
       ['GitHub link', githubLink],
@@ -2388,10 +2183,7 @@ const GithubDisk = (() => {
   }
 
   function isNotepadFile(file) {
-    const mime = (file.mimeType || '').toLowerCase();
-    const name = (file.name || '').toLowerCase();
-    if (mime.startsWith('text/') || mime === 'application/json' || mime === 'application/xml') return true;
-    return /\.(txt|md|markdown|csv|log|xml|yml|yaml|html|htm|css|js|ts|tsx|jsx|py|sh|bat|sql|json)$/i.test(name);
+    return isTextFileMime(file?.mimeType, file?.name);
   }
 
   async function buildNotepadFilePath(diskId, file) {
@@ -2425,10 +2217,11 @@ const GithubDisk = (() => {
   }
 
   async function tryResolveFileByDirectPath(disk, diskId, path) {
-    const dateFormatted = formatDate((await getRepoTreeState(disk, { force: true })).updatedAt);
     for (let attempt = 0; attempt < 4; attempt += 1) {
       try {
-        const meta = await getFileContentMeta(disk, path);
+        // 深链解析可能在文件刚由其他设备创建后立刻发生，重试必须看最新远端状态，
+        // 因此逐次 force；updatedAt 直接从同一个 meta 里取，不再单独拉一次分支。
+        const meta = await getFileContentMeta(disk, path, { force: true });
         if (meta.type === 'dir') throw new Error('项目是文件夹');
         const fileName = path.split('/').pop() || path;
         const parentPath = getParentPath(path);
@@ -2442,7 +2235,7 @@ const GithubDisk = (() => {
           parentId: parentPath || ROOT_ID,
           size: meta.size || 0,
           sizeFormatted: formatSize(meta.size || 0),
-          dateFormatted,
+          dateFormatted: formatDate(meta.updatedAt),
           typeName: mimeType === 'application/json' ? 'JSON file' : mimeType.startsWith('text/') ? 'Text file' : 'File',
           viewUrl: getFileViewUrl(diskId, path),
           webViewLink: getItemWebUrl(diskId, path, false),
@@ -2469,7 +2262,6 @@ const GithubDisk = (() => {
     getOAuthRedirectUriHelp,
     getTokenExchangeUrl,
     getTokenExchangeHelp,
-    prefersPatSignIn,
     acquireAccessToken,
     isGithubId,
     isBrowserViewableFile,
@@ -2488,20 +2280,18 @@ const GithubDisk = (() => {
     removeDisk,
     listHistory,
     listFiles,
-    listTrash,
     createFolder,
     createFile,
     createFileFromBlob,
+    createFilesFromBlobs,
     replaceFile,
     isDuplicateNameError,
     makeUniqueSiblingName,
     isTextFileMime,
+    inferMimeType,
     renameFile,
-    trashFile,
     restoreFile,
     deleteFile,
-    moveFile,
-    copyFile,
     executeBatch,
     buildBatchCopyOperations,
     buildBatchMoveOperations,

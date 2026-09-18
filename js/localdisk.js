@@ -798,7 +798,6 @@ const LocalDisk = (() => {
     getDiskByName,
     getBrowserStorage,
     getAllocatableSize,
-    getReservedSize,
     createDisk,
     renameDisk,
     removeDisk,

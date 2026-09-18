@@ -1,5 +1,5 @@
 import { ApiError, assertSameOrigin, parseRepoPath, readJson, json } from './http.js';
-import { requireRepositoryAccess, requireSession, upsertAclRow } from './session.js';
+import { buildAclUpsertStatements, requireRepositoryAccess, requireSession, upsertAclRow } from './session.js';
 import { branchState, githubRequest, repoPrefix, streamFile } from './github.js';
 import { executeOperations } from './operations.js';
 
@@ -140,17 +140,21 @@ export async function handleRepoList(request, env) {
       can_write: repo.permissions?.push || repo.permissions?.admin ? 1 : 0,
     }];
   });
-  // 逐条写入：upsertAclRow 负责在缺 checked_at 列的旧库上回退。
-  // 这批是拿用户的 token 校验过的结果，重新落库以刷新 TTL。
-  for (const repo of shaped) {
-    await upsertAclRow(env, {
-      sessionId: session.id,
-      owner: repo.owner,
-      repo: repo.repo,
-      canRead: repo.can_read,
-      canWrite: repo.can_write,
-      checkedAt: Date.now(),
-    });
+  // 整批 ACL 一次提交：这批是刚用用户 token 校验过的结果，重新落库以刷新 TTL。
+  // 早先是逐个 await 一次 D1 往返，最多 1000 个仓库会把刷新拖到数秒。
+  const checkedAt = Date.now();
+  const statements = await buildAclUpsertStatements(env, shaped.map((repo) => ({
+    sessionId: session.id,
+    owner: repo.owner,
+    repo: repo.repo,
+    canRead: repo.can_read,
+    canWrite: repo.can_write,
+    checkedAt,
+  })));
+  // 分批提交，避免单次 batch 过大；50 是远低于 D1 限制的保守值。
+  const ACL_BATCH_SIZE = 50;
+  for (let offset = 0; offset < statements.length; offset += ACL_BATCH_SIZE) {
+    await env.DB.batch(statements.slice(offset, offset + ACL_BATCH_SIZE));
   }
   return json({ repositories: shaped.filter((repo) => repo.can_read), cached: false });
 }

@@ -35,15 +35,12 @@ const App = (() => {
   let urlPushPending = false;
   let initialRouteApplied = false;
   let progressTimer = null;
+  let searchRenderTimer = null;
   let deferredInstallPrompt = window.gitFilesInstallPrompt || null;
 
-  const USER_SECTIONS = [
-    { id: 'my-drive', icon: '📁', label: '我的云端硬盘' },
-    { id: 'recent', icon: '🕐', label: '最近使用' },
-    { id: 'shared', icon: '👥', label: '与我共享' },
-    { id: 'starred', icon: '⭐', label: '已加星标' },
-    { id: 'trash', icon: '🗑️', label: '回收站' },
-  ];
+  /** 配额缓存的有效期；显式刷新不受它限制（见 refreshUserQuotas）。 */
+  const QUOTA_TTL_MS = 60 * 1000;
+  const quotaFetchedAt = new Map();
 
   const LOCAL_DISK_SECTIONS = [
     { id: 'trash', icon: '🗑️', label: '回收站' },
@@ -207,6 +204,10 @@ const App = (() => {
     else if (input) {
       input.value = '';
       state.searchQuery = '';
+      if (searchRenderTimer) {
+        clearTimeout(searchRenderTimer);
+        searchRenderTimer = null;
+      }
       renderCurrentView();
     }
   }
@@ -397,26 +398,198 @@ const App = (() => {
     };
   }
 
-  function attachFileContextMenu(el, file) {
-    const openMenu = () => {
-      selectFile(file.id);
-      ContextMenu.showContext(buildFileContext(file));
-    };
+  /**
+   * 工作区文件项（grid / list）的**事件委托**。
+   *
+   * 原先每个文件项各自挂 click / dblclick / contextmenu / 4 个 touch 事件、
+   * more 按钮 click、dragstart / dragend / dragover / dragleave / drop —— 约 14 个
+   * 监听器。500 项目录一次渲染就是 7000 个监听器，移动端负担很重。
+   *
+   * 现在容器上只挂一套；`draggable` 属性仍需逐项设置（无法委托），
+   * 但它不是监听器。`..` 返回上级项沿用自身的 click/keydown 绑定。
+   */
 
-    el.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      selectFile(file.id);
-      ContextMenu.show(e, buildFileContext(file));
-    });
+  /** 从事件目标向上找到当前容器内的文件项元素。 */
+  function workspaceItemElement(target, container) {
+    const el = target?.closest?.('.file-item[data-id], .list-row[data-id]');
+    if (!el || !container.contains(el)) return null;
+    return el;
+  }
 
-    attachLongPress(el, openMenu);
+  /** 委托处理器取出对应的 file（返回上级项与未知 id 一律为 null）。 */
+  function workspaceFileFor(el) {
+    const id = el?.dataset?.id;
+    if (!id || id === '__go_up__') return null;
+    return state.files.find((entry) => entry.id === id) || null;
+  }
 
-    el.querySelector('.item-more-btn')?.addEventListener('click', (e) => {
-      e.preventDefault();
-      e.stopPropagation();
-      openMenu();
-    });
+  /** 该文件项作为拖放目标时的 dest；不可作为目标时返回 null。 */
+  function workspaceDropTargetFor(file) {
+    if (file.isUserDrive) return { destUserId: file.userId, destParentId: Drive.ROOT_ID };
+    if (file.isLocalDisk) return { destUserId: file.userId, destParentId: LocalDisk.ROOT_ID };
+    if (file.isGithubDisk) return { destUserId: file.userId, destParentId: GithubDisk.ROOT_ID };
+    if (state.section !== 'my-drive' || !state.currentUserId) return null;
+    return file.isFolder ? { destUserId: state.currentUserId, destParentId: file.id } : null;
+  }
+
+  /** 该文件项作为拖拽源时的 {userId, parentId}；不可拖拽时返回 null。 */
+  function workspaceDragSourceFor(file) {
+    if (file.pending || file.isUserDrive || file.isLocalDisk || file.isGithubDisk) return null;
+    if (state.section !== 'my-drive' || !state.currentUserId) return null;
+    return { userId: state.currentUserId, parentId: getFileParentId(file, state.currentUserId) };
+  }
+
+  function wireWorkspaceItemDelegation() {
+    const containers = [$('#file-grid'), $('#file-list-body')].filter(Boolean);
+
+    for (const container of containers) {
+      let pressTimer = null;
+      let longPressFired = false;
+      let pressEl = null;
+      let startX = 0;
+      let startY = 0;
+
+      const clearPress = () => {
+        if (pressTimer) clearTimeout(pressTimer);
+        pressTimer = null;
+        pressEl = null;
+      };
+
+      const openMenu = (el, event) => {
+        const file = workspaceFileFor(el);
+        if (!file) return;
+        selectFile(file.id);
+        if (event) ContextMenu.show(event, buildFileContext(file));
+        else ContextMenu.showContext(buildFileContext(file));
+      };
+
+      container.addEventListener('contextmenu', (event) => {
+        const el = workspaceItemElement(event.target, container);
+        if (!el || !workspaceFileFor(el)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        openMenu(el, event);
+      });
+
+      container.addEventListener('click', (event) => {
+        const el = workspaceItemElement(event.target, container);
+        if (!el) return;
+        const file = workspaceFileFor(el);
+        if (!file) return;
+        // 「更多」按钮与项本身共用同一个容器监听器，必须在同一处短路，
+        // 否则 stopPropagation 挡不住同一元素上的另一个监听器。
+        if (event.target.closest('.item-more-btn')) {
+          event.preventDefault();
+          event.stopPropagation();
+          openMenu(el, null);
+          return;
+        }
+        handleItemTap(event, file);
+      });
+
+      container.addEventListener('dblclick', (event) => {
+        const file = workspaceFileFor(workspaceItemElement(event.target, container));
+        if (file) openFile(file);
+      });
+
+      // 长按（触屏上下文菜单）：整套手势只跟踪一次。
+      container.addEventListener('touchstart', (event) => {
+        if (event.target.closest('.item-more-btn')) return;
+        const el = workspaceItemElement(event.target, container);
+        if (!el || !workspaceFileFor(el)) return;
+        longPressFired = false;
+        pressEl = el;
+        startX = event.touches[0].clientX;
+        startY = event.touches[0].clientY;
+        pressTimer = setTimeout(() => {
+          pressTimer = null;
+          longPressFired = true;
+          if (navigator.vibrate) navigator.vibrate(12);
+          openMenu(el, null);
+        }, 480);
+      }, { passive: true });
+
+      container.addEventListener('touchmove', (event) => {
+        if (!pressEl) return;
+        const touch = event.touches[0];
+        if (Math.abs(touch.clientX - startX) > 12 || Math.abs(touch.clientY - startY) > 12) clearPress();
+      }, { passive: true });
+
+      container.addEventListener('touchend', clearPress, { passive: true });
+      container.addEventListener('touchcancel', clearPress, { passive: true });
+
+      // 长按之后的那次 click 要吞掉，否则会顺带打开文件。
+      container.addEventListener('click', (event) => {
+        if (!longPressFired) return;
+        event.preventDefault();
+        event.stopPropagation();
+        longPressFired = false;
+      }, true);
+
+      // 拖放：手势在容器上处理，`draggable` 由渲染阶段逐项设置。
+      container.addEventListener('dragstart', (event) => {
+        const el = workspaceItemElement(event.target, container);
+        const file = workspaceFileFor(el);
+        const source = file && workspaceDragSourceFor(file);
+        if (!source) return;
+        const payload = {
+          userId: source.userId,
+          parentId: source.parentId,
+          item: {
+            id: file.id,
+            name: file.name,
+            isFolder: !!file.isFolder,
+            mimeType: file.mimeType,
+            parents: file.parents,
+            parentId: file.parentId,
+          },
+        };
+        event.dataTransfer.setData(DRAG_MIME, JSON.stringify(payload));
+        event.dataTransfer.effectAllowed = 'move';
+        el.classList.add('drag-source');
+      });
+
+      container.addEventListener('dragend', () => {
+        container.querySelectorAll('.drag-source').forEach((node) => node.classList.remove('drag-source'));
+        document.querySelectorAll('.drop-target-active').forEach((node) => node.classList.remove('drop-target-active'));
+      });
+
+      container.addEventListener('dragover', (event) => {
+        if (![...event.dataTransfer.types].includes(DRAG_MIME)) return;
+        const el = workspaceItemElement(event.target, container);
+        const file = workspaceFileFor(el);
+        if (!file || !workspaceDropTargetFor(file)) return;
+        event.preventDefault();
+        event.dataTransfer.dropEffect = 'move';
+        el.classList.add('drop-target-active');
+      });
+
+      container.addEventListener('dragleave', (event) => {
+        const el = workspaceItemElement(event.target, container);
+        if (el && !el.contains(event.relatedTarget)) el.classList.remove('drop-target-active');
+      });
+
+      container.addEventListener('drop', async (event) => {
+        const el = workspaceItemElement(event.target, container);
+        if (el) el.classList.remove('drop-target-active');
+        if (![...event.dataTransfer.types].includes(DRAG_MIME)) return;
+        const file = workspaceFileFor(el);
+        const target = file && workspaceDropTargetFor(file);
+        if (!target) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const raw = event.dataTransfer.getData(DRAG_MIME);
+        if (!raw) return;
+        let payload;
+        try {
+          payload = JSON.parse(raw);
+        } catch {
+          return;
+        }
+        if (!canDropItem(payload, target)) return;
+        await handleItemDrop(payload, target);
+      });
+    }
   }
 
   function attachLongPress(el, callback) {
@@ -790,11 +963,18 @@ const App = (() => {
     return [...localDisksAsFileItems(), ...githubDisksAsFileItems()];
   }
 
-  async function refreshUserQuotas() {
+  async function refreshUserQuotas({ force = false } = {}) {
+    const now = Date.now();
     const localDisks = LocalDisk.getDisks();
     const githubDisks = GithubDisk.getDisks();
+    // 目录导航每次都会调到这里，而配额只是侧栏/首页的一个文本标签。
+    // TTL 内复用已有值；用户显式刷新（按钮 / 属性面板）传 { force: true }。
+    const isFresh = (disk) => !force
+      && state.userQuotas[disk.id]
+      && now - (quotaFetchedAt.get(disk.id) || 0) < QUOTA_TTL_MS;
+
     await Promise.all([
-      ...localDisks.map(async (disk) => {
+      ...localDisks.filter((disk) => !isFresh(disk)).map(async (disk) => {
         try {
           state.userQuotas[disk.id] = await LocalDisk.getStorageQuota(disk.id);
         } catch {
@@ -803,8 +983,9 @@ const App = (() => {
             shortLabel: '—',
           };
         }
+        quotaFetchedAt.set(disk.id, Date.now());
       }),
-      ...githubDisks.map(async (disk) => {
+      ...githubDisks.filter((disk) => !isFresh(disk)).map(async (disk) => {
         try {
           state.userQuotas[disk.id] = await GithubDisk.getStorageQuota(disk.id);
         } catch {
@@ -813,6 +994,7 @@ const App = (() => {
             shortLabel: '—',
           };
         }
+        quotaFetchedAt.set(disk.id, Date.now());
       }),
     ]);
 
@@ -1124,8 +1306,11 @@ const App = (() => {
       }
     });
 
+    // 建一次 id → file 索引：原先对每个已渲染项都调 state.files.find，
+    // 250ms 一轮，500 项时约每秒百万次比较（O(n²)）。
+    const filesById = new Map(state.files.map((entry) => [entry.id, entry]));
     document.querySelectorAll('.file-item[data-id], .list-row[data-id]').forEach((el) => {
-      const file = state.files.find((entry) => entry.id === el.dataset.id);
+      const file = filesById.get(el.dataset.id);
       if (!file || (!file.pending && !state.processingItemIds.has(file.id))) return;
       const label = getPendingDisplayLabel(file);
       const badge = el.querySelector('.file-pending-badge');
@@ -1214,7 +1399,7 @@ const App = (() => {
   function renderFileStatusBadge(file) {
     if (file.pending || state.processingItemIds.has(file.id)) {
       const label = getPendingDisplayLabel(file);
-      const status = file.pendingStatus || (state.processingItemIds.has(file.id) ? 'syncing' : 'syncing');
+      const status = file.pendingStatus || 'syncing';
       return `<span class="file-pending-badge file-pending-badge--${status}">${escapeHtml(label)}</span>`;
     }
     if (file.isUserDrive || file.isLocalDisk || file.isGithubDisk) {
@@ -1298,10 +1483,9 @@ const App = (() => {
         <span class="file-name">${escapeHtml(file.name)}</span>
         ${statusHtml}
       `;
-      item.addEventListener('click', (event) => handleItemTap(event, file));
-      item.addEventListener('dblclick', () => openFile(file));
-      attachFileContextMenu(item, file);
-      bindDragDropForWorkspaceItem(item, file);
+      // 交互事件统一由容器委托（wireWorkspaceItemDelegation）。
+      // 只有 draggable 必须逐项设置——它是属性，不是监听器。
+      if (workspaceDragSourceFor(file)) item.draggable = true;
       grid.appendChild(item);
     });
     Auth.applyAvatarFallbacks(grid);
@@ -1333,19 +1517,26 @@ const App = (() => {
           <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/></svg>
         </button>
       `;
-      row.addEventListener('click', (event) => handleItemTap(event, file));
-      row.addEventListener('dblclick', () => openFile(file));
-      attachFileContextMenu(row, file);
-      bindDragDropForWorkspaceItem(row, file);
+      // 交互事件统一由容器委托（wireWorkspaceItemDelegation）。
+      if (workspaceDragSourceFor(file)) row.draggable = true;
       body.appendChild(row);
     });
     Auth.applyAvatarFallbacks(body);
   }
 
-  function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+  /**
+   * HTML 转义。
+   *
+   * 用显式字符集的正则，而不是 `createElement('div')` + `innerHTML`：
+   *   · DOM 版本每次调用都要创建/销毁节点，文件列表逐行渲染时开销明显；
+   *   · 需要转义的字符集在这里是显式的，便于审计（AGENTS.md §17）。
+   * 字符集与 js/markdown-lite.js 一致，且**包含引号**，比 DOM 版本更严格
+   * （DOM 版本不会转义 `"` / `'`，而本文件存在属性上下文插值）。
+   */
+  const HTML_ESCAPE_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (ch) => HTML_ESCAPE_MAP[ch]);
   }
 
   /**
@@ -1655,25 +1846,36 @@ const App = (() => {
       || (GithubDisk.isGithubId(userId) ? GithubDisk.ROOT_ID : LocalDisk.ROOT_ID);
     let uploaded = 0;
     const failures = [];
-    for (const file of files) {
-      const mimeType = file.type || 'application/octet-stream';
-      try {
-        if (GithubDisk.isGithubId(userId)) {
-          await GithubDisk.createFileFromBlob(userId, parentId, file.name, mimeType, file);
-        } else if (LocalDisk.isLocalId(userId)) {
-          // 本地存储只支持文本内容；二进制直接拒绝，避免静默写入损坏的文件。
-          if (!isTextMime(mimeType, file.name)) {
-            failures.push(`${file.name}（本地存储不支持二进制文件）`);
-            continue;
+
+    // GitHub 多选上传走批量路径：一次 Tree + 一次 Commit（AGENTS.md §3）。
+    // 单文件仍走 createFileFromBlob，保留 pending 行与进度反馈。
+    if (GithubDisk.isGithubId(userId) && files.length > 1) {
+      const result = await GithubDisk.createFilesFromBlobs(userId, parentId, files);
+      uploaded += result.created;
+      for (const failure of result.failures || []) {
+        failures.push(`${failure.name}（${failure.message}）`);
+      }
+    } else {
+      for (const file of files) {
+        const mimeType = file.type || 'application/octet-stream';
+        try {
+          if (GithubDisk.isGithubId(userId)) {
+            await GithubDisk.createFileFromBlob(userId, parentId, file.name, mimeType, file);
+          } else if (LocalDisk.isLocalId(userId)) {
+            // 本地存储只支持文本内容；二进制直接拒绝，避免静默写入损坏的文件。
+            if (!isTextMime(mimeType, file.name)) {
+              failures.push(`${file.name}（本地存储不支持二进制文件）`);
+              continue;
+            }
+            await LocalDisk.createFile(userId, parentId, file.name, mimeType, await file.text());
+          } else {
+            const token = await Auth.ensureValidToken(userId);
+            await Drive.createFileFromBlob(token, parentId, file.name, mimeType, file);
           }
-          await LocalDisk.createFile(userId, parentId, file.name, mimeType, await file.text());
-        } else {
-          const token = await Auth.ensureValidToken(userId);
-          await Drive.createFileFromBlob(token, parentId, file.name, mimeType, file);
+          uploaded += 1;
+        } catch (err) {
+          failures.push(`${file.name}（${err.message}）`);
         }
-        uploaded += 1;
-      } catch (err) {
-        failures.push(`${file.name}（${err.message}）`);
       }
     }
     if (uploaded) showStatus(`已上传 ${uploaded} 个文件`);
@@ -1681,10 +1883,12 @@ const App = (() => {
     if (uploaded) await refreshCurrentDrive();
   }
 
+  /** 文本类判定统一委托给 GithubDisk.isTextFileMime，避免扩展名表各写一份。 */
   function isTextMime(mimeType, name = '') {
-    if (/^text\//i.test(mimeType)) return true;
-    if (/^application\/(json|xml|javascript|x-yaml)/i.test(mimeType)) return true;
-    return /\.(txt|md|markdown|csv|log|xml|yml|yaml|html?|css|js|ts|tsx|jsx|py|sh|bat|sql|json)$/i.test(name);
+    if (typeof GithubDisk !== 'undefined' && typeof GithubDisk.isTextFileMime === 'function') {
+      return GithubDisk.isTextFileMime(mimeType, name);
+    }
+    return /^text\//i.test(mimeType || '');
   }
 
   function emptyActionButton(label, primary, onClick) {
@@ -2113,10 +2317,6 @@ const App = (() => {
     return null;
   }
 
-  function findTreeFile(userId, fileId) {
-    return findTreeItem(userId, fileId);
-  }
-
   async function syncTreeWithCurrentPath(userId, token) {
     if (state.section !== 'my-drive') return;
 
@@ -2249,128 +2449,10 @@ const App = (() => {
     const list = $('#sidebar-tree-users');
     list.innerHTML = '';
 
-    const users = [];
-
-    if (false) users.forEach((user) => {
-      const expanded = isUserExpanded(user.id);
-      const userNav = `user:${user.id}`;
-
-      const li = document.createElement('li');
-      li.className = 'tree-user-node' + (expanded ? '' : ' collapsed');
-
-      const row = document.createElement('div');
-      row.className = 'tree-row';
-
-      const toggle = createTreeToggle({
-        type: 'user',
-        userId: user.id,
-        expanded,
-      });
-
-      const userBtn = document.createElement('button');
-      userBtn.type = 'button';
-      userBtn.className = 'sidebar-item user-drive-item tree-user-btn';
-      userBtn.dataset.nav = userNav;
-
-      const img = document.createElement('img');
-      img.className = 'sidebar-user-avatar avatar-img';
-      img.alt = userLabel(user);
-      img.src = Auth.getAvatarUrl(user.picture);
-      Auth.applyAvatarFallback(img);
-
-      const info = document.createElement('div');
-      info.className = 'tree-user-info';
-
-      const label = document.createElement('span');
-      label.className = 'sidebar-user-label';
-      label.textContent = userLabel(user);
-
-      const quota = document.createElement('span');
-      quota.className = 'tree-user-quota';
-      quota.dataset.userId = user.id;
-      quota.dataset.reauthUser = user.id;
-      quota.textContent = getQuotaLabel(user.id);
-      if (state.userQuotas[user.id]?.needsReauth) {
-        quota.classList.add('tree-user-quota-reauth');
-      }
-
-      info.appendChild(label);
-      info.appendChild(quota);
-      userBtn.appendChild(img);
-      userBtn.appendChild(info);
-      attachDropTarget(userBtn, () => ({
-        destUserId: user.id,
-        destParentId: Drive.ROOT_ID,
-      }));
-      row.appendChild(toggle);
-      row.appendChild(userBtn);
-      addTreeMoreButton(row, () => ({ type: 'user', userId: user.id, user }));
-
-      const children = document.createElement('ul');
-      children.className = 'tree-children tree-level-2';
-
-      USER_SECTIONS.forEach((section) => {
-        const sectionLi = document.createElement('li');
-        sectionLi.className = 'tree-section-node';
-
-        if (section.id === 'my-drive') {
-          const myDriveExpanded = isFolderExpanded(user.id, Drive.ROOT_ID);
-          sectionLi.classList.toggle('collapsed', !myDriveExpanded);
-
-          const sectionRow = document.createElement('div');
-          sectionRow.className = 'tree-row';
-
-          const sectionToggle = createTreeToggle({
-            type: 'my-drive',
-            userId: user.id,
-            folderId: Drive.ROOT_ID,
-            expanded: myDriveExpanded,
-          });
-
-          const sectionBtn = document.createElement('button');
-          sectionBtn.type = 'button';
-          sectionBtn.className = 'sidebar-item tree-child-item';
-          sectionBtn.dataset.nav = `user:${user.id}:my-drive`;
-          sectionBtn.innerHTML = `
-            <span class="sidebar-icon">${section.icon}</span>
-            <span>${section.label}</span>
-          `;
-
-          sectionRow.appendChild(sectionToggle);
-          sectionRow.appendChild(sectionBtn);
-          sectionLi.appendChild(sectionRow);
-
-          const folderTree = document.createElement('ul');
-          folderTree.className = 'tree-children tree-level-3';
-          if (myDriveExpanded) {
-            renderTreeNodes(user.id, Drive.ROOT_ID, folderTree);
-          }
-          sectionLi.appendChild(folderTree);
-        } else {
-          const sectionRow = document.createElement('div');
-          sectionRow.className = 'tree-row';
-          sectionRow.appendChild(createTreeSpacer());
-
-          const sectionBtn = document.createElement('button');
-          sectionBtn.type = 'button';
-          sectionBtn.className = 'sidebar-item tree-child-item';
-          sectionBtn.dataset.nav = `user:${user.id}:${section.id}`;
-          sectionBtn.innerHTML = `
-            <span class="sidebar-icon">${section.icon}</span>
-            <span>${section.label}</span>
-          `;
-
-          sectionRow.appendChild(sectionBtn);
-          sectionLi.appendChild(sectionRow);
-        }
-
-        children.appendChild(sectionLi);
-      });
-
-      li.appendChild(row);
-      li.appendChild(children);
-      list.appendChild(li);
-    });
+    // Google Drive 的用户侧栏渲染整块已删除：它被 `if (false)` 包裹，
+    // 永远不会执行（`Auth.getUsers()` 恒为空数组），约 120 行死代码。
+    // 侧栏现在只渲染本地存储（下方）与 GitHub 仓库。见
+    // docs/代码审阅-性能与死代码-20260918.md 的 D-6。
 
     LocalDisk.getDisks().forEach((disk) => {
       const expanded = isUserExpanded(disk.id);
@@ -2726,6 +2808,10 @@ const App = (() => {
     state.selectedId = null;
     state.selectedIds.clear();
     state.searchQuery = '';
+    if (searchRenderTimer) {
+      clearTimeout(searchRenderTimer);
+      searchRenderTimer = null;
+    }
     const searchInput = $('#file-search');
     if (searchInput) searchInput.value = '';
     updateSelectionBar();
@@ -2926,7 +3012,7 @@ const App = (() => {
     const fileMatch = nav.match(/^file\|([^|]+)\|(.+)$/);
     if (fileMatch) {
       const [, userId, fileId] = fileMatch;
-      const file = findTreeFile(userId, fileId);
+      const file = findTreeItem(userId, fileId);
       if (file) {
         if (file.isFolder) {
           if (LocalDisk.isLocalId(userId)) navigateToLocalDisk(userId, file.id);
@@ -3140,40 +3226,6 @@ const App = (() => {
     }
   }
 
-  function bindDragDropForWorkspaceItem(el, file) {
-    if (file.isUserDrive) {
-      attachDropTarget(el, () => ({
-        destUserId: file.userId,
-        destParentId: Drive.ROOT_ID,
-      }));
-      return;
-    }
-    if (file.isLocalDisk) {
-      attachDropTarget(el, () => ({
-        destUserId: file.userId,
-        destParentId: LocalDisk.ROOT_ID,
-      }));
-      return;
-    }
-    if (file.isGithubDisk) {
-      attachDropTarget(el, () => ({
-        destUserId: file.userId,
-        destParentId: GithubDisk.ROOT_ID,
-      }));
-      return;
-    }
-    if (state.section !== 'my-drive' || !state.currentUserId) return;
-    const userId = state.currentUserId;
-    const parentId = getFileParentId(file, userId);
-    attachDragSource(el, file, userId, parentId);
-    if (file.isFolder) {
-      attachDropTarget(el, () => ({
-        destUserId: userId,
-        destParentId: file.id,
-      }));
-    }
-  }
-
   function bindDragDropForTreeItem(el, file, userId) {
     const parentId = getFileParentId(file, userId);
     attachDragSource(el, file, userId, parentId);
@@ -3271,6 +3323,7 @@ const App = (() => {
     $('#btn-user-sign-out')?.addEventListener('click', () => { closeUserMenu(); return signOutGithub(); });
     wireUserMenu();
     wireSearchToggle();
+    wireWorkspaceItemDelegation();
     $('#btn-conflict-center')?.addEventListener('click', () => openConflictCenter());
 
     const refreshBtn = $('#btn-refresh');
@@ -3308,9 +3361,16 @@ const App = (() => {
       viewPinnedByUser = true;
       setView(state.view === 'list' ? 'grid' : 'list');
     });
+    // 搜索按字符防抖：原先每敲一个键就全量重建 grid/list（每项还会重挂
+    // contextmenu/touch/drag 等十余个监听器），大目录 + 移动端会明显卡顿。
+    // 只把「重建 DOM」延后，state.searchQuery 立即更新，输入框始终即时回显。
     $('#file-search')?.addEventListener('input', (event) => {
       state.searchQuery = event.target.value;
-      renderCurrentView();
+      if (searchRenderTimer) clearTimeout(searchRenderTimer);
+      searchRenderTimer = setTimeout(() => {
+        searchRenderTimer = null;
+        renderCurrentView();
+      }, 120);
     });
     $('#file-sort')?.addEventListener('change', (event) => {
       state.sortBy = event.target.value;
@@ -3583,6 +3643,8 @@ const App = (() => {
       getUserQuota: (userId) => state.userQuotas[userId] || null,
       setUserQuota: (userId, quota) => {
         state.userQuotas[userId] = quota;
+        // 记下写入时间，避免刚由其它路径写好的配额立刻被 TTL 判为过期再拉一次。
+        quotaFetchedAt.set(userId, Date.now());
       },
     });
 

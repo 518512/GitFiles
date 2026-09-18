@@ -1,7 +1,6 @@
 const OperationProgress = (() => {
   const STORAGE_KEY = 'storage_hub_operation_stats';
   const ACTIVE = new Map();
-  const ITEM_TRACKS = new Map();
 
   const DEFAULTS = {
     'github:create': { baseMs: 4500, perKbMs: 2 },
@@ -102,7 +101,6 @@ const OperationProgress = (() => {
       size: Number(options.size) || 0,
     };
     ACTIVE.set(itemId, track);
-    ITEM_TRACKS.set(itemId, itemId);
     return itemId;
   }
 
@@ -112,17 +110,14 @@ const OperationProgress = (() => {
     const durationMs = performance.now() - track.startedAt;
     recordDuration(track.operationKey, durationMs, track.size, success);
     ACTIVE.delete(itemId);
-    ITEM_TRACKS.delete(itemId);
   }
 
   function transfer(fromId, toId) {
     const track = ACTIVE.get(fromId);
     if (!track || !toId || fromId === toId) return false;
     ACTIVE.delete(fromId);
-    ITEM_TRACKS.delete(fromId);
     track.itemId = toId;
     ACTIVE.set(toId, track);
-    ITEM_TRACKS.set(toId, toId);
     return true;
   }
 

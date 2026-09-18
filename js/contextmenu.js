@@ -513,10 +513,11 @@ const ContextMenu = (() => {
     const localDisks = LocalDisk.getDisks();
     const githubDisks = GithubDisk.getDisks();
     const localProfile = LocalUser.getProfile();
+    const mountCount = localDisks.length + githubDisks.length;
     const rows = [
       { section: typeof SITE !== 'undefined' ? SITE.name : 'GitFiles' },
       ['位置', '根目录'],
-      ['已挂载存储', String(localDisks.length + githubDisks.length)],
+      ['已挂载存储', String(mountCount)],
       ['本地存储卷', String(localDisks.length)],
       ['GitHub 存储仓库', String(githubDisks.length)],
       { section: '本地资料' },
@@ -524,16 +525,51 @@ const ContextMenu = (() => {
       { section: '存储' },
     ];
 
+    // 配额优先取 app 的缓存（refreshUserQuotas 已经拉过），缺失的并发补齐。
+    // 之前这里是逐个 `await` 串行请求；更严重的是下面的 usageCount / limitCount
+    // 从未自增，面板永远显示「报告使用量的存储 0 / N」「Total used —」——
+    // 明明有盘报了用量却显示成没有，属于展示错误数据。
+    const withQuota = async (disk, kind, scopedLimit) => {
+      const cached = app?.getUserQuota?.(disk.id);
+      if (cached) return { disk, kind, scopedLimit, quota: cached };
+      try {
+        const quota = kind === 'local'
+          ? await LocalDisk.getStorageQuota(disk.id)
+          : await GithubDisk.getStorageQuota(disk.id);
+        app?.setUserQuota?.(disk.id, quota);
+        return { disk, kind, scopedLimit, quota };
+      } catch {
+        return { disk, kind, scopedLimit, quota: null };
+      }
+    };
+    const entries = await Promise.all([
+      ...localDisks.map((disk) => withQuota(disk, 'local', disk.sizeLimit || 0)),
+      // GitHub 仓库的容量上限是固定常量，取决于仓库大小，因此总能计入总量。
+      ...githubDisks.map((disk) => withQuota(disk, 'github', Number.POSITIVE_INFINITY)),
+    ]);
+
     let totalUsage = 0;
     let totalLimit = 0;
-    let limitCount = 0;
     let usageCount = 0;
+    let limitCount = 0;
+    for (const entry of entries) {
+      if (entry.quota?.usage == null) continue;
+      usageCount += 1;
+      totalUsage += entry.quota.usage;
+      // 本地卷若未设置上限，quota.limit 是**共享的**浏览器配额，
+      // 多个卷累加会重复计算，因此只认用户显式设置的 sizeLimit。
+      const scopedLimit = entry.kind === 'local' ? entry.scopedLimit : (entry.quota.limit || 0);
+      if (scopedLimit > 0) {
+        limitCount += 1;
+        totalLimit += scopedLimit;
+      }
+    }
 
     rows.push({ section: '存储统计' });
-    rows.push(['报告使用量的存储', `${usageCount} / ${localDisks.length + githubDisks.length}`]);
+    rows.push(['报告使用量的存储', `${usageCount} / ${mountCount}`]);
     rows.push(['Total used', usageCount ? formatBytes(totalUsage) : '—']);
 
-    if (limitCount > 0 && limitCount === localDisks.length + githubDisks.length) {
+    if (mountCount > 0 && limitCount === mountCount) {
       const totalFree = Math.max(0, totalLimit - totalUsage);
       rows.push(['Total capacity', formatBytes(totalLimit)]);
       rows.push(['Total free', formatBytes(totalFree)]);
@@ -543,20 +579,16 @@ const ContextMenu = (() => {
       rows.push(['Note', 'Per-drive limits differ or need re-login']);
     }
 
-    if (localDisks.length) {
+    const localEntries = entries.filter((entry) => entry.kind === 'local');
+    if (localEntries.length) {
       rows.push({ section: 'Local storage' });
-      for (const disk of localDisks) {
-        const quota = await LocalDisk.getStorageQuota(disk.id);
-        rows.push([disk.name, quota.label || '—']);
-      }
+      for (const entry of localEntries) rows.push([entry.disk.name, entry.quota?.label || '—']);
     }
 
-    if (githubDisks.length) {
+    const githubEntries = entries.filter((entry) => entry.kind === 'github');
+    if (githubEntries.length) {
       rows.push({ section: 'GitHub storage' });
-      for (const disk of githubDisks) {
-        const quota = await GithubDisk.getStorageQuota(disk.id);
-        rows.push([disk.name, quota.label || '—']);
-      }
+      for (const entry of githubEntries) rows.push([entry.disk.name, entry.quota?.label || '—']);
     }
 
     return rows;
@@ -719,7 +751,7 @@ const ContextMenu = (() => {
           if (user) {
             Auth.setActiveUser(user.id);
             await Auth.refreshTokenInteractive(user.id);
-            app.refreshUserQuotas?.();
+            app.refreshUserQuotas?.({ force: true });
             app.showStatus(`已登录：${Auth.formatDisplayEmail(user.email)}`);
           }
           break;
@@ -803,7 +835,7 @@ const ContextMenu = (() => {
           break;
         case 'refresh':
           if (ctx.type === 'root' && app.refreshUserQuotas) {
-            await app.refreshUserQuotas();
+            await app.refreshUserQuotas({ force: true });
           }
           app.refresh();
           break;
@@ -1004,39 +1036,15 @@ const ContextMenu = (() => {
       }
       return folder;
     }
+    // 本地存储只支持文本：二进制若走 blob.text() 再 createFile 会被
+    // localdisk.js 归一成 ''，用户看到「复制成功」但文件是空的（假成功）。
+    // 这里明确拒绝，与 app.js 本地上传的 isTextMime 守卫保持一致。
+    if (!GithubDisk.isTextFileMime(item.mimeType, item.name)) {
+      throw new Error(`本地存储只支持文本文件，无法复制二进制文件：${item.name}`);
+    }
     const blob = await GithubDisk.downloadFile(sourceDiskId, item.id);
     const content = await blob.text();
     return LocalDisk.createFile(destDiskId, parentId, item.name, item.mimeType || 'application/octet-stream', content);
-  }
-
-  async function copyGithubItemToGoogle(sourceDiskId, destToken, item, parentId) {
-    if (item.isFolder || item.mimeType === GithubDisk.FOLDER_MIME) {
-      const folder = await Drive.createFolder(destToken, parentId, item.name);
-      const children = await GithubDisk.listFiles(sourceDiskId, item.id);
-      for (const child of children) {
-        await copyGithubItemToGoogle(sourceDiskId, destToken, child, folder.id);
-      }
-      return folder;
-    }
-    const blob = await GithubDisk.downloadFile(sourceDiskId, item.id);
-    if (GithubDisk.isTextFileMime(item.mimeType, item.name)) {
-      const text = await blob.text();
-      return Drive.createFile(destToken, parentId, item.name, item.mimeType || 'text/plain', text);
-    }
-    return Drive.createFileFromBlob(destToken, parentId, item.name, item.mimeType, blob);
-  }
-
-  async function copyGithubItemToGithub(sourceDiskId, destDiskId, item, parentId) {
-    if (item.isFolder || item.mimeType === GithubDisk.FOLDER_MIME) {
-      const folder = await GithubDisk.createFolder(destDiskId, parentId, item.name);
-      const children = await GithubDisk.listFiles(sourceDiskId, item.id);
-      for (const child of children) {
-        await copyGithubItemToGithub(sourceDiskId, destDiskId, child, folder.id);
-      }
-      return folder;
-    }
-    const blob = await GithubDisk.downloadFile(sourceDiskId, item.id);
-    return GithubDisk.createFileFromBlob(destDiskId, parentId, item.name, item.mimeType, blob);
   }
 
   // T4: local 递归收集到批量结构（只读）
@@ -1053,32 +1061,11 @@ const ContextMenu = (() => {
       }
       return;
     }
+    // 本地存储只保存文本（localdisk.js 会把非字符串内容归一为 ''），
+    // 所以这里必定是文本读取；原先按 MIME 分叉出来的二进制分支
+    // 只会产出一个空字节数组，属于不会生效的代码。
     const blob = await LocalDisk.downloadFile(sourceDiskId, item.id);
-    const content = GithubDisk.isTextFileMime(item.mimeType, item.name)
-      ? await blob.text()
-      : new Uint8Array(await blob.arrayBuffer());
-    files.push({ relPath: rel, content });
-  }
-
-  // T4: Google 递归收集到批量结构（只读）
-  async function collectGoogleIntoBatch(sourceToken, item, prefix, files, emptyDirs) {
-    const rel = prefix ? `${prefix}/${item.name}` : item.name;
-    if (item.isFolder) {
-      const children = await Drive.listFiles(sourceToken, item.id);
-      if (!children.length) {
-        emptyDirs.push(rel);
-        return;
-      }
-      for (const child of children) {
-        await collectGoogleIntoBatch(sourceToken, child, rel, files, emptyDirs);
-      }
-      return;
-    }
-    const exported = await Drive.getFileBlobForExternalCopy(sourceToken, item.id, item);
-    const content = GithubDisk.isTextFileMime(exported.mimeType, exported.name)
-      ? await exported.blob.text()
-      : new Uint8Array(await exported.blob.arrayBuffer());
-    files.push({ relPath: rel, content });
+    files.push({ relPath: rel, content: await blob.text() });
   }
 
   function storageKind(userId) {
@@ -1260,63 +1247,6 @@ const ContextMenu = (() => {
     }
     const content = await LocalDisk.getTextFileContent(sourceDiskId, item.id);
     return LocalDisk.createFile(destDiskId, parentId, item.name, item.mimeType, content);
-  }
-
-  async function copyGoogleItemToLocal(sourceToken, destDiskId, item, parentId) {
-    if (item.isFolder) {
-      const folder = await LocalDisk.createFolder(destDiskId, parentId, item.name);
-      const children = await Drive.listFiles(sourceToken, item.id);
-      for (const child of children) {
-        await copyGoogleItemToLocal(sourceToken, destDiskId, child, folder.id);
-      }
-      return folder;
-    }
-    const blob = await Drive.downloadFile(sourceToken, item.id, item.mimeType);
-    const content = await blob.text();
-    return LocalDisk.createFile(destDiskId, parentId, item.name, item.mimeType || 'text/plain', content);
-  }
-
-  async function copyLocalItemToGoogle(sourceDiskId, destToken, item, parentId) {
-    if (item.isFolder || item.mimeType === LocalDisk.FOLDER_MIME) {
-      const folder = await Drive.createFolder(destToken, parentId, item.name);
-      const children = await LocalDisk.listFiles(sourceDiskId, item.id);
-      for (const child of children) {
-        await copyLocalItemToGoogle(sourceDiskId, destToken, child, folder.id);
-      }
-      return folder;
-    }
-    const content = await LocalDisk.getTextFileContent(sourceDiskId, item.id);
-    return Drive.createFile(destToken, parentId, item.name, item.mimeType || 'text/plain', content);
-  }
-
-  async function copyBlobToGithub(destDiskId, parentId, name, mimeType, blob) {
-    return GithubDisk.createFileFromBlob(destDiskId, parentId, name, mimeType, blob);
-  }
-
-  async function copyLocalItemToGithub(sourceDiskId, destDiskId, item, parentId) {
-    if (item.isFolder || item.mimeType === LocalDisk.FOLDER_MIME) {
-      const folder = await GithubDisk.createFolder(destDiskId, parentId, item.name);
-      const children = await LocalDisk.listFiles(sourceDiskId, item.id);
-      for (const child of children) {
-        await copyLocalItemToGithub(sourceDiskId, destDiskId, child, folder.id);
-      }
-      return folder;
-    }
-    const blob = await LocalDisk.downloadFile(sourceDiskId, item.id);
-    return copyBlobToGithub(destDiskId, parentId, item.name, item.mimeType, blob);
-  }
-
-  async function copyGoogleItemToGithub(sourceToken, destDiskId, item, parentId) {
-    if (item.isFolder) {
-      const folder = await GithubDisk.createFolder(destDiskId, parentId, item.name);
-      const children = await Drive.listFiles(sourceToken, item.id);
-      for (const child of children) {
-        await copyGoogleItemToGithub(sourceToken, destDiskId, child, folder.id);
-      }
-      return folder;
-    }
-    const exported = await Drive.getFileBlobForExternalCopy(sourceToken, item.id, item);
-    return copyBlobToGithub(destDiskId, parentId, exported.name, exported.mimeType, exported.blob);
   }
 
   function makeUniqueSiblingName(name, existsFn) {
@@ -1641,10 +1571,11 @@ const ContextMenu = (() => {
     }
   }
 
-  function escapeHtml(str) {
-    const div = document.createElement('div');
-    div.textContent = str;
-    return div.innerHTML;
+  /** 与 js/app.js / js/markdown-lite.js 同一套转义字符集（含引号）。 */
+  const HTML_ESCAPE_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+
+  function escapeHtml(value) {
+    return String(value ?? '').replace(/[&<>"']/g, (ch) => HTML_ESCAPE_MAP[ch]);
   }
 
   function getClipboard() {

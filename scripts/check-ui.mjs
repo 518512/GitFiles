@@ -50,8 +50,7 @@ for (const ids of idsByFile.values()) for (const id of ids) allIds.add(id);
 const jsFiles = fs.readdirSync(path.join(root, 'js'))
   .filter((name) => name.endsWith('.js'))
   .map((name) => `js/${name}`);
-// js/github/ 是仅测试用的历史引擎，不参与生产 UI，跳过。
-const jsSources = jsFiles.concat(['js/github']);
+const jsSources = jsFiles;
 
 // id 也可以由 JS 动态创建（例如 Dialog 惰性插入 #app-dialog），这类 id 不在
 // HTML 里出现是正常的，不能报错。
@@ -105,7 +104,16 @@ const htmlAndJs = HTML_FILES
 for (const cssRel of ['css/style.css']) {
   const css = read(cssRel).replace(/\/\*[\s\S]*?\*\//g, '');
   const classes = new Set([...css.matchAll(/\.([a-zA-Z][\w-]*)/g)].map((m) => m[1]));
-  const unused = [...classes].filter((name) => !htmlAndJs.includes(name));
+  // JS 里用模板字符串拼出来的类名（如 `file-item--pending-${status}`、
+  // `file-pending-badge--${status}`）永远不会以字面量出现在源码里，
+  // 直接按文本搜索会报成"未引用"。这里把 `${` 之前那段静态前缀收集起来，
+  // 类名只要以某个前缀开头就视为已使用。
+  const dynamicPrefixes = new Set(
+    [...htmlAndJs.matchAll(/([a-zA-Z][\w-]{5,}-)\$\{/g)].map((m) => m[1])
+  );
+  const isUsed = (name) => htmlAndJs.includes(name)
+    || [...dynamicPrefixes].some((prefix) => name.startsWith(prefix));
+  const unused = [...classes].filter((name) => !isUsed(name));
   if (unused.length) {
     warnings.push(`${cssRel}: ${unused.length} 个类选择器未被 HTML/JS 引用 → ${unused.slice(0, 12).join(', ')}${unused.length > 12 ? ' …' : ''}`);
   }

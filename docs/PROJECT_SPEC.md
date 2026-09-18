@@ -156,6 +156,44 @@ POST /api/repos/:owner/:repo/operations
 
 `POST /api/repos` 仅在用户明确确认后创建私有初始化仓库，并把返回仓库写入当前 session ACL。登录本身绝不创建 `Drive-N` 或其他仓库。
 
+### 4.1 operations 请求体
+
+```jsonc
+{
+  "branch": "main",
+  "expectedHead": "<commit sha | null>",   // null 表示空分支，首建 ref
+  "message": "Batch file operations",
+  "operations": [
+    { "type": "create", "path": "docs/a.md", "content": "# hi" },
+    { "type": "create", "path": "img/logo.png", "content": "iVBORw0…", "encoding": "base64" },
+    { "type": "update", "path": "README.md", "content": "new" },
+    { "type": "delete", "path": "old.md" },
+    { "type": "rename", "from": "a.md", "to": "b.md" },
+    { "type": "move",   "from": "a.md", "to": "archive/a.md" },
+    { "type": "copy",   "from": "a.md", "to": "a (copy).md" },
+    { "type": "mkdir",  "path": "docs/empty" }
+  ]
+}
+```
+
+内容字段（`create` / `update` / `upload`）支持两种编码：
+
+```text
+省略 encoding 或 "utf-8"   content 为文本，Worker 用 TextEncoder → base64 后提交
+encoding: "base64"         content 已是 base64 字符串，Worker 校验后原样透传
+```
+
+约定与理由：
+
+- `base64` 是**二进制**的传输形式。JSON 没有 typed array，客户端若把 `Uint8Array`
+  展开成数字数组，体积约为 3.6 倍且会产生上千万元素的数组；base64 只有 4/3。
+- Worker 对 base64 做严格校验（字符集、长度为 4 的倍数、去空白），并按**解码后**
+  的字节数执行 25MB 上限，超限在调用 GitHub 之前就返回 422。
+- 去重（相同内容只上传一个 Blob）按 `encoding + 内容` 分组，字节数组按长度分组
+  后再逐字节复核，绝不把不同内容合并成同一个 Blob SHA。
+- 单文件上限两端一致：客户端 `js/githubdisk.js` 与 Worker `workers/operations.js`
+  都是 25 MB。
+
 ## 5. Git Data Mutation Pipeline
 
 所有写操作必须由 Worker 执行：
@@ -267,10 +305,10 @@ timestamp
 - 前端只调用同源 `GithubApi`，不得向 GitHub API 发送 `Authorization` header。
 - 浏览器只保留 `github-paths.js` 的纯路径工具；GitHub API/token/Git Data engine 必须只在 Worker。
 
-  > 现状与目标的差距必须如实记录：`js/github/*.js` 是上游遗留的浏览器端 Git 引擎，
-  > 未被任何页面加载且被构建排除，仅测试使用；`js/drive.js` / `js/auth.js` 是
-  > Google Drive 的兼容壳（已移除该能力）。二者都是待清理项，**不得**作为
-  > "浏览器可以持有 Git 引擎"的先例。
+  > 现状：上游遗留的浏览器端 Git 引擎 `js/github/*.js` 已于 2026-09-18 **删除**
+  > （它从未被任何页面加载，其测试场景已迁移到 `workers/operations.js` 的测试）。
+  > `js/drive.js` / `js/auth.js` 是 Google Drive 的兼容壳（该能力已移除），仍属待清理项。
+  > **不得**以任何形式重新引入"浏览器持有 Git 引擎"。
 - 登录只建立 Worker session；“Add Repository”先列出可写 ACL 仓库，用户选择后挂载。
 - 新建仓库是独立确认动作。
 - 顶栏显示 Worker session，状态取值为
@@ -395,8 +433,8 @@ GitHub Pages、独立 token proxy、PAT 浏览器 fallback 不属于受支持的
 当前 Node 测试与静态校验：
 
 ```bash
-node --test tests/github-engine.test.mjs tests/worker-api.test.mjs tests/markdown-lite.test.mjs
-node tests/github-engine.test.mjs        # 自带 harness，退出码非 0 表示失败
+node --test tests/worker-api.test.mjs tests/markdown-lite.test.mjs \
+  tests/github-tree-cache.test.mjs tests/githubdisk-utils.test.mjs
 node scripts/check-ui.mjs                # UI 结构
 node scripts/audit-css.mjs --strict      # 两层样式表冲突，必须 0 未处理
 node scripts/build-logo-from-image.mjs --check   # 图标资源

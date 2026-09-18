@@ -17,16 +17,12 @@ const Drive = (() => {
       || /\.(txt|md|markdown|csv|log|xml|yml|yaml|html|htm|css|js|ts|tsx|jsx|py|sh|bat|sql|json)$/i.test(name);
   }
 
-  function parseNotepadFilePath(filePath) {
-    return String(filePath || '').split('/').filter(Boolean).map((segment) => {
-      try { return decodeURIComponent(segment); } catch { return segment; }
-    });
-  }
-
   return {
     ROOT_ID,
     isNotepadFile,
     getDefaultIcon: () => '📄',
+    // Drive 已移除：路径解析退化为一律返回空数组（原先这里有一份实现，
+    // 但紧接着就被这个箭头函数覆盖，属于永不执行的代码）。
     parseNotepadFilePath: () => [],
     ...Object.fromEntries([
       'listFiles', 'listShared', 'listStarred', 'listRecent', 'listTrash',

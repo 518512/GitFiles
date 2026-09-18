@@ -186,11 +186,11 @@ Writes must include `expectedHead`; the first write to an empty repository uses 
 ## Development and tests
 
 ```bash
-node --test tests/github-engine.test.mjs tests/worker-api.test.mjs tests/markdown-lite.test.mjs
+node --test tests/worker-api.test.mjs tests/markdown-lite.test.mjs tests/github-tree-cache.test.mjs tests/githubdisk-utils.test.mjs
 node scripts/build-config.mjs
 ```
 
-Current tests cover Git operations, Blob SHA reuse, one-commit batches, CAS, initial empty-repository refs, D1/session/ACL rejection and stale-ACL revalidation, same-origin mutations, OAuth token non-disclosure, the OAuth callback delivery-origin allowlist, path NFC normalization, rejection of invalid UTF-16 content, propagation of 429 back-off details, streaming/Range file downloads, and XSS hardening of Markdown rendering.
+Current tests cover Git operations (including directory move/copy, mkdir, mixed batches and one-commit batches), Blob SHA reuse, base64 binary transport and deduplication, CAS, initial empty-repository refs, D1/session/ACL rejection and stale-ACL revalidation, same-origin mutations, OAuth token non-disclosure, the OAuth callback delivery-origin allowlist, path NFC normalization, rejection of invalid UTF-16 content, propagation of 429 back-off details, streaming/Range file downloads, the browser-side repository tree cache, and XSS hardening of Markdown rendering.
 
 UI structure has its own static checks (duplicate ids, JS references to missing ids, stylesheet cascade order, unused CSS class selectors):
 

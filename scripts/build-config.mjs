@@ -61,11 +61,12 @@ const FILES = [
 const DIRS = ['css', 'js', 'assets'];
 
 /**
- * Test-only legacy Git engine remains in source for regression coverage but
- * must never be published to Worker static assets: production browser code
- * uses same-origin Worker APIs plus github-paths.js only.
+ * `js/config.local.example.js` 只是模板，不进入发布产物。
+ *
+ * 注：历史上还有一份仅测试用的浏览器端 Git 引擎 `js/github/`，2026-09-18 已连同
+ * 其独立测试一并删除（场景覆盖已迁移到 `workers/operations.js` 的测试）。
  */
-const EXCLUDED = [/config\.local\.example\.js$/, /[\\/]js[\\/]github(?:[\\/]|$)/];
+const EXCLUDED = [/config\.local\.example\.js$/];
 
 // 1) 重建 public/
 fs.rmSync(outDir, { recursive: true, force: true });
