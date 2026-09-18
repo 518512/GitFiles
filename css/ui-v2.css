@@ -22,6 +22,9 @@
   --color-accent-subtle: #ddf4ff;
   --color-danger: #cf222e;
   --color-success: #1a7f37;
+  --color-accent-dark: #0757b0;
+  --color-hover: rgba(9, 105, 218, .12);
+  --color-selected: rgba(9, 105, 218, .2);
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;

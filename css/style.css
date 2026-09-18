@@ -6,17 +6,46 @@
   padding: 0;
 }
 
+/* ==========================================================================
+   设计令牌统一（D 层改造）
+   --------------------------------------------------------------------------
+   style.css 是登录页 / 记事本 / 对话框 / 属性面板 / 法律页的样式来源，
+   历史上使用 Windows 风格的 --win-* 变量（灰蓝 #0078d4 系）。
+   ui-v2.css 已定义 GitHub 风格的 --color-* 体系（主应用使用）。
+
+   现在把 --win-* 全部改为引用 --color-*：值跟随主应用配色，
+   171 处 var(--win-*) 引用无需改动即自动统一；独立页面从此与主应用同风格。
+   回退 = 撤销本块的引用即可（每个旧值就是原色值，见右侧注释）。
+   ========================================================================== */
 :root {
-  --win-blue: #0078d4;
-  --win-blue-dark: #005a9e;
-  --win-bg: #f3f3f3;
-  --win-border: #d1d1d1;
-  --win-hover: #e5f3ff;
-  --win-selected: #cce8ff;
-  --win-text: #1a1a1a;
-  --win-text-muted: #616161;
-  --title-bar-bg: #f9f9f9;
-  --sidebar-bg: #f9f9f9;
+  /* --color-* 基础令牌：style.css 单独加载的页面（privacy/terms/oauth 回调）
+     没有 ui-v2.css，必须在这里也能解析 --win-* 引用的变量。
+     ui-v2.css 会再次定义同名变量，值相同，无冲突。 */
+  --color-bg: #f6f8fa;
+  --color-surface: #ffffff;
+  --color-border: #d0d7de;
+  --color-border-muted: #eaeef2;
+  --color-text: #1f2328;
+  --color-muted: #656d76;
+  --color-accent: #0969da;
+  --color-accent-subtle: #ddf4ff;
+  --color-accent-dark: #0757b0;
+  --color-hover: rgba(9, 105, 218, .12);
+  --color-selected: rgba(9, 105, 218, .2);
+  --color-danger: #cf222e;
+  --color-success: #1a7f37;
+
+  --win-blue: var(--color-accent);            /* 原 #0078d4 */
+  --win-blue-dark: var(--color-accent-dark);  /* 原 #005a9e */
+  --win-bg: var(--color-bg);                  /* 原 #f3f3f3 */
+  --win-border: var(--color-border);          /* 原 #d1d1d1 */
+  --win-hover: var(--color-hover);            /* 原 #e5f3ff */
+  --win-selected: var(--color-selected);      /* 原 #cce8ff */
+  --win-text: var(--color-text);              /* 原 #1a1a1a */
+  --win-text-muted: var(--color-muted);       /* 原 #616161 */
+  --title-bar-bg: var(--color-surface);       /* 原 #f9f9f9 */
+  --sidebar-bg: var(--color-bg);              /* 原 #f9f9f9 */
+  /* 阴影不是配色，独立保留（ui-v2 的 --shadow-sm 是另一种极轻阴影） */
   --shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
   --radius: 8px;
   --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
@@ -24,7 +53,7 @@
 
 body {
   font-family: var(--font);
-  background: #eef2f6;
+  background: var(--color-bg);  /* 原 #eef2f6，统一到 --color-bg */
   min-height: 100vh;
   display: flex;
   align-items: center;
