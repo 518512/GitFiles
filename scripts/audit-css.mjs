@@ -2,25 +2,21 @@
 /**
  * CSS 层叠审计（无浏览器环境下的静态检查）。
  *
- * 背景：本项目有两层样式表——
- *   css/style.css   历史基础层（约 3400 行，含历史 !important，上游时代遗留）
- *   css/ui-v2.css   设计令牌与 V2 覆盖层，必须最后加载
+ * 背景：自 2026-09-18 起本项目只有一份样式表 `css/style.css`，但文件内部
+ * 仍分两层——
+ *   历史基础层   文件头部（上游时代遗留，含历史 !important）
+ *   V2 覆盖层    文末 `V2_LAYER_START` 标记之后（原 css/ui-v2.css 并入）
  *
- * `style.css` 里的规则是在**旧布局**下写的。当某个元素被搬进新的结构
- * （例如 `.file-tools` 从独立工具栏并入 `.ribbon`）后，它的定位/装饰属性
- * （白底、border-bottom、padding、min-height…）往往不再成立，却仍然生效，
- * 表现为「多出一条横线」「间距莫名变大」这类问题。
- *
- * 这类问题靠肉眼逐个页面看很难查全，因此用本脚本静态比对：
- *   对给定的类名，列出两层样式表里所有命中它的规则（含来源文件、行号、
- *   是否在 @media 内、是否 !important），并**标记出哪些属性只被历史层设置、
- *   V2 层没有显式复位** —— 这些就是"可能泄漏"的候选。
+ * 本脚本以 `V2_LAYER_START` 标记把单文件切回两层做静态比对：
+ *   对给定的类名，列出两层里所有命中它的规则（含来源行号、是否在 @media 内、
+ *   是否 !important），并**标记出哪些属性只被历史层设置、V2 层没有显式复位**
+ *   ——这些就是"可能泄漏"的候选。
  *
  * 用法：
  *   node scripts/audit-css.mjs                       # 审计 UI 已知的迁移元素
  *   node scripts/audit-css.mjs ribbon file-tools …   # 审计指定类名
  *
- * 退出码：0（本脚本只做报告，不阻断构建）
+ * 退出码：0（本脚本只做报告，不阻断构建）；--strict 时未处理泄漏返回 1。
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -28,7 +24,8 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const BASE = 'css/style.css';
-const V2 = 'css/ui-v2.css';
+/** 单文件内两层切分标记（见 css/style.css 文末 V2_LAYER_START 小节）。 */
+const V2_MARKER = 'V2_LAYER_START';
 
 /** 被搬进新结构、需要重点核对的历史元素 */
 const DEFAULT_TARGETS = [
@@ -62,8 +59,15 @@ function stripComments(src) {
   return src.replace(/\/\*[\s\S]*?\*\//g, (block) => block.replace(/[^\n]/g, ' '));
 }
 
-function parseCss(relPath) {
-  const src = stripComments(fs.readFileSync(path.join(ROOT, relPath), 'utf8'));
+/**
+ * 解析一段 CSS 文本为声明列表。
+ * @param {string} relPath   展示用的文件路径（行号归一到该文件）
+ * @param {string} layer     层名（'历史' 或 'V2'），用于区分层叠来源
+ * @param {string} source    CSS 源码（可能只是单文件的一部分）
+ * @param {number} lineOffset 该段在真实文件中的起始行（0 基偏移），用于行号还原
+ */
+function parseCss(relPath, layer, source, lineOffset = 0) {
+  const src = stripComments(source);
   const out = [];
   const re = /([^{}]+)\{([^{}]*)\}/g;
   let m;
@@ -86,7 +90,7 @@ function parseCss(relPath) {
     }
     const sel = rawSel.replace(/\/\*[\s\S]*?\*\//g, '').trim();
     if (!sel || sel.startsWith('@')) continue;
-    const line = lineOf(src, m.index + rawSel.length);
+    const line = lineOffset + lineOf(src, m.index + rawSel.length);
     for (const decl of body.split(';')) {
       const d = decl.trim();
       const c = d.indexOf(':');
@@ -95,7 +99,7 @@ function parseCss(relPath) {
       const value = d.slice(c + 1).trim();
       for (const one of sel.split(',')) {
         const s = one.trim();
-        if (s) out.push({ file: relPath, line, media, sel: s, prop, value, important: /!important/.test(value) });
+        if (s) out.push({ file: relPath, layer, line, media, sel: s, prop, value, important: /!important/.test(value) });
       }
     }
   }
@@ -162,8 +166,17 @@ const ALLOWED_LEGACY = new Map(Object.entries({
   'repository-header': {}, 'repository-tab': {}, 'sidebar-nav': {}, 'sidebar-nav-item': {},
 }));
 
-const baseRules = parseCss(BASE);
-const v2Rules = parseCss(V2);
+// 单文件按 V2_LAYER_START 标记切回两层；行号归一到真实文件。
+const fullCss = fs.readFileSync(path.join(ROOT, BASE), 'utf8');
+const markerIdx = fullCss.indexOf(V2_MARKER);
+if (markerIdx === -1) {
+  throw new Error(`未找到 V2_LAYER_START 标记（${BASE} 应包含原 ui-v2.css 的 V2 覆盖层小节）`);
+}
+const baseSource = fullCss.slice(0, markerIdx);
+const v2Source = fullCss.slice(markerIdx);
+const v2LineOffset = baseSource.split('\n').length - 1; // 0 基：V2 段第一行的前一行号
+const baseRules = parseCss(BASE, '历史', baseSource, 0);
+const v2Rules = parseCss(BASE, 'V2', v2Source, v2LineOffset);
 const allRules = [...baseRules, ...v2Rules];
 
 /** 命中某个类的规则（选择器里出现 .cls） */
@@ -198,8 +211,8 @@ function audit(cls, { verbose = true } = {}) {
   // 按 (特异性, 层叠顺序) 取最大值；若胜出者来自历史层，才算真正泄漏。
   const rxEnd = new RegExp(`\\.${cls.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![\\w-])\\s*$`);
   const byProp = new Map();
-  // allRules 的顺序 = style.css 全部规则，再 ui-v2.css 全部规则，
-  // 正好等价于浏览器里「style.css 先、ui-v2.css 后」的层叠顺序。
+  // allRules 的顺序 = 历史层全部规则，再 V2 覆盖层全部规则，
+  // 正好等价于浏览器里「历史层先、V2 层后」的层叠顺序。
   allRules.forEach((r, index) => {
     if (!rxEnd.test(r.sel)) return;
     const spec = specificity(r.sel);
@@ -213,9 +226,9 @@ function audit(cls, { verbose = true } = {}) {
   const leaks = [];
   const handled = [];
   for (const [prop, winner] of byProp) {
-    const baseDecl = exact.find((r) => r.file === BASE && r.prop === prop);
+    const baseDecl = exact.find((r) => r.layer === '历史' && r.prop === prop);
     if (!baseDecl) continue; // 历史层没设过这个属性，无需关心
-    if (winner.file === BASE) {
+    if (winner.layer === '历史') {
       // 历史层胜出：检查 V2 是否"根本没管"这个属性（真正的泄漏）
       leaks.push(winner);
     } else {
@@ -226,13 +239,13 @@ function audit(cls, { verbose = true } = {}) {
   if (verbose) {
     console.log(`\n### .${cls} —— 命中 ${hits.length} 条`);
     for (const h of exact) {
-      const tag = h.file === BASE ? '历史' : ' V2 ';
+      const tag = h.layer === '历史' ? '历史' : ' V2 ';
       console.log(`  [${tag}] ${h.file}:${h.line}${h.media ? ' [media]' : ''}  ${h.prop}: ${h.value}${h.important ? '  !important' : ''}`);
     }
     if (scoped.length) {
       console.log(`  -- 带前缀/后代选择器 ${scoped.length} 条 --`);
       for (const h of scoped) {
-        const tag = h.file === BASE ? '历史' : ' V2 ';
+        const tag = h.layer === '历史' ? '历史' : ' V2 ';
         console.log(`  [${tag}] ${h.file}:${h.line}${h.media ? ' [media]' : ''}  ${h.sel} { ${h.prop}: ${h.value}${h.important ? ' !important' : ''} }`);
       }
     }
@@ -243,7 +256,7 @@ function audit(cls, { verbose = true } = {}) {
 const args = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const targets = args.length ? args : DEFAULT_TARGETS;
 
-console.log(`审计 ${targets.length} 个类；已解析 ${baseRules.length} 条(style.css) + ${v2Rules.length} 条(ui-v2.css)\n`);
+console.log(`审计 ${targets.length} 个类；已解析 ${baseRules.length} 条(历史层) + ${v2Rules.length} 条(V2 覆盖层)\n`);
 
 const STRICT = process.argv.includes('--strict');
 let leakCount = 0;

@@ -275,11 +275,8 @@ const BasePath = (() => {
       baseEl.href = baseHref;
     }
 
-    // The markup in <head> already lists style.css then ui-v2.css in cascade
-    // order, so this only has to fix up the hrefs for a non-root base path.
-    // ui-v2.css carries the design tokens and V2 overrides and MUST come after
-    // the legacy style.css; otherwise every V2 rule has to out-specify a
-    // 3400-line legacy sheet. Create the links only if the markup lacks them.
+    // 唯一样式表：css/style.css（内含「V2 覆盖层」小节，原 ui-v2.css 已并入）。
+    // 这里只补 href 前缀与 ?v= 版本号；标记缺失时补建 link。
     const ensureStyleLink = (attr, relPath) => {
       const href = `${prefixRelativeAsset(relPath)}${version}`;
       let link = document.querySelector(`link[${attr}]`);
@@ -293,11 +290,8 @@ const BasePath = (() => {
       return link;
     };
     ensureStyleLink('data-storage-hub-css', 'css/style.css');
-    const v2Link = ensureStyleLink('data-storage-hub-css-v2', 'css/ui-v2.css');
-    // Re-append if some other script moved it, so V2 always cascades last.
-    if (v2Link !== document.head.lastElementChild) document.head.appendChild(v2Link);
 
-    document.querySelectorAll('link[href]:not([data-storage-hub-css]):not([data-storage-hub-css-v2])').forEach((el) => {
+    document.querySelectorAll('link[href]:not([data-storage-hub-css])').forEach((el) => {
       const value = el.getAttribute('href');
       if (!value || value.startsWith('/') || /^https?:/i.test(value)) return;
       const resolved = prefixRelativeAsset(value);

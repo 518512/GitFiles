@@ -7,20 +7,15 @@
 }
 
 /* ==========================================================================
-   设计令牌统一（D 层改造）
+   GitFiles 唯一样式表（2026-09-18 起由 css/style.css + css/ui-v2.css 合并而成）
    --------------------------------------------------------------------------
-   style.css 是登录页 / 记事本 / 对话框 / 属性面板 / 法律页的样式来源，
-   历史上使用 Windows 风格的 --win-* 变量（灰蓝 #0078d4 系）。
-   ui-v2.css 已定义 GitHub 风格的 --color-* 体系（主应用使用）。
-
-   现在把 --win-* 全部改为引用 --color-*：值跟随主应用配色，
-   171 处 var(--win-*) 引用无需改动即自动统一；独立页面从此与主应用同风格。
-   回退 = 撤销本块的引用即可（每个旧值就是原色值，见右侧注释）。
+   文件结构：
+     1) 设计令牌（:root，全部页面共用，含独立 legal/notepad 页）
+     2) 历史基础层（上游时代的组件规则，保持原样以便追溯）
+     3) V2 覆盖层（原 css/ui-v2.css，见文末标记小节；新增样式一律写在该小节）
+   所有页面只加载本文件；ui-v2.css 已删除，请勿再引用。
    ========================================================================== */
 :root {
-  /* --color-* 基础令牌：style.css 单独加载的页面（privacy/terms/oauth 回调）
-     没有 ui-v2.css，必须在这里也能解析 --win-* 引用的变量。
-     ui-v2.css 会再次定义同名变量，值相同，无冲突。 */
   --color-bg: #f6f8fa;
   --color-surface: #ffffff;
   --color-border: #d0d7de;
@@ -34,31 +29,30 @@
   --color-selected: rgba(9, 105, 218, .2);
   --color-danger: #cf222e;
   --color-success: #1a7f37;
-
-  --win-blue: var(--color-accent);            /* 原 #0078d4 */
-  --win-blue-dark: var(--color-accent-dark);  /* 原 #005a9e */
-  --win-bg: var(--color-bg);                  /* 原 #f3f3f3 */
-  --win-border: var(--color-border);          /* 原 #d1d1d1 */
-  --win-hover: var(--color-hover);            /* 原 #e5f3ff */
-  --win-selected: var(--color-selected);      /* 原 #cce8ff */
-  --win-text: var(--color-text);              /* 原 #1a1a1a */
-  --win-text-muted: var(--color-muted);       /* 原 #616161 */
-  --title-bar-bg: var(--color-surface);       /* 原 #f9f9f9 */
-  --sidebar-bg: var(--color-bg);              /* 原 #f9f9f9 */
-  /* 阴影不是配色，独立保留（ui-v2 的 --shadow-sm 是另一种极轻阴影） */
-  --shadow: 0 8px 32px rgba(0, 0, 0, 0.18);
-  --radius: 8px;
-  --font: 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --header-height: 52px;
+  --sidebar-width: 248px;
+  --tap-target: 44px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --shadow-sm: 0 1px 0 rgba(31, 35, 40, .04);
+  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.18);
+  --font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
 }
 
 body {
-  font-family: var(--font);
+  font-family: var(--font-family);
   background: var(--color-bg);  /* 原 #eef2f6，统一到 --color-bg */
   min-height: 100vh;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--win-text);
+  color: var(--color-text);
 }
 
 .hidden {
@@ -93,7 +87,7 @@ body {
   border-radius: 12px;
   padding: 48px 40px;
   text-align: center;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-lg);
   max-width: 420px;
   width: 90%;
 }
@@ -107,13 +101,6 @@ body {
   margin: 0 auto;
 }
 
-.window-logo {
-  width: 18px;
-  height: 18px;
-  flex-shrink: 0;
-  border-radius: 3px;
-}
-
 .login-card h1 {
   font-size: 1.5rem;
   font-weight: 600;
@@ -122,19 +109,19 @@ body {
 
 .login-brand {
   font-size: 0.9rem;
-  color: var(--win-text-muted);
+  color: var(--color-muted);
   margin-bottom: 12px;
 }
 
 .login-about {
   margin-top: 16px;
   font-size: 0.75rem;
-  color: var(--win-text-muted);
+  color: var(--color-muted);
   line-height: 1.5;
 }
 
 .login-about a {
-  color: var(--win-blue);
+  color: var(--color-accent);
   text-decoration: none;
 }
 
@@ -143,7 +130,7 @@ body {
 }
 
 .login-card p {
-  color: var(--win-text-muted);
+  color: var(--color-muted);
   font-size: 0.9rem;
   margin-bottom: 28px;
   line-height: 1.5;
@@ -153,7 +140,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  background: var(--win-blue);
+  background: var(--color-accent);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -165,7 +152,7 @@ body {
 }
 
 .btn-primary:hover {
-  background: var(--win-blue-dark);
+  background: var(--color-accent-dark);
 }
 
 .btn-github {
@@ -219,7 +206,7 @@ body {
 }
 
 .btn-primary:disabled:hover {
-  background: var(--win-blue);
+  background: var(--color-accent);
 }
 
 .login-error {
@@ -231,51 +218,6 @@ body {
   font-size: 0.82rem;
   line-height: 1.4;
   text-align: left;
-}
-
-.login-hint {
-  margin-top: 20px !important;
-  font-size: 0.78rem !important;
-}
-
-.login-verify-notice {
-  margin-top: 16px;
-  padding: 12px 14px;
-  background: #f5f9ff;
-  border: 1px solid #cce4f7;
-  border-radius: 8px;
-  text-align: left;
-  font-size: 0.78rem;
-  line-height: 1.45;
-  color: var(--win-text-muted);
-}
-
-.login-verify-notice summary {
-  cursor: pointer;
-  font-weight: 600;
-  color: var(--win-blue-dark);
-  list-style: none;
-}
-
-.login-verify-notice summary::-webkit-details-marker {
-  display: none;
-}
-
-.login-verify-notice summary::before {
-  content: '▸ ';
-}
-
-.login-verify-notice[open] summary::before {
-  content: '▾ ';
-}
-
-.login-verify-notice ol {
-  margin: 10px 0 0 18px;
-  padding: 0;
-}
-
-.login-verify-notice li + li {
-  margin-top: 6px;
 }
 
 /* ── Explorer window ── */
@@ -291,15 +233,15 @@ body {
 
 .window {
   background: #fff;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-lg);
   width: 100%;
   max-width: 1100px;
   height: calc(100vh - 48px);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border: 1px solid var(--win-border);
+  border: 1px solid var(--color-border);
 }
 
 /* Title bar */
@@ -307,8 +249,8 @@ body {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--title-bar-bg);
-  border-bottom: 1px solid var(--win-border);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
   padding: 0 8px 0 12px;
   height: 36px;
   flex-shrink: 0;
@@ -320,10 +262,6 @@ body {
   align-items: center;
   gap: 8px;
   font-size: 0.82rem;
-}
-
-.window-icon {
-  font-size: 0.9rem;
 }
 
 .title-bar-controls {
@@ -339,15 +277,15 @@ body {
   font-size: 0.75rem;
   cursor: pointer;
   border-radius: 4px;
-  color: var(--win-text);
+  color: var(--color-text);
 }
 
 .title-btn:hover {
-  background: #e0e0e0;
+  background: var(--color-hover);
 }
 
 .title-btn.close:hover {
-  background: #e81123;
+  background: var(--color-danger);
   color: #fff;
 }
 
@@ -357,7 +295,7 @@ body {
   align-items: center;
   gap: 8px;
   padding: 6px 10px;
-  border-bottom: 1px solid var(--win-border);
+  border-bottom: 1px solid var(--color-border);
   background: #fff;
   flex-shrink: 0;
 }
@@ -378,16 +316,16 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--win-text);
+  color: var(--color-text);
 }
 
 .tool-btn:hover:not(:disabled) {
-  background: var(--win-hover);
-  border-color: var(--win-border);
+  background: var(--color-hover);
+  border-color: var(--color-border);
 }
 
 .tool-btn.active {
-  background: var(--win-selected);
+  background: var(--color-selected);
   border-color: #99d1ff;
 }
 
@@ -402,28 +340,11 @@ body {
   align-items: center;
   gap: 6px;
   background: #fff;
-  border: 1px solid var(--win-border);
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 4px 6px 4px 10px;
   min-height: 30px;
   overflow: hidden;
-}
-
-.address-copy-btn {
-  flex-shrink: 0;
-  width: 28px;
-  height: 24px;
-  border: none;
-  background: transparent;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.85rem;
-  opacity: 0.7;
-}
-
-.address-copy-btn:hover {
-  background: var(--win-hover);
-  opacity: 1;
 }
 
 .breadcrumbs {
@@ -437,25 +358,25 @@ body {
 }
 
 .breadcrumb-item {
-  color: var(--win-blue);
+  color: var(--color-accent);
   cursor: pointer;
   padding: 2px 4px;
   border-radius: 3px;
 }
 
 .breadcrumb-item:hover {
-  background: var(--win-hover);
+  background: var(--color-hover);
   text-decoration: underline;
 }
 
 .breadcrumb-sep {
-  color: var(--win-text-muted);
+  color: var(--color-muted);
   font-size: 0.7rem;
   user-select: none;
 }
 
 .breadcrumb-current {
-  color: var(--win-text);
+  color: var(--color-text);
   font-weight: 500;
   padding: 2px 4px;
 }
@@ -470,8 +391,8 @@ body {
 /* Sidebar */
 .sidebar {
   width: 260px;
-  background: var(--sidebar-bg);
-  border-right: 1px solid var(--win-border);
+  background: var(--color-bg);
+  border-right: 1px solid var(--color-border);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
@@ -495,12 +416,6 @@ body {
 
 .tree-children {
   list-style: none;
-}
-
-.tree-level-1 {
-  margin: 2px 0 4px 12px;
-  padding-left: 8px;
-  border-left: 1px solid var(--win-border);
 }
 
 .tree-level-2 {
@@ -530,11 +445,11 @@ body {
 }
 
 .tree-row:hover > .tree-toggle {
-  color: var(--win-text);
+  color: var(--color-text);
 }
 
 .tree-row:hover > .sidebar-item:not(.active) {
-  background: var(--win-hover);
+  background: var(--color-hover);
 }
 
 .tree-row:focus-within {
@@ -555,7 +470,7 @@ body {
   flex-shrink: 0;
   border: none;
   background: transparent;
-  color: var(--win-text-muted);
+  color: var(--color-muted);
   cursor: pointer;
   padding: 0;
   display: flex;
@@ -567,11 +482,11 @@ body {
 
 .tree-toggle:hover {
   background: rgba(0, 0, 0, 0.06);
-  color: var(--win-text);
+  color: var(--color-text);
 }
 
 .tree-toggle:focus-visible {
-  outline: 2px solid var(--win-blue);
+  outline: 2px solid var(--color-accent);
   outline-offset: -2px;
 }
 
@@ -632,7 +547,7 @@ body {
 .tree-more-item {
   padding-left: 4px !important;
   font-size: 0.85rem !important;
-  color: var(--win-blue) !important;
+  color: var(--color-accent) !important;
   font-weight: 600;
   letter-spacing: 0.1em;
 }
@@ -655,7 +570,7 @@ body {
 
 .tree-repo-meta {
   display: block;
-  color: var(--win-text-muted);
+  color: var(--color-muted);
   font-size: 0.68rem;
   line-height: 1.25;
   overflow: hidden;
@@ -665,7 +580,7 @@ body {
 
 .tree-user-quota {
   font-size: 0.68rem;
-  color: var(--win-text-muted);
+  color: var(--color-muted);
   line-height: 1.2;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -673,7 +588,7 @@ body {
 }
 
 .tree-user-quota-reauth {
-  color: var(--win-blue);
+  color: var(--color-accent);
   cursor: pointer;
   text-decoration: underline;
 }
@@ -681,11 +596,6 @@ body {
 .tree-child-item {
   font-size: 0.8rem !important;
   gap: 8px !important;
-}
-
-.tree-add-btn {
-  margin-left: 32px;
-  width: calc(100% - 44px);
 }
 
 .sidebar-item {
@@ -699,17 +609,17 @@ body {
   font-size: 0.85rem;
   cursor: pointer;
   text-align: left;
-  color: var(--win-text);
+  color: var(--color-text);
   border-left: 3px solid transparent;
 }
 
 .sidebar-item:hover {
-  background: var(--win-hover);
+  background: var(--color-hover);
 }
 
 .sidebar-item.active {
-  background: var(--win-selected);
-  border-left-color: var(--win-blue);
+  background: var(--color-selected);
+  border-left-color: var(--color-accent);
   font-weight: 500;
 }
 
@@ -724,18 +634,18 @@ body {
   width: calc(100% - 24px);
   margin: 4px 12px 8px;
   padding: 8px 12px;
-  border: 1px dashed var(--win-border);
+  border: 1px dashed var(--color-border);
   border-radius: 4px;
   background: transparent;
   font-size: 0.82rem;
-  color: var(--win-blue);
+  color: var(--color-accent);
   cursor: pointer;
   text-align: left;
 }
 
 .sidebar-add-btn:hover {
-  background: var(--win-hover);
-  border-color: var(--win-blue);
+  background: var(--color-hover);
+  border-color: var(--color-accent);
 }
 
 .user-drive-item {
@@ -749,7 +659,6 @@ body {
   flex-shrink: 0;
 }
 
-.local-drive-icon,
 .local-storage-icon-wrap {
   width: 22px;
   height: 22px;
@@ -761,7 +670,7 @@ body {
 
 .local-storage-icon {
   flex-shrink: 0;
-  color: var(--win-blue);
+  color: var(--color-accent);
 }
 
 .file-icon .local-storage-icon {
@@ -816,14 +725,14 @@ body {
   background: rgba(255, 255, 255, 0.85);
   z-index: 10;
   font-size: 0.9rem;
-  color: var(--win-text-muted);
+  color: var(--color-muted);
 }
 
 .spinner {
   width: 32px;
   height: 32px;
-  border: 3px solid var(--win-border);
-  border-top-color: var(--win-blue);
+  border: 3px solid var(--color-border);
+  border-top-color: var(--color-accent);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
@@ -863,12 +772,12 @@ body {
 }
 
 .file-item:hover {
-  background: var(--win-hover);
+  background: var(--color-hover);
   border-color: #c2e0f7;
 }
 
 .file-item.selected {
-  background: var(--win-selected);
+  background: var(--color-selected);
   border-color: #99d1ff;
 }
 
@@ -909,7 +818,7 @@ body {
   margin-top: 4px;
   font-size: 0.68rem;
   line-height: 1.2;
-  color: var(--win-text-muted);
+  color: var(--color-muted);
 }
 
 .file-pending-badge--syncing,
@@ -958,8 +867,8 @@ body {
 .file-item.drop-target-active,
 .list-row.drop-target-active,
 .sidebar-item.drop-target-active {
-  background: var(--win-selected);
-  outline: 2px dashed var(--win-blue);
+  background: var(--color-selected);
+  outline: 2px dashed var(--color-accent);
   outline-offset: -2px;
 }
 
@@ -1016,7 +925,7 @@ body {
   height: 100%;
   width: 0;
   border-radius: inherit;
-  background: linear-gradient(90deg, #0078d4, #00a2ed);
+  background: linear-gradient(90deg, var(--color-accent), #54aeff);
   transition: width 0.2s linear;
 }
 
@@ -1110,7 +1019,7 @@ body {
 
 .file-quota {
   font-size: 0.65rem;
-  color: var(--win-text-muted);
+  color: var(--color-muted);
   margin-top: 3px;
   max-width: 90px;
   line-height: 1.2;
@@ -1130,9 +1039,9 @@ body {
   padding: 6px 16px;
   font-size: 0.78rem;
   font-weight: 600;
-  color: var(--win-text-muted);
-  border-bottom: 1px solid var(--win-border);
-  background: var(--sidebar-bg);
+  color: var(--color-muted);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
   position: sticky;
   top: 0;
   z-index: 2;
@@ -1154,11 +1063,11 @@ body {
 }
 
 .list-row:hover {
-  background: var(--win-hover);
+  background: var(--color-hover);
 }
 
 .list-row.selected {
-  background: var(--win-selected);
+  background: var(--color-selected);
   border-color: #99d1ff;
 }
 
@@ -1198,7 +1107,7 @@ body {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: var(--win-text-muted);
+  color: var(--color-muted);
   gap: 8px;
 }
 
@@ -1211,9 +1120,9 @@ body {
 .worker-session-state {
   align-self: center;
   padding: 2px 7px;
-  border: 1px solid var(--win-border);
+  border: 1px solid var(--color-border);
   border-radius: 3px;
-  color: var(--win-text-muted);
+  color: var(--color-muted);
   font-size: 0.7rem;
   line-height: 1.3;
   white-space: nowrap;
@@ -1243,7 +1152,7 @@ body {
 .sidebar-install-btn:hover { border-color: #4e9bc7; background: #e8f5fc; }
 .sidebar-install-hint {
   margin: -2px 12px 8px 12px;
-  color: var(--win-text-muted);
+  color: var(--color-muted);
   font-size: 0.68rem;
   line-height: 1.35;
 }
@@ -1295,7 +1204,7 @@ body {
   gap: 6px;
   padding: 4px 10px;
   background: #fff;
-  border-bottom: 1px solid var(--win-border);
+  border-bottom: 1px solid var(--color-border);
 }
 .search-box {
   display: flex;
@@ -1303,10 +1212,10 @@ body {
   gap: 6px;
   min-width: 180px;
   flex: 1;
-  border: 1px solid var(--win-border);
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   padding: 0 8px;
-  color: var(--win-text-muted);
+  color: var(--color-muted);
 }
 .search-box input {
   width: 100%;
@@ -1314,24 +1223,24 @@ body {
   border: 0;
   outline: 0;
   background: transparent;
-  color: var(--win-text);
+  color: var(--color-text);
 }
 .sort-select {
   min-height: 32px;
-  border: 1px solid var(--win-border);
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   background: #fff;
   padding: 0 6px;
-  color: var(--win-text);
+  color: var(--color-text);
 }
 .app-status {
   min-height: 0;
   padding: 0 12px;
   background: #f6f8fa;
-  color: var(--win-text-muted);
+  color: var(--color-muted);
   font-size: 0.78rem;
   line-height: 30px;
-  border-top: 1px solid var(--win-border);
+  border-top: 1px solid var(--color-border);
 }
 .app-status[data-kind="error"] { color: #9d2b1c; background: #fff2f0; }
 .app-status[data-kind="success"] { color: #1a6b3c; background: #edf8f0; }
@@ -1342,7 +1251,7 @@ body {
   padding: 6px 12px;
   background: #eaf4ff;
   border-top: 1px solid #b9d9f7;
-  color: var(--win-text);
+  color: var(--color-text);
 }
 .selection-bar button {
   min-height: 32px;
@@ -1352,7 +1261,7 @@ body {
   padding: 0 10px;
   cursor: pointer;
 }
-.selection-bar button:hover { background: var(--win-hover); }
+.selection-bar button:hover { background: var(--color-hover); }
 
 /* Status bar */
 .status-bar {
@@ -1361,9 +1270,9 @@ body {
   gap: 12px;
   padding: 4px 12px;
   font-size: 0.75rem;
-  color: var(--win-text-muted);
-  border-top: 1px solid var(--win-border);
-  background: var(--sidebar-bg);
+  color: var(--color-muted);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg);
   flex-shrink: 0;
 }
 
@@ -1373,7 +1282,7 @@ body {
   z-index: 1000;
   min-width: 210px;
   background: #fff;
-  border: 1px solid var(--win-border);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.18);
   padding: 4px 0;
@@ -1390,11 +1299,11 @@ body {
   background: transparent;
   text-align: left;
   cursor: pointer;
-  color: var(--win-text);
+  color: var(--color-text);
 }
 
 .ctx-item:hover:not(:disabled) {
-  background: var(--win-hover);
+  background: var(--color-hover);
 }
 
 .ctx-item:disabled {
@@ -1413,13 +1322,13 @@ body {
 }
 
 .ctx-shortcut {
-  color: var(--win-text-muted);
+  color: var(--color-muted);
   font-size: 0.72rem;
 }
 
 .ctx-sep {
   height: 1px;
-  background: var(--win-border);
+  background: var(--color-border);
   margin: 4px 0;
 }
 
@@ -1429,7 +1338,7 @@ body {
   font-weight: 600;
   letter-spacing: 0.03em;
   text-transform: uppercase;
-  color: var(--win-text-muted);
+  color: var(--color-muted);
 }
 
 .context-menu-backdrop {
@@ -1465,8 +1374,8 @@ body {
   justify-content: space-between;
   gap: 12px;
   padding: 14px 16px 10px;
-  border-bottom: 1px solid var(--win-border);
-  background: var(--sidebar-bg);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
 }
 
 .ctx-sheet-title {
@@ -1498,7 +1407,7 @@ body {
   appearance: none;
 }
 .ctx-sheet-close:hover { background: #dcdcdc; }
-.ctx-sheet-close:focus-visible { outline: 2px solid var(--win-blue); outline-offset: 2px; }
+.ctx-sheet-close:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; }
 
 .ctx-sheet-body {
   max-height: min(60dvh, 420px);
@@ -1521,14 +1430,14 @@ body.ctx-open {
   border: none;
   border-radius: 50%;
   background: transparent;
-  color: var(--win-text-muted);
+  color: var(--color-muted);
   cursor: pointer;
 }
 
 .item-more-btn:active,
 .item-more-btn:hover {
   background: rgba(0, 0, 0, 0.06);
-  color: var(--win-blue);
+  color: var(--color-accent);
 }
 
 .tree-item-more {
@@ -1540,7 +1449,7 @@ body.ctx-open {
 .empty-hint {
   margin-top: 8px;
   font-size: 0.82rem;
-  color: var(--win-text-muted);
+  color: var(--color-muted);
   text-align: center;
   max-width: 240px;
 }
@@ -1553,8 +1462,8 @@ body.notepad-page {
   min-height: 100dvh;
   background: #f0f0f0;
   overflow: hidden;
-  font-family: var(--font);
-  color: var(--win-text);
+  font-family: var(--font-family);
+  color: var(--color-text);
 }
 
 .notepad-page .notepad-shell {
@@ -1587,8 +1496,8 @@ body.notepad-page {
   justify-content: space-between;
   height: 36px;
   padding: env(safe-area-inset-top, 0) 4px 0 12px;
-  background: var(--title-bar-bg);
-  border-bottom: 1px solid var(--win-border);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
   user-select: none;
 }
@@ -1603,7 +1512,7 @@ body.notepad-page {
 
 .notepad-page .notepad-app-icon {
   flex-shrink: 0;
-  color: var(--win-blue);
+  color: var(--color-accent);
 }
 
 .notepad-page .title-bar-controls {
@@ -1620,7 +1529,7 @@ body.notepad-page {
   font-size: 0.75rem;
   cursor: pointer;
   border-radius: 4px;
-  color: var(--win-text);
+  color: var(--color-text);
   transition: background 0.12s ease;
 }
 
@@ -1662,7 +1571,7 @@ body.notepad-page {
   gap: 4px;
   padding: 6px 10px;
   background: #fafafa;
-  border-bottom: 1px solid var(--win-border);
+  border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
 }
 
@@ -1671,30 +1580,30 @@ body.notepad-page {
   align-items: center;
   gap: 6px;
   padding: 5px 12px;
-  border: 1px solid var(--win-border);
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   background: #fff;
   font-family: inherit;
   font-size: 0.78rem;
-  color: var(--win-text);
+  color: var(--color-text);
   cursor: pointer;
   transition: background 0.12s ease, border-color 0.12s ease;
 }
 
 .notepad-page .notepad-tool-btn:hover {
-  background: var(--win-hover);
+  background: var(--color-hover);
   border-color: #99d1ff;
 }
 
 .notepad-page .notepad-tool-btn--primary {
-  background: var(--win-blue);
-  border-color: var(--win-blue-dark);
+  background: var(--color-accent);
+  border-color: var(--color-accent-dark);
   color: #fff;
 }
 
 .notepad-page .notepad-tool-btn--primary:hover {
-  background: var(--win-blue-dark);
-  border-color: var(--win-blue-dark);
+  background: var(--color-accent-dark);
+  border-color: var(--color-accent-dark);
 }
 
 .notepad-page .notepad-tool-btn:disabled {
@@ -1704,19 +1613,13 @@ body.notepad-page {
 
 .notepad-page .notepad-tool-btn:disabled:hover {
   background: #fff;
-  border-color: var(--win-border);
-}
-
-.notepad-page .notepad-tool-btn--toggle.active {
-  background: var(--win-selected);
-  border-color: #99d1ff;
-  font-weight: 600;
+  border-color: var(--color-border);
 }
 
 .notepad-page .notepad-toolbar-sep {
   width: 1px;
   height: 20px;
-  background: var(--win-border);
+  background: var(--color-border);
   margin: 0 4px;
 }
 
@@ -1727,7 +1630,7 @@ body.notepad-page {
   gap: 8px 12px;
   padding: 8px 12px;
   background: #f9f9f9;
-  border-bottom: 1px solid var(--win-border);
+  border-bottom: 1px solid var(--color-border);
   flex-shrink: 0;
 }
 
@@ -1753,14 +1656,14 @@ body.notepad-page {
 
 .notepad-page .notepad-find-label {
   font-size: 0.78rem;
-  color: var(--win-text-muted);
+  color: var(--color-muted);
   flex-shrink: 0;
 }
 
 .notepad-page .notepad-find-input {
   width: min(220px, 36vw);
   padding: 5px 8px;
-  border: 1px solid var(--win-border);
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   font-family: inherit;
   font-size: 0.82rem;
@@ -1769,8 +1672,8 @@ body.notepad-page {
 
 .notepad-page .notepad-find-input:focus {
   outline: none;
-  border-color: var(--win-blue);
-  box-shadow: 0 0 0 1px var(--win-blue);
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent);
 }
 
 .notepad-page .notepad-find-actions {
@@ -1782,17 +1685,17 @@ body.notepad-page {
 
 .notepad-page .notepad-find-btn {
   padding: 4px 10px;
-  border: 1px solid var(--win-border);
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   background: #fff;
   font-family: inherit;
   font-size: 0.78rem;
   cursor: pointer;
-  color: var(--win-text);
+  color: var(--color-text);
 }
 
 .notepad-page .notepad-find-btn:hover {
-  background: var(--win-hover);
+  background: var(--color-hover);
   border-color: #99d1ff;
 }
 
@@ -1803,7 +1706,7 @@ body.notepad-page {
 
 .notepad-page .notepad-find-status {
   font-size: 0.75rem;
-  color: var(--win-text-muted);
+  color: var(--color-muted);
   margin-left: auto;
   min-width: 72px;
   text-align: right;
@@ -1844,7 +1747,7 @@ body.notepad-page {
 
 .notepad-page .notepad-menu:hover .notepad-menu-label,
 .notepad-page .notepad-menu.open .notepad-menu-label {
-  background: var(--win-hover);
+  background: var(--color-hover);
 }
 
 .notepad-page .notepad-menu-dropdown {
@@ -1854,7 +1757,7 @@ body.notepad-page {
   left: 0;
   min-width: 220px;
   background: #fff;
-  border: 1px solid var(--win-border);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
   padding: 4px 0;
@@ -1876,13 +1779,13 @@ body.notepad-page {
   text-align: left;
   cursor: pointer;
   font-size: 0.8rem;
-  color: var(--win-text);
+  color: var(--color-text);
   transition: background 0.1s ease;
 }
 
 .notepad-page .notepad-menu-dropdown button:hover,
 .notepad-page .notepad-menu-dropdown button:focus-visible {
-  background: var(--win-hover);
+  background: var(--color-hover);
   outline: none;
 }
 
@@ -1896,15 +1799,15 @@ body.notepad-page {
 
 .notepad-page .notepad-menu-sep {
   height: 1px;
-  background: var(--win-border);
+  background: var(--color-border);
   margin: 4px 8px;
 }
 
 .notepad-page .notepad-kbd {
-  color: var(--win-text-muted);
+  color: var(--color-muted);
   font-size: 0.72rem;
   margin-left: 24px;
-  font-family: var(--font);
+  font-family: var(--font-family);
 }
 
 .notepad-page .notepad-editor-area {
@@ -1927,14 +1830,14 @@ body.notepad-page {
   gap: 12px;
   background: rgba(255, 255, 255, 0.88);
   font-size: 0.85rem;
-  color: var(--win-text-muted);
+  color: var(--color-muted);
 }
 
 .notepad-page .notepad-loading-spinner {
   width: 28px;
   height: 28px;
   border: 3px solid #e8e8e8;
-  border-top-color: var(--win-blue);
+  border-top-color: var(--color-accent);
   border-radius: 50%;
   animation: notepad-spin 0.7s linear infinite;
 }
@@ -1958,7 +1861,7 @@ body.notepad-page {
   overflow: auto;
   tab-size: 4;
   -moz-tab-size: 4;
-  caret-color: var(--win-blue);
+  caret-color: var(--color-accent);
 }
 
 .notepad-page .notepad-editor::selection {
@@ -1966,7 +1869,7 @@ body.notepad-page {
 }
 
 .notepad-page .notepad-editor:disabled {
-  color: var(--win-text-muted);
+  color: var(--color-muted);
   cursor: wait;
 }
 
@@ -2003,7 +1906,7 @@ body.notepad-page {
   background: #f0f0f0;
   border-top: 1px solid #d9d9d9;
   flex-shrink: 0;
-  color: var(--win-text-muted);
+  color: var(--color-muted);
   user-select: none;
 }
 
@@ -2016,7 +1919,7 @@ body.notepad-page {
 .notepad-page #notepad-status {
   flex: 1;
   text-align: center;
-  color: var(--win-blue);
+  color: var(--color-accent);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2030,7 +1933,7 @@ body.notepad-page {
 #notepad-status {
   flex: 1;
   text-align: center;
-  color: var(--win-blue);
+  color: var(--color-accent);
 }
 
 .notepad-dialog {
@@ -2046,9 +1949,9 @@ body.notepad-page {
 
 .notepad-window {
   background: #fff;
-  border: 1px solid var(--win-border);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-lg);
   width: min(900px, 96vw);
   height: min(640px, 90vh);
   display: flex;
@@ -2061,8 +1964,8 @@ body.notepad-page {
   align-items: center;
   justify-content: space-between;
   padding: 8px 12px;
-  background: var(--title-bar-bg);
-  border-bottom: 1px solid var(--win-border);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
   font-size: 0.85rem;
   font-weight: 600;
   flex-shrink: 0;
@@ -2090,7 +1993,7 @@ body.notepad-page {
   display: flex;
   gap: 2px;
   padding: 4px 6px;
-  border-bottom: 1px solid var(--win-border);
+  border-bottom: 1px solid var(--color-border);
   background: #fafafa;
   font-size: 0.8rem;
   flex-shrink: 0;
@@ -2110,7 +2013,7 @@ body.notepad-page {
 
 .notepad-menu:hover .notepad-menu-label,
 .notepad-menu.open .notepad-menu-label {
-  background: var(--win-hover);
+  background: var(--color-hover);
 }
 
 .notepad-menu-dropdown {
@@ -2120,7 +2023,7 @@ body.notepad-page {
   left: 0;
   min-width: 220px;
   background: #fff;
-  border: 1px solid var(--win-border);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
   padding: 4px 0;
@@ -2146,7 +2049,7 @@ body.notepad-page {
 
 .notepad-menu-dropdown button:hover,
 .notepad-menu-dropdown button:focus-visible {
-  background: var(--win-hover);
+  background: var(--color-hover);
   outline: none;
 }
 
@@ -2160,12 +2063,12 @@ body.notepad-page {
 
 .notepad-menu-sep {
   height: 1px;
-  background: var(--win-border);
+  background: var(--color-border);
   margin: 4px 8px;
 }
 
 .notepad-kbd {
-  color: var(--win-text-muted);
+  color: var(--color-muted);
   font-size: 0.72rem;
   margin-left: 24px;
 }
@@ -2189,14 +2092,14 @@ body.notepad-page {
   gap: 12px;
   background: rgba(255, 255, 255, 0.88);
   font-size: 0.85rem;
-  color: var(--win-text-muted);
+  color: var(--color-muted);
 }
 
 .notepad-loading-spinner {
   width: 28px;
   height: 28px;
   border: 3px solid #e8e8e8;
-  border-top-color: var(--win-blue);
+  border-top-color: var(--color-accent);
   border-radius: 50%;
   animation: notepad-spin 0.7s linear infinite;
 }
@@ -2215,11 +2118,11 @@ body.notepad-page {
   white-space: pre;
   overflow: auto;
   tab-size: 4;
-  caret-color: var(--win-blue);
+  caret-color: var(--color-accent);
 }
 
 .notepad-editor:disabled {
-  color: var(--win-text-muted);
+  color: var(--color-muted);
   cursor: wait;
 }
 
@@ -2235,10 +2138,10 @@ body.notepad-page {
   justify-content: space-between;
   gap: 12px;
   padding: 4px 12px;
-  border-top: 1px solid var(--win-border);
+  border-top: 1px solid var(--color-border);
   background: #f0f0f0;
   font-size: 0.72rem;
-  color: var(--win-text-muted);
+  color: var(--color-muted);
   flex-shrink: 0;
 }
 
@@ -2262,7 +2165,7 @@ body.notepad-page {
 .props-card {
   background: #fff;
   border-radius: 8px;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-lg);
   width: 90%;
   max-width: 520px;
   max-height: 80vh;
@@ -2276,8 +2179,8 @@ body.notepad-page {
   align-items: center;
   justify-content: space-between;
   padding: 12px 16px;
-  border-bottom: 1px solid var(--win-border);
-  background: var(--sidebar-bg);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
 }
 
 .props-title {
@@ -2311,12 +2214,12 @@ body.notepad-page {
   padding: 10px 16px 4px;
   font-size: 0.72rem;
   font-weight: 600;
-  color: var(--win-text-muted);
+  color: var(--color-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  background: var(--sidebar-bg);
-  border-top: 1px solid var(--win-border);
-  border-bottom: 1px solid var(--win-border);
+  background: var(--color-bg);
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
   margin-top: 4px;
 }
 
@@ -2329,7 +2232,7 @@ body.notepad-page {
   padding: 24px 16px;
   text-align: center;
   font-size: 0.85rem;
-  color: var(--win-text-muted);
+  color: var(--color-muted);
 }
 
 .props-error {
@@ -2350,7 +2253,7 @@ body.notepad-page {
 }
 
 .props-key {
-  color: var(--win-text-muted);
+  color: var(--color-muted);
 }
 
 /* App dialog (replaces alert / confirm / prompt) */
@@ -2368,7 +2271,7 @@ body.notepad-page {
 .app-dialog-card {
   background: #fff;
   border-radius: 8px;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-lg);
   width: 100%;
   max-width: 460px;
   display: flex;
@@ -2386,8 +2289,8 @@ body.notepad-page {
   justify-content: space-between;
   gap: 12px;
   padding: 12px 16px;
-  border-bottom: 1px solid var(--win-border);
-  background: var(--sidebar-bg);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-bg);
 }
 
 .app-dialog-title {
@@ -2420,7 +2323,7 @@ body.notepad-page {
   margin: 0 0 12px;
   font-size: 0.88rem;
   line-height: 1.5;
-  color: var(--win-text);
+  color: var(--color-text);
   white-space: pre-wrap;
   user-select: text;
   cursor: text;
@@ -2437,61 +2340,10 @@ body.notepad-page {
   margin: 0 0 8px;
 }
 
-.app-dialog-lead {
-  font-weight: 600;
-}
-
-.app-dialog-section {
-  margin: 14px 0 0;
-  padding-top: 12px;
-  border-top: 1px solid var(--win-border, rgba(0, 0, 0, 0.12));
-}
-
-.app-dialog-section:first-of-type {
-  margin-top: 0;
-  padding-top: 0;
-  border-top: none;
-}
-
-.app-dialog-section-title {
-  margin: 0 0 6px;
-  font-size: 0.9rem;
-  font-weight: 600;
-}
-
-.app-dialog-section-label {
-  margin: 8px 0 4px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: var(--win-text-muted);
-}
-
-.app-dialog-section-link {
-  margin: 0 0 4px;
-}
-
-.app-dialog-section-note {
-  margin: 0 0 8px;
-  font-size: 0.82rem;
-  line-height: 1.45;
-  color: var(--win-text-muted);
-}
-
 .app-dialog-message a {
-  color: var(--win-accent, #0078d4);
+  color: var(--color-accent, #0969da);
   text-decoration: underline;
   cursor: pointer;
-}
-
-.app-dialog-perms,
-.app-dialog-steps {
-  margin: 4px 0 8px;
-  padding-left: 1.25rem;
-}
-
-.app-dialog-perms li,
-.app-dialog-steps li {
-  margin: 4px 0;
 }
 
 .app-dialog-message code {
@@ -2513,12 +2365,12 @@ body.notepad-page {
 
 .app-dialog-label {
   font-size: 0.82rem;
-  color: var(--win-text-muted);
+  color: var(--color-muted);
 }
 
 .app-dialog-hint {
   font-size: 0.76rem;
-  color: var(--win-text-muted);
+  color: var(--color-muted);
   line-height: 1.4;
 }
 
@@ -2530,7 +2382,7 @@ body.notepad-page {
 
 .app-dialog-range {
   flex: 1;
-  accent-color: var(--win-blue);
+  accent-color: var(--color-accent);
 }
 
 .app-dialog-range-value {
@@ -2538,13 +2390,13 @@ body.notepad-page {
   font-size: 0.85rem;
   font-weight: 500;
   text-align: right;
-  color: var(--win-text);
+  color: var(--color-text);
 }
 
 .app-dialog-input {
   width: 100%;
   padding: 8px 10px;
-  border: 1px solid var(--win-border);
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   font-size: 0.9rem;
   font-family: inherit;
@@ -2552,7 +2404,7 @@ body.notepad-page {
 
 .app-dialog-input:focus {
   outline: none;
-  border-color: var(--win-blue);
+  border-color: var(--color-accent);
   box-shadow: 0 0 0 2px rgba(0, 120, 212, 0.15);
 }
 
@@ -2561,13 +2413,13 @@ body.notepad-page {
   justify-content: flex-end;
   gap: 8px;
   padding: 12px 16px;
-  border-top: 1px solid var(--win-border);
+  border-top: 1px solid var(--color-border);
   background: #fafafa;
 }
 
 .btn-dialog {
   padding: 8px 16px;
-  border: 1px solid var(--win-border);
+  border: 1px solid var(--color-border);
   border-radius: 4px;
   background: #fff;
   font-size: 0.85rem;
@@ -2575,7 +2427,7 @@ body.notepad-page {
 }
 
 .btn-dialog:hover {
-  background: var(--win-hover);
+  background: var(--color-hover);
 }
 
 .app-dialog-footer .btn-primary {
@@ -2600,7 +2452,7 @@ body.dialog-open {
 }
 
 .props-val a {
-  color: var(--win-blue);
+  color: var(--color-accent);
   text-decoration: none;
 }
 
@@ -2609,9 +2461,6 @@ body.dialog-open {
 }
 
 /* Mobile helpers */
-.mobile-only {
-  display: none;
-}
 
 .sidebar-overlay {
   display: none;
@@ -2626,10 +2475,6 @@ body.dialog-open {
 
   body.sidebar-open {
     overflow: hidden;
-  }
-
-  .mobile-only {
-    display: flex;
   }
 
   .login-card {
@@ -2743,11 +2588,6 @@ body.dialog-open {
     flex: 1 1 100%;
     min-width: 0;
     min-height: 36px;
-  }
-
-  .address-copy-btn {
-    width: 36px;
-    height: 32px;
   }
 
   .breadcrumbs {
@@ -2977,12 +2817,6 @@ body.dialog-open {
 }
 
 @media (max-width: 420px) {
-  .window-title {
-    max-width: 120px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
 
   .file-grid {
     grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
@@ -3040,9 +2874,9 @@ body.legal-page {
 .legal-card {
   background: #fff;
   border-radius: 12px;
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow-lg);
   padding: 32px 28px;
-  color: var(--win-text);
+  color: var(--color-text);
   line-height: 1.65;
 }
 
@@ -3052,26 +2886,11 @@ body.legal-page {
 }
 
 /* GitHub-style full-screen workspace */
-:root {
-  --win-blue: #0969da;
-  --win-blue-dark: #0550ae;
-  --win-bg: #f6f8fa;
-  --win-border: #d0d7de;
-  --win-hover: #f6f8fa;
-  --win-selected: #ddf4ff;
-  --win-text: #1f2328;
-  --win-text-muted: #656d76;
-  --title-bar-bg: #24292f;
-  --sidebar-bg: #f6f8fa;
-  --shadow: none;
-  --radius: 6px;
-}
-
 body {
   display: block;
   min-height: 100vh;
-  background: var(--win-bg);
-  color: var(--win-text);
+  background: var(--color-bg);
+  color: var(--color-text);
 }
 
 .explorer {
@@ -3104,10 +2923,6 @@ body {
   gap: 10px;
   font-size: 1rem;
   font-weight: 600;
-}
-
-.window-logo {
-  border-radius: 50%;
 }
 
 .title-bar-controls {
@@ -3160,7 +2975,7 @@ body {
   padding: 10px 20px;
   gap: 12px;
   background: #fff;
-  border-bottom: 1px solid var(--win-border);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .tool-btn {
@@ -3171,13 +2986,13 @@ body {
 
 .address-bar {
   min-height: 36px;
-  border-color: var(--win-border);
+  border-color: var(--color-border);
   border-radius: 6px;
   background: #f6f8fa;
 }
 
 .breadcrumb-item {
-  color: var(--win-blue);
+  color: var(--color-accent);
 }
 
 .main-area {
@@ -3188,7 +3003,7 @@ body {
 .sidebar {
   width: 280px;
   background: #f6f8fa;
-  border-right: 1px solid var(--win-border);
+  border-right: 1px solid var(--color-border);
 }
 
 .sidebar-section {
@@ -3237,7 +3052,7 @@ body {
 
 .file-item:hover {
   background: #f6f8fa;
-  border-color: var(--win-border);
+  border-color: var(--color-border);
 }
 
 .file-item.selected {
@@ -3252,7 +3067,7 @@ body {
 .list-header {
   padding: 10px 20px;
   background: #f6f8fa;
-  border-bottom-color: var(--win-border);
+  border-bottom-color: var(--color-border);
 }
 
 .list-row {
@@ -3278,7 +3093,7 @@ body {
   min-height: 32px;
   padding: 7px 20px;
   background: #f6f8fa;
-  border-top-color: var(--win-border);
+  border-top-color: var(--color-border);
 }
 
 .login-screen {
@@ -3289,7 +3104,7 @@ body {
 .login-card {
   max-width: 460px;
   padding: 40px;
-  border: 1px solid var(--win-border);
+  border: 1px solid var(--color-border);
   border-radius: 6px;
   box-shadow: 0 8px 24px rgba(140, 149, 159, 0.2);
 }
@@ -3321,7 +3136,7 @@ body {
 
   .sidebar {
     width: min(320px, 88vw);
-    border-right: 1px solid var(--win-border);
+    border-right: 1px solid var(--color-border);
     box-shadow: 8px 0 24px rgba(31, 35, 40, 0.18);
   }
 
@@ -3345,9 +3160,8 @@ body {
   }
 }
 
-
 .legal-meta {
-  color: var(--win-text-muted);
+  color: var(--color-muted);
   font-size: 0.88rem;
   margin-bottom: 20px;
 }
@@ -3369,11 +3183,11 @@ body {
 }
 
 .legal-card a {
-  color: var(--win-blue);
+  color: var(--color-accent);
 }
 
 .legal-card code {
-  background: #f3f3f3;
+  background: var(--color-bg);
   padding: 1px 5px;
   border-radius: 4px;
   font-size: 0.86em;
@@ -3399,12 +3213,12 @@ body {
 .login-footer {
   margin-top: 20px;
   font-size: 0.78rem;
-  color: var(--win-text-muted);
+  color: var(--color-muted);
   line-height: 1.6;
 }
 
 .login-footer a {
-  color: var(--win-blue);
+  color: var(--color-accent);
   text-decoration: none;
 }
 
@@ -3425,4 +3239,746 @@ body {
 
 .empty-state .btn {
   margin-top: 0.75rem;
+}
+
+/* ==========================================================================
+   V2_LAYER_START（原 css/ui-v2.css 并入本文件）
+   --------------------------------------------------------------------------
+   以下小节按浏览器层叠顺序覆盖上方历史层规则；新增样式一律写在本小节，
+   不要在上方历史层叠加同名块。audit-css.mjs 以 V2_LAYER_START 标记
+   切分「历史层 / V2 层」。
+   ========================================================================== */
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+.explorer {
+  width: 100%;
+  min-height: 100vh;
+}
+
+.window {
+  width: min(100%, 1920px);
+  min-height: 100vh;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--color-surface);
+}
+
+/* --- 2. 顶栏与工作区工具栏 ---------------------------------------------
+   结构（DOM 顺序不可变）：
+     .ribbon
+       ├─ #btn-sidebar-toggle   导航开关
+       ├─ #app-brand            品牌 / 返回概览
+       ├─ .app-header-actions   添加存储 + 会话状态
+       ├─ .nav-buttons          刷新
+       ├─ .address-bar          面包屑（唯一弹性区）
+       ├─ .file-tools           目录内搜索 + 排序
+       └─ .view-toggle          列表 / 大图标
+
+   视觉分组：左侧（导航 + 品牌） | 中间（位置） | 右侧（动作 + 视图）
+   ------------------------------------------------------------------------ */
+.ribbon {
+  display: flex;
+  align-items: center;
+  flex-wrap: nowrap;
+  gap: var(--space-2);
+  min-height: var(--header-height);
+  padding: 0 var(--space-4);
+  border-bottom: 1px solid var(--color-border);
+  background: var(--color-surface);
+  box-shadow: var(--shadow-sm);
+  /* 不能是 hidden：账户菜单面板是绝对定位的弹出层，会被直接裁掉。
+     横向溢出改由内部的 .address-bar / .breadcrumbs 自己收敛。 */
+  overflow: visible;
+}
+
+.app-brand {
+  flex: 0 0 auto;
+  padding: 6px 4px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 16px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+.app-brand:hover { color: var(--color-accent); }
+
+.app-header-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex: 0 0 auto;
+}
+
+.header-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 1;
+  cursor: pointer;
+}
+.header-action:hover { border-color: var(--color-border); background: var(--color-bg); }
+.header-action:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+.header-action--primary { color: var(--color-text); }
+/* 顶栏不再显示「owner/repo · 分支」：仓库头（.repository-header）在正下方已经
+   显示了完整的仓库名与分支，属于重复信息；会话状态由账户菜单表达。
+   #header-repo-state 节点保留，但不再占用工具栏空间。 */
+.header-repo-state { display: none; }
+
+/* 顶栏账户菜单：登录后退出登录的主要入口（原来只在底部状态栏，移动端难发现）。 */
+.user-menu { position: relative; display: inline-flex; }
+.user-menu-trigger { padding: 0; }
+.user-menu-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+  font-size: 12px;
+  font-weight: 700;
+  overflow: hidden;
+}
+.user-menu-avatar img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.user-menu-panel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 60;
+  min-width: 210px;
+  padding: 4px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  box-shadow: 0 8px 24px rgba(31, 35, 40, .16);
+}
+.user-menu-head {
+  display: grid;
+  gap: 2px;
+  padding: 8px 10px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--color-border-muted);
+}
+.user-menu-head strong { font-size: 13px; overflow-wrap: anywhere; }
+.user-menu-head small { color: var(--color-muted); font-size: 11px; }
+.user-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 34px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--color-text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.user-menu-item:hover:not(:disabled) { background: var(--color-bg); }
+.user-menu-item:disabled { color: var(--color-muted); cursor: default; opacity: .6; }
+.user-menu-item-icon { display: inline-flex; width: 16px; justify-content: center; }
+
+.toolbar-menu-toggle { display: inline-flex; }
+
+/* 搜索框：图标 + 输入；关闭按钮只在移动端展开态出现。
+   style.css 给 .search-box / .sort-select 设了边框、圆角与白底（历史上它们是
+   独立工具条里的输入控件）。放进 ribbon 后这些装饰会显得与工具栏割裂，
+   这里统一改为扁平风格，只在 hover/focus 时给反馈。 */
+.search-box {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  min-width: 200px;
+}
+.search-box:hover { border-color: var(--color-border); }
+.search-box:focus-within { border-color: var(--color-accent); background: var(--color-surface); }
+.search-box input { min-height: 30px; font-size: 13px; }
+.sort-select {
+  height: 32px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 13px;
+}
+.sort-select:hover { border-color: var(--color-border); }
+.search-box-icon { color: var(--color-muted); }
+.search-box-close { display: none; border: 0; background: transparent; color: var(--color-muted); cursor: pointer; padding: 0 2px; }
+/* 移动端才需要「点图标才展开搜索」，桌面端常驻显示 */
+.search-toggle { display: none; }
+
+/* 位置区是唯一的弹性区域，保证面包屑优先占用剩余宽度。 */
+.ribbon .address-bar {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  overflow: hidden;
+}
+/* 「返回上一级」在列表 / 网格内以 ".." 行呈现（见 .go-up-row / .go-up-item） */
+.breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  scrollbar-width: thin;
+}
+.breadcrumbs > * { flex: 0 0 auto; }
+
+.ribbon .nav-buttons,
+.ribbon .file-tools,
+.ribbon .view-toggle { flex: 0 0 auto; }
+.ribbon .file-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-left: 0;
+  /* style.css 给 .file-tools 设了白底 + border-bottom（历史上它是独立的一条工具栏）。
+     放进 ribbon 后会画出一条多余的横线，这里显式清掉。 */
+  background: transparent;
+  border-bottom: 0;
+  padding: 0;
+}
+
+/* 顶栏刷新按钮的进行中反馈：禁用 + 图标旋转，避免重复点击触发并发刷新。 */
+.tool-btn[aria-busy="true"],
+.tool-btn:disabled { opacity: .55; cursor: default; }
+.tool-btn.is-refreshing svg { animation: gf-spin .7s linear infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .tool-btn.is-refreshing svg { animation: none; }
+}
+@keyframes gf-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* --- 2.1 历史元素迁移复位 ----------------------------------------------
+   `css/style.css` 里的以下元素是在**旧布局**下写的：
+     .file-tools   原为独立的一条工具栏（白底 + border-bottom）
+     .address-bar  原是带边框的地址输入框样式
+     .breadcrumbs  原为独立一行的路径条
+     .view-toggle / .nav-buttons  原为独立分组
+   它们现在都并入 `.ribbon`，旧的边框/底色/间距会形成"多余横线""割裂色块"。
+   这里集中做一次**显式复位**：即便某处特异性侥幸生效，也把意图写清楚，
+   避免以后调 layout 时又被历史属性咬到。
+   ------------------------------------------------------------------------ */
+.ribbon .address-bar {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  gap: 6px;
+  background: transparent;
+  /* border: 0 不会重置 border-radius：历史样式设了 6px，
+     虽然当前无边框看不出，但一旦将来加背景/描边就会冒出圆角。 */
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  min-height: 0;
+}
+.ribbon .breadcrumbs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  min-width: 0;
+  flex: 1 1 auto;
+  background: transparent;
+  border: 0;
+  padding: 0;
+}
+.ribbon .nav-buttons,
+.ribbon .view-toggle {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+.ribbon .tool-btn {
+  border-radius: var(--radius-sm);
+}
+
+/* --- 2.2 其余历史属性复位 ----------------------------------------------
+   以下属性经 `node scripts/audit-css.mjs` 逐条核对后确认：历史层（style.css）
+   在新布局下仍然胜出，但**其中一部分在新布局下依然正确**（保留），
+   另一部分需要显式改写才符合 V2 设计（本区块处理）。
+
+   保留（历史值即 V2 期望值，故不覆盖）：
+     .ribbon flex-shrink:0         保持工具栏在纵向不收缩
+     .nav-buttons/.view-toggle flex-shrink:0   按钮组不被压扁
+     .sidebar display:flex/flex-direction:column  侧栏竖排布局
+     .sidebar 移动端抽屉的 position/top/left/bottom/z-index/transform
+     .sidebar-tree list-style:none  列表去点
+     .tool-btn display:flex/align-items/justify-content/cursor/background
+     .list-row cursor:not-allowed 之外的 cursor:pointer、-webkit-touch-callout
+     .list-header position:sticky/top/z-index    吸顶表头
+     .empty-state display:flex 等   居中布局
+     .file-grid display:grid       网格容器
+
+   需要改写：见下列规则。
+   ------------------------------------------------------------------------ */
+.breadcrumb-item {
+  /* 上游时代的旧蓝色已统一为当前 GitHub 风格强调色 */
+  color: var(--color-accent);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+}
+.breadcrumb-item:hover { text-decoration: underline; }
+.ribbon .tool-btn { color: var(--color-text); }
+.breadcrumbs { font-size: 13px; }
+.ribbon .search-box { color: var(--color-text); }
+.sort-select {
+  /* 历史层在窄屏设了 min-height:40px、flex:1，会把紧凑工具栏顶高 */
+  min-height: 32px;
+  flex: 0 0 auto;
+}
+/* 保留历史值但显式声明，避免日后调布局时被"看不见的继承"咬到 */
+.tree-row { padding-right: 2px; border-radius: 4px; }
+.sidebar-tree { list-style: none; margin: 0; }
+.file-grid { display: grid; gap: 4px; padding: 8px; }
+.empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; }
+
+/* --- 3. 主区域与侧栏 ----------------------------------------------------- */
+.main-area { min-height: calc(100vh - var(--header-height)); }
+
+.sidebar {
+  width: var(--sidebar-width);
+  flex: 0 0 var(--sidebar-width);
+  border-right: 1px solid var(--color-border);
+  background: var(--color-bg);
+  transition: width .15s ease, flex-basis .15s ease;
+}
+body.sidebar-collapsed .sidebar { width: 0; flex-basis: 0; border-right: 0; overflow: hidden; }
+
+.sidebar-nav {
+  padding: var(--space-3) var(--space-2) var(--space-2);
+  border-bottom: 1px solid var(--color-border);
+}
+.sidebar-nav-heading {
+  padding: 8px 10px 6px;
+  color: var(--color-muted);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.sidebar-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-text);
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+.sidebar-nav-item:hover { background: rgba(208, 215, 222, .32); }
+.sidebar-nav-item.active { background: var(--color-accent-subtle); color: var(--color-accent); font-weight: 600; }
+.sidebar-nav-icon { display: inline-flex; width: 16px; justify-content: center; color: currentColor; }
+.sidebar-nav-item:not(.active) .sidebar-nav-icon { color: var(--color-muted); }
+
+/* Dense repository tree: icons clarify type without wasting sidebar height. */
+.sidebar-tree-section { padding: 4px 0; }
+.tree-row { margin: 0 4px; }
+.tree-row > .sidebar-item { min-height: 30px; padding-top: 4px !important; padding-bottom: 4px !important; }
+.tree-toggle { width: 22px; min-height: 28px; }
+.tree-toggle-spacer { width: 22px; }
+.tree-level-2, .tree-level-3, .tree-level-folder { margin-left: 7px; padding-left: 5px; }
+.tree-folder-item, .tree-file-item { font-size: 12px !important; }
+.tree-folder-item .sidebar-icon, .tree-file-item .sidebar-icon { display: inline-flex; }
+.tree-entry-icon { width: 16px; justify-content: center; flex: 0 0 16px; font-size: 13px; }
+
+.content { background: var(--color-surface); flex: 1; min-width: 0; }
+
+/* --- 3.1 「返回上一级」列表行 -------------------------------------------
+   进入子目录后出现在列表 / 网格的最上方，是文件管理器的常识入口。
+   与普通项同构（复用 .list-row / .file-item），只换图标并略作弱化，
+   保证在两种视图下都不显得突兀。
+   ------------------------------------------------------------------------ */
+/* 图标沿用普通目录项的 emoji，因此这里只需要弱化文字、表明它不是可选中项 */
+.go-up-item .file-name,
+.go-up-row .list-name-text { color: var(--color-muted); font-weight: 600; }
+/* 该行不是可选中项，点击即导航；聚焦态用手型与描边表达 */
+.go-up-item, .go-up-row { cursor: pointer; }
+.go-up-item:focus-visible, .go-up-row:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: -2px;
+}
+/* ".." 行跨满整行，不参与列对齐（它没有修改时间/大小/类型） */
+.list-row.go-up-row { display: flex; align-items: center; }
+.go-up-row .go-up-cell { display: inline-flex; align-items: center; gap: 10px; grid-column: 1 / -1; }
+
+/* --- 4. 列表与状态 ------------------------------------------------------- */
+.list-header,
+.list-row { grid-template-columns: minmax(280px, 1fr) 180px 100px 120px 44px; }
+.list-header { color: var(--color-muted); border-bottom: 1px solid var(--color-border); }
+.list-row { min-height: 44px; border-bottom: 1px solid var(--color-border-muted); }
+.list-row:hover { background: var(--color-bg); }
+.list-row.selected { background: var(--color-accent-subtle); }
+
+.empty-state {
+  max-width: 520px;
+  margin: 72px auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: none;
+}
+.app-status { border-top: 0; }
+.status-bar { border-top: 1px solid var(--color-border); background: var(--color-bg); }
+
+/* --- 5. 仓库页 ----------------------------------------------------------- */
+.repository-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px 24px 0;
+  border-bottom: 1px solid var(--color-border);
+  /* 页签必须保持横向单行：窄屏时让标题区收缩，而不是压缩页签 */
+  flex-wrap: nowrap;
+}
+.repository-heading { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 auto; }
+.repository-mark { color: var(--color-accent); font-size: 22px; flex: 0 0 auto; }
+.repository-heading > div { min-width: 0; }
+/* 仓库名过长时省略号截断，绝不换行——换行会把页签挤成竖排 */
+.repository-name {
+  font-size: 19px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.repository-meta {
+  color: var(--color-muted);
+  font-size: 12px;
+  margin-top: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.repository-tabs {
+  display: flex;
+  gap: 4px;
+  align-self: stretch;
+  align-items: end;
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+}
+.repository-tab {
+  min-height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--color-muted);
+  cursor: pointer;
+  /* 中文标签禁止折行：曾经因为没有 nowrap + flex-shrink，
+     窄屏下被压到比文字还窄，"文件""历史"逐字竖排 */
+  white-space: nowrap;
+  flex: 0 0 auto;
+}
+.repository-tab:hover { color: var(--color-text); }
+.repository-tab.active { color: var(--color-accent); border-bottom-color: var(--color-accent); font-weight: 600; }
+
+.repository-history { max-width: 960px; margin: 0 auto; padding: 20px 24px 48px; }
+.history-heading { display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--color-border); }
+.history-heading h2 { font-size: 16px; }
+.repository-history-list { display: grid; }
+.history-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; padding: 14px 0; border-bottom: 1px solid var(--color-border-muted); }
+.history-item strong { overflow-wrap: anywhere; }
+.history-item span { color: var(--color-muted); font-size: 12px; }
+.history-item code { grid-row: 1 / span 2; grid-column: 2; align-self: center; color: var(--color-muted); }
+
+/* README 视图：只渲染 MarkdownLite 生成的标签，样式保持 GitHub 阅读感 */
+.repository-readme { max-width: 860px; margin: 0 auto; padding: 20px 24px 64px; }
+.markdown-body { color: var(--color-text); font-size: 15px; line-height: 1.65; overflow-wrap: anywhere; }
+.markdown-body > :first-child { margin-top: 0; }
+.markdown-body h1, .markdown-body h2 { padding-bottom: .3em; border-bottom: 1px solid var(--color-border); }
+.markdown-body h1 { font-size: 1.75em; margin: 24px 0 16px; }
+.markdown-body h2 { font-size: 1.4em; margin: 24px 0 16px; }
+.markdown-body h3 { font-size: 1.15em; margin: 20px 0 12px; }
+.markdown-body h4, .markdown-body h5, .markdown-body h6 { margin: 18px 0 10px; }
+.markdown-body p, .markdown-body ul, .markdown-body ol, .markdown-body blockquote { margin: 0 0 14px; }
+.markdown-body ul, .markdown-body ol { padding-left: 26px; }
+.markdown-body li { margin: 4px 0; }
+.markdown-body a { color: var(--color-accent); text-decoration: none; }
+.markdown-body a:hover { text-decoration: underline; }
+.markdown-body code {
+  padding: .2em .4em;
+  border-radius: 4px;
+  background: rgba(175, 184, 193, .2);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .88em;
+}
+.markdown-body pre {
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  overflow-x: auto;
+}
+.markdown-body pre code { padding: 0; background: transparent; font-size: .85em; }
+.markdown-body blockquote {
+  padding: 0 12px;
+  border-left: 3px solid var(--color-border);
+  color: var(--color-muted);
+}
+.markdown-body img { max-width: 100%; height: auto; }
+.markdown-body hr { height: 1px; margin: 24px 0; border: 0; background: var(--color-border); }
+.markdown-body table { border-collapse: collapse; }
+.markdown-body del { color: var(--color-muted); }
+
+/* --- 6. 概览页（首页）----------------------------------------------------
+   结构：标题行（含主行动按钮）→ 最近访问 → 已挂载存储（标题带一行指标）
+   ------------------------------------------------------------------------ */
+.overview-panel { max-width: 1080px; margin: 0 auto; padding: 28px 32px 64px; }
+.overview-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--color-border);
+}
+.overview-heading-copy { min-width: 0; }
+.eyebrow { margin: 0 0 6px; color: var(--color-accent); font-size: 12px; font-weight: 700; text-transform: uppercase; }
+.overview-heading h1 { margin: 0; font-size: 24px; }
+.overview-summary { margin: 6px 0 0; color: var(--color-muted); font-size: 13px; }
+
+.overview-section { margin-top: 24px; }
+.overview-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 6px;
+}
+.overview-section-heading h2 { margin: 0; font-size: 14px; font-weight: 600; }
+.overview-section-heading--main { margin-top: 28px; }
+/* 指标降级为标题旁的一行小字（原来三个大卡片里有一个是前两者之和）。 */
+.overview-metrics {
+  display: flex;
+  gap: 14px;
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.overview-metrics strong { color: var(--color-text); font-weight: 600; }
+
+.overview-storage-list { display: grid; gap: 6px; padding-top: 10px; }
+.overview-storage-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 52px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-surface);
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+.overview-storage-item:hover { border-color: var(--color-accent); background: #f6faff; }
+.overview-storage-item:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 1px; }
+.overview-storage-icon { display: inline-flex; color: var(--color-muted); flex: 0 0 16px; }
+.overview-storage-copy { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.overview-storage-copy strong { overflow-wrap: anywhere; font-size: 14px; }
+.overview-storage-copy small { color: var(--color-muted); font-size: 12px; }
+.overview-storage-when { color: var(--color-muted); font-size: 12px; white-space: nowrap; }
+.overview-storage-chevron { color: var(--color-muted); font-size: 16px; }
+.overview-empty {
+  margin-top: 14px;
+  padding: 24px 20px;
+  border: 1px dashed var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg);
+  color: var(--color-muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* --- 7. 空态（文件夹为空等）--------------------------------------------- */
+.empty-state-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+/* --- 8. 桌面布局 --------------------------------------------------------- */
+@media (min-width: 769px) {
+  .main-area { display: flex; }
+}
+
+/* --- 9. 移动端（独立布局，不是桌面缩放）--------------------------------
+   目标：用最少的纵向空间容纳最多的操作。
+
+   默认（两条紧凑行）：
+     第 1 行  导航 · 品牌 · [弹性] · 刷新 · ＋ · 头像
+     第 2 行  搜索 · 视图切换          （面包屑在窄屏隐藏，节省空间）
+   搜索展开（点放大镜后，整条工具栏变成单一搜索行）：
+     [输入框占满] · ✕
+   排序控件在窄屏收起（低频操作）；视图切换已合并为单一按钮，不额外占行。
+   ------------------------------------------------------------------------ */
+@media (max-width: 768px) {
+  body { align-items: stretch; }
+
+  .ribbon {
+    flex-wrap: wrap;
+    gap: 4px;
+    min-height: 0;
+    padding: 4px 8px;
+    overflow: visible;
+  }
+
+  /* 收窄所有工具按钮的留白，改用更小的触达尺寸但保持可点 */
+  .ribbon .tool-btn { width: 36px; height: 36px; }
+
+  /* 第 1 行：导航 · 品牌 · 弹性 · 刷新 · ＋ · 头像 */
+  .ribbon .toolbar-menu-toggle { order: 1; width: 36px; height: 36px; }
+  .ribbon .app-brand { order: 2; font-size: 15px; padding: 6px 2px; }
+  .ribbon .nav-buttons { order: 3; margin-left: auto; }
+  .ribbon .app-header-actions { order: 4; margin-left: 0; gap: 2px; }
+  .ribbon .header-action { width: 36px; min-width: 36px; height: 36px; font-size: 18px; }
+
+  /* 账户菜单在移动端必须可达（退出登录入口），且面板不被屏幕右缘裁切 */
+  .user-menu-panel { right: 0; min-width: 208px; max-width: min(86vw, 280px); }
+  .user-menu-item { min-height: var(--tap-target); }
+  .user-menu-avatar { width: 24px; height: 24px; }
+
+  /* 面包屑在窄屏隐藏：仓库名 + 当前目录已由「..」行、仓库头与侧栏表达，
+     挤在顶栏只会压缩可用空间。子目录导航由列表内的 ".." 行承担。
+     order 一并声明：历史层在这里设了 order:3，虽然 display:none 下不影响布局，
+     但显式声明可以避免"关掉隐藏后位置突然不对"。 */
+  .ribbon .address-bar { display: none; order: 0; }
+
+  /* 第 2 行：搜索图标 + 视图切换（面包屑已隐藏） */
+  .ribbon .file-tools { order: 5; }
+  .ribbon .file-tools { flex: 0 0 auto; }
+  /* 视图切换是单一按钮，与搜索图标并排放在第 2 行，不额外占行 */
+  .ribbon .view-toggle { order: 6; flex: 0 0 auto; }
+  .ribbon .view-toggle .tool-btn { width: 36px; height: 36px; }
+
+  /* 搜索平时只占一个图标 */
+  .ribbon .search-toggle { display: inline-flex; }
+  .ribbon .file-tools .search-box { display: none; }
+
+  /* 排序属于低频操作，小屏收起以节省空间 */
+  .ribbon .file-tools .sort-select,
+  .ribbon .file-tools #btn-sort-direction { display: none; }
+
+  /* ---- 搜索展开态：整条工具栏只保留搜索 ---- */
+  .ribbon.search-open { flex-wrap: nowrap; }
+  .ribbon.search-open > *:not(.file-tools) { display: none; }
+  .ribbon.search-open .file-tools {
+    order: 1;
+    flex: 1 1 100%;
+    width: 100%;
+    gap: 6px;
+  }
+  .ribbon.search-open .file-tools .search-toggle { display: none; }
+  .ribbon.search-open .file-tools .search-box {
+    display: inline-flex;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .ribbon.search-open .file-tools .search-box input { flex: 1 1 auto; min-width: 0; }
+  .ribbon.search-open .file-tools .search-box-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+
+  /* 侧栏与列表等主要触达目标仍保持 ≥ 44px（AGENTS.md §15）；
+     顶栏工具按钮是紧凑区，统一 36px 以避免两行工具栏过高。 */
+  .sidebar-nav-item,
+  .repository-tab {
+    min-width: var(--tap-target);
+    min-height: var(--tap-target);
+  }
+  .header-action {
+    width: var(--tap-target);
+    height: var(--tap-target);
+    padding: 0;
+    font-size: 20px;
+  }
+  .header-action > span:first-child { display: inline; line-height: 1; }
+  .sidebar-nav-item { min-height: var(--tap-target); font-size: 14px; }
+  .tree-row > .sidebar-item { min-height: var(--tap-target); }
+
+  .sidebar { width: min(84vw, 300px); flex-basis: min(84vw, 300px); }
+  .file-list { overflow-x: hidden; }
+  .list-header { display: none; }
+  .list-row { display: grid; grid-template-columns: minmax(0, 1fr) 44px; min-height: 52px; padding: 4px 8px; }
+  .list-row .col-modified,
+  .list-row .col-size,
+  .list-row .col-type { display: none; }
+  .list-row .col-name { min-width: 0; }
+  .list-row .item-more-btn { min-width: 44px; min-height: 44px; }
+
+  .repository-readme { padding: 16px 14px 48px; }
+  .markdown-body { font-size: 14px; }
+
+  /* 仓库头在窄屏：去掉图标与多余装饰，优先保证页签横向可读。
+     仓库名过长时省略号截断，不换行。 */
+  .repository-header { padding: 10px 12px 0; gap: 10px; }
+  .repository-mark { display: none; }
+  .repository-name { font-size: 15px; }
+  .repository-meta { font-size: 11px; }
+  .repository-tab { min-height: 36px; padding: 0 10px; font-size: 13px; }
+  .repository-history { padding: 16px; }
+  .history-item { grid-template-columns: minmax(0, 1fr); }
+  .history-item code { grid-row: auto; grid-column: auto; }
+
+  .overview-panel { padding: 18px 14px 48px; }
+  .overview-heading { flex-direction: column; align-items: stretch; gap: 12px; }
+  .overview-heading .btn { width: 100%; }
+  .overview-metrics { flex-wrap: wrap; gap: 8px 12px; }
+  .overview-storage-when { display: none; }
+  .overview-empty { text-align: left; }
+
+  .selection-bar { bottom: max(8px, env(safe-area-inset-bottom)); }
 }

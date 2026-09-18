@@ -8,9 +8,9 @@
  *
  *   1. HTML 中是否存在重复 id
  *   2. js/ 里 $('#x') / getElementById('x') 引用的 id 是否存在于某个 HTML
- *   3. index.html / notepad.html / 404.html 是否都存在样式表且顺序为
- *      style.css → ui-v2.css（层叠顺序约定，见 css/ui-v2.css 顶部注释）
- *   4. css/ui-v2.css 与 css/style.css 中的类选择器是否至少被 HTML/JS 使用
+ *   3. index.html / notepad.html / 404.html 是否都引用唯一样式表 style.css
+ *      （ui-v2.css 已于 2026-09-18 并入 style.css，残留引用视为错误）
+ *   4. css/style.css 中的类选择器是否至少被 HTML/JS 使用
  *      （仅告警，不失败：历史样式允许存在未使用选择器）
  *
  * 用法：node scripts/check-ui.mjs
@@ -83,16 +83,13 @@ for (const [id, rel] of referenced) {
   errors.push(`${rel}: 引用了不存在的 id="${id}"`);
 }
 
-// --- 3. 样式表顺序 ----------------------------------------------------------
+// --- 3. 唯一样式表 ----------------------------------------------------------
 for (const rel of ['index.html', 'notepad.html', '404.html']) {
   const html = read(rel);
   const baseIndex = html.indexOf('data-storage-hub-css ');
   const v2Index = html.indexOf('data-storage-hub-css-v2');
   if (baseIndex === -1) errors.push(`${rel}: 缺少 data-storage-hub-css（style.css）`);
-  if (v2Index === -1) errors.push(`${rel}: 缺少 data-storage-hub-css-v2（ui-v2.css）`);
-  if (baseIndex !== -1 && v2Index !== -1 && v2Index < baseIndex) {
-    errors.push(`${rel}: ui-v2.css 出现在 style.css 之前，层叠顺序被反转`);
-  }
+  if (v2Index !== -1) errors.push(`${rel}: 仍引用已删除的 data-storage-hub-css-v2（ui-v2.css 已并入 style.css）`);
 }
 
 // --- 4. CSS 类选择器使用情况（告警）----------------------------------------
@@ -105,7 +102,7 @@ const htmlAndJs = HTML_FILES
     .map((rel) => read(rel))
     .join('\n'));
 
-for (const cssRel of ['css/ui-v2.css', 'css/style.css']) {
+for (const cssRel of ['css/style.css']) {
   const css = read(cssRel).replace(/\/\*[\s\S]*?\*\//g, '');
   const classes = new Set([...css.matchAll(/\.([a-zA-Z][\w-]*)/g)].map((m) => m[1]));
   const unused = [...classes].filter((name) => !htmlAndJs.includes(name));

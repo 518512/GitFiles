@@ -281,12 +281,12 @@ timestamp
 - UI 使用高密度、低圆角、低阴影的文件管理器风格，不做营销落地页。
 - 首页是工作区入口：展示已挂载 storage 与本地记录的「最近访问」，并在零状态直接给出添加存储的主行动按钮。首页不得为展示附加信息而逐仓库请求 API。
 - 仓库页签为 文件 / README / 历史。README 使用内置 `js/markdown-lite.js` 渲染；该渲染器必须先整体转义再做白名单替换，绝不输出原始 HTML，且链接与图片只允许 http、https、mailto 与相对路径。
-- 样式表层叠顺序固定为 `css/style.css`（历史基础层）→ `css/ui-v2.css`（设计令牌与 V2 覆盖层）。`js/base-path.js` 保证 V2 最后层叠；新增样式一律写进 `ui-v2.css`，不要叠加同名块。
+- 样式表为**唯一样式表 `css/style.css`**（2026-09-18 起由原 style.css + ui-v2.css 合并而成）：文件头定义设计令牌（`--color-*` / `--space-*` 等），中部为历史基础层，文末 `V2_LAYER_START` 标记之后为 V2 覆盖层。新增样式一律写进 V2 覆盖层小节，不要在上方历史层叠加同名块；`js/base-path.js` 只为该文件补 `?v=` 版本号。
 - UI 结构变更后必须通过：
 
   ```bash
-  node scripts/check-ui.mjs          # 重复 id、JS 引用的 id 是否存在、样式表顺序、选择器使用
-  node scripts/audit-css.mjs --strict # 两层样式表的冲突（必须 0 未处理）
+  node scripts/check-ui.mjs          # 重复 id、JS 引用的 id 是否存在、唯一样式表引用、选择器使用
+  node scripts/audit-css.mjs --strict # 单文件内历史层 / V2 覆盖层冲突（必须 0 未处理）
   ```
 
   图标资源变更后：`node scripts/build-logo-from-image.mjs --check`。
