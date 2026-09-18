@@ -113,34 +113,47 @@
 </head>
 <body>
   <div id="app-boot" class="app-boot" role="status">正在验证访问权限…</div>
-  <!-- Login screen -->
+  <!-- Login / landing screen（与 index.html 保持一致，避免两处漂移）。
+       视觉参照 deepseek.com 落地页；样式在 css/style.css 的 V2 覆盖层。 -->
   <div id="login-screen" class="login-screen hidden">
-    <div class="login-card">
-      <div class="login-logo">
-        <img src="assets/logo.svg" width="72" height="72" alt="GitFiles 徽标">
+    <header class="landing-nav">
+      <a class="landing-brand" href="./">
+        <img src="assets/logo.svg" width="26" height="26" alt="" aria-hidden="true">
+        <span>GitFiles</span>
+      </a>
+      <nav class="landing-nav-links" aria-label="Site links">
+        <a data-hide-sm href="https://github.com/MbAIGC/GitFiles" target="_blank" rel="noopener">Source</a>
+        <a href="privacy.html">隐私政策</a>
+        <a href="terms.html">服务条款</a>
+      </nav>
+    </header>
+
+    <main class="landing-hero">
+      <p class="landing-eyebrow">MbAIGC 出品</p>
+      <h1 class="landing-slogan">把 GitHub 仓库<br>当作云端文件系统</h1>
+      <p class="landing-sub">浏览、上传、编辑，并以正确的 Git 历史提交。移动端可用，可安装为 PWA。</p>
+
+      <div class="landing-actions">
+        <button id="btn-sign-in-github" class="btn-github" type="button">
+          <svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true">
+            <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
+          </svg>
+          <span class="btn-label">使用 GitHub 登录</span>
+        </button>
+        <a class="landing-secondary" href="https://github.com/MbAIGC/GitFiles" target="_blank" rel="noopener">查看源码</a>
       </div>
-      <h1>GitFiles</h1>
-      <p class="login-brand">MbAIGC 出品</p>
-      <p>一个全屏、快速、安全的本地与 GitHub 仓库文件管理器。</p>
-      <button id="btn-sign-in-github" class="btn-github">
-        <svg viewBox="0 0 16 16" width="20" height="20" aria-hidden="true">
-          <path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
-        </svg>
-        使用 GitHub 登录
-      </button>
-      <p id="login-error" class="login-error hidden"></p>
+
+      <p id="login-error" class="login-error hidden" role="alert"></p>
+    </main>
+
+    <footer class="landing-foot">
       <p class="login-about">
         <a href="https://github.com/MbAIGC/GitFiles">GitFiles</a> 是
         <a href="https://github.com/fi3ik-mme/storage-hub">Storage Hub</a> 的分支项目，原作者：
         <a href="https://github.com/fi3ik-mme">Mykhailo Mikus</a>。
         本项目不隶属于 GitHub。
       </p>
-      <p class="login-footer">
-        <a href="privacy.html">隐私政策</a>
-        ·
-        <a href="terms.html">服务条款</a>
-      </p>
-    </div>
+    </footer>
   </div>
 
   <!-- Explorer window -->
@@ -233,12 +246,17 @@
                 <p id="overview-summary" class="overview-summary">管理已挂载的本地存储和 GitHub 仓库。</p>
               </div>
             </div>
-            <div class="overview-stats" aria-label="存储统计">
-              <div class="overview-stat"><strong id="overview-repo-count">0</strong><span>GitHub 仓库</span></div>
-              <div class="overview-stat"><strong id="overview-local-count">0</strong><span>本地存储</span></div>
-              <div class="overview-stat"><strong id="overview-total-count">0</strong><span>已挂载存储</span></div>
+            <!-- 与 index.html 的概览保持一致：原先这里是 .overview-stats /
+                 .overview-stat 结构，但样式表里没有对应规则（只有
+                 .overview-metrics），三个统计块等于没有样式。 -->
+            <div class="overview-section-heading overview-section-heading--main">
+              <h2>已挂载存储</h2>
+              <p class="overview-metrics">
+                <span><strong id="overview-repo-count">0</strong> 个仓库</span>
+                <span><strong id="overview-local-count">0</strong> 个本地存储</span>
+                <span><strong id="overview-total-count">0</strong> 个已挂载</span>
+              </p>
             </div>
-            <div class="overview-section-heading"><h2>已挂载存储</h2></div>
             <div id="overview-storage-list" class="overview-storage-list"></div>
             <div id="overview-empty" class="overview-empty hidden">尚未挂载存储。添加一个 GitHub 仓库后，它会出现在这里。</div>
           </section>
@@ -261,7 +279,7 @@
             <span class="empty-icon">🔗</span>
             <p>欢迎回来</p>
             <p class="empty-hint">尚未挂载 GitHub 仓库。</p>
-            <button id="btn-add-repository" class="btn btn-primary">添加仓库</button>
+            <button id="btn-add-repository" class="btn-primary">添加仓库</button>
           </div>
           <div id="empty-state" class="empty-state hidden">
             <span class="empty-icon">📂</span>

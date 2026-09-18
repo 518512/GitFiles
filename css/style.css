@@ -28,13 +28,10 @@
   --color-hover: rgba(9, 105, 218, .12);
   --color-selected: rgba(9, 105, 218, .2);
   --color-danger: #cf222e;
-  --color-success: #1a7f37;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
   --space-4: 16px;
-  --space-5: 20px;
-  --space-6: 24px;
   --header-height: 52px;
   --sidebar-width: 248px;
   --tap-target: 44px;
@@ -74,67 +71,8 @@ body {
 
 .app-boot.hidden { display: none !important; }
 
-.login-screen {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  width: 100%;
-}
-
-.login-card {
-  background: #fff;
-  border-radius: 12px;
-  padding: 48px 40px;
-  text-align: center;
-  box-shadow: var(--shadow-lg);
-  max-width: 420px;
-  width: 90%;
-}
-
-.login-logo {
-  margin-bottom: 16px;
-}
-
-.login-logo img {
-  display: block;
-  margin: 0 auto;
-}
-
-.login-card h1 {
-  font-size: 1.5rem;
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-
-.login-brand {
-  font-size: 0.9rem;
-  color: var(--color-muted);
-  margin-bottom: 12px;
-}
-
-.login-about {
-  margin-top: 16px;
-  font-size: 0.75rem;
-  color: var(--color-muted);
-  line-height: 1.5;
-}
-
-.login-about a {
-  color: var(--color-accent);
-  text-decoration: none;
-}
-
-.login-about a:hover {
-  text-decoration: underline;
-}
-
-.login-card p {
-  color: var(--color-muted);
-  font-size: 0.9rem;
-  margin-bottom: 28px;
-  line-height: 1.5;
-}
+/* 登录 / 落地页样式见文件末尾的 V2 覆盖层（.login-screen / .landing-*）。
+   这里曾有三代历史写法，2026-09-18 已删除，避免与 V2 层叠加。 */
 
 .btn-primary {
   display: inline-flex;
@@ -155,33 +93,14 @@ body {
   background: var(--color-accent-dark);
 }
 
-.btn-github {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  background: #24292f;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 12px 28px;
-  font-size: 0.95rem;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.btn-github:hover {
-  background: #1c2128;
-}
+/* `.btn-github` 的完整外观在 V2 覆盖层的 `.login-screen .btn-github` 中定义
+   （深色胶囊，参照 deepseek.com 的 primary 按钮）；这里只保留与 .btn-primary
+   共用的禁用态与 aria-busy 旋转。 */
 
 .btn-primary:disabled,
 .btn-github:disabled {
   opacity: 0.6;
   cursor: default;
-}
-
-.btn-github:disabled:hover {
-  background: #24292f;
 }
 
 .btn-primary[aria-busy="true"],
@@ -207,17 +126,6 @@ body {
 
 .btn-primary:disabled:hover {
   background: var(--color-accent);
-}
-
-.login-error {
-  margin-top: 16px;
-  padding: 10px 12px;
-  background: #fde7e9;
-  color: #a80000;
-  border-radius: 6px;
-  font-size: 0.82rem;
-  line-height: 1.4;
-  text-align: left;
 }
 
 /* ── Explorer window ── */
@@ -278,10 +186,6 @@ body {
   cursor: pointer;
   border-radius: 4px;
   color: var(--color-text);
-}
-
-.title-btn:hover {
-  background: var(--color-hover);
 }
 
 .title-btn.close:hover {
@@ -771,28 +675,19 @@ body {
   -webkit-touch-callout: none;
 }
 
-.file-item:hover {
-  background: var(--color-hover);
-  border-color: #c2e0f7;
-}
-
-.file-item.selected {
-  background: var(--color-selected);
-  border-color: #99d1ff;
-}
-
 .file-item--pending {
   opacity: 0.82;
 }
 
 .file-item--pending-syncing,
 .file-item--pending-saving,
-.file-item--pending-moving,
-.file-item--pending-kind-delete.file-item--pending-syncing {
+.file-item--pending-moving {
   border-color: #f5d66b;
   background: #fffbe6;
 }
 
+/* 删除中的同步态单独给红色：上一组里的同选择器曾重复出现，
+   紧跟其后的这条会覆盖它，那一行是不生效的死声明。 */
 .file-item--pending-kind-delete.file-item--pending-syncing {
   border-color: #f4a4a4;
   background: #fff5f5;
@@ -1062,15 +957,6 @@ body {
   -webkit-touch-callout: none;
 }
 
-.list-row:hover {
-  background: var(--color-hover);
-}
-
-.list-row.selected {
-  background: var(--color-selected);
-  border-color: #99d1ff;
-}
-
 .list-row .col-name {
   display: flex;
   align-items: center;
@@ -1178,23 +1064,11 @@ body {
   transform: translateY(1px);
 }
 
-.worker-session-state[data-state="connected"] {
-  color: #1a6b3c;
-  border-color: #79b88b;
-  background: #edf8f0;
-}
-
 .worker-session-state[data-state="expired"],
 .worker-session-state[data-state="unavailable"] {
   color: #9d2b1c;
   border-color: #dba096;
   background: #fff2f0;
-}
-
-.title-btn--conflicts {
-  color: #8a2a14;
-  background: #fff1e9;
-  border-left: 1px solid #e2a391;
 }
 
 /* File tools and persistent operation status */
@@ -2477,18 +2351,6 @@ body.dialog-open {
     overflow: hidden;
   }
 
-  .login-card {
-    padding: 32px 20px;
-    border-radius: 0;
-    max-width: none;
-    width: 100%;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    box-shadow: none;
-  }
-
   .btn-primary {
     width: 100%;
     justify-content: center;
@@ -3096,21 +2958,7 @@ body {
   border-top-color: var(--color-border);
 }
 
-.login-screen {
-  min-height: 100vh;
-  background: #f6f8fa;
-}
-
-.login-card {
-  max-width: 460px;
-  padding: 40px;
-  border: 1px solid var(--color-border);
-  border-radius: 6px;
-  box-shadow: 0 8px 24px rgba(140, 149, 159, 0.2);
-}
-
-.btn-primary,
-.btn-github {
+.btn-primary {
   min-height: 44px;
   border-radius: 6px;
 }
@@ -3207,22 +3055,6 @@ body {
 
 .legal-footer a:hover {
   color: #fff;
-  text-decoration: underline;
-}
-
-.login-footer {
-  margin-top: 20px;
-  font-size: 0.78rem;
-  color: var(--color-muted);
-  line-height: 1.6;
-}
-
-.login-footer a {
-  color: var(--color-accent);
-  text-decoration: none;
-}
-
-.login-footer a:hover {
   text-decoration: underline;
 }
 
@@ -3982,3 +3814,249 @@ body.sidebar-collapsed .sidebar { width: 0; flex-basis: 0; border-right: 0; over
 
   .selection-bar { bottom: max(8px, env(safe-area-inset-bottom)); }
 }
+
+/* 冲突态（AGENTS.md §4：冲突是正常的多设备场景，必须进入 Conflict Center）。
+   JS 会生成 file-item--pending-conflict / file-pending-badge--conflict
+   （见 js/githubdisk.js 的状态标签与 js/app.js 的 renderFileStatusBadge），
+   但样式表里原先没有对应规则，冲突文件与普通文件外观一致、无法一眼识别。 */
+.file-item--pending-conflict,
+.list-row.file-item--pending-conflict {
+  border-color: #d0a2f7;
+  background: #faf5ff;
+}
+
+.file-pending-badge--conflict {
+  color: #7b2cbf;
+}
+
+.file-item--pending-conflict .file-icon-progress__bar {
+  background: linear-gradient(90deg, #7b2cbf, #d0a2f7);
+}
+
+/* ==========================================================================
+   登录 / 落地页（V2）
+   视觉参照 deepseek.com 的落地页：柔和浅底 + 顶部极淡品牌光晕、居中大标题、
+   深色胶囊主按钮、毛玻璃次级按钮。
+   只作用于 #login-screen 内部；应用内其余界面仍是 GitHub 风格。
+   ========================================================================== */
+.login-screen {
+  /* 页面局部令牌：避免把落地页的配色污染到全局 GitHub 风格令牌上。 */
+  --landing-bg: #f9f8f8;
+  --landing-text: #152443;
+  --landing-muted: rgba(0, 0, 0, .55);
+  /* 浅底上的链接用更深的蓝，保证小字号也满足对比度 */
+  --landing-link: #234792;
+  --landing-border: rgba(0, 0, 0, .08);
+  --landing-glass: hsla(0, 0%, 100%, .55);
+  --landing-ink: #1a1615;
+
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  padding: 0 24px calc(28px + env(safe-area-inset-bottom));
+  background-color: var(--landing-bg);
+  /* 极淡的品牌蓝光晕：只做氛围，不形成"大面积渐变" */
+  background-image: radial-gradient(120% 70% at 50% -12%,
+    rgba(77, 107, 254, .10) 0%, rgba(77, 107, 254, .03) 42%, transparent 74%);
+  color: var(--landing-text);
+  text-align: center;
+}
+
+.landing-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  width: 100%;
+  max-width: 1140px;
+  min-height: 64px;
+  padding-top: env(safe-area-inset-top, 0);
+}
+
+.landing-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--landing-text);
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.landing-brand img { display: block; }
+
+.landing-nav-links {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.landing-nav-links a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 100px;
+  color: var(--landing-muted);
+  font-size: 14px;
+  text-decoration: none;
+  transition: color .15s ease, background-color .15s ease;
+}
+
+.landing-nav-links a:hover {
+  color: var(--landing-text);
+  background: rgba(0, 0, 0, .04);
+}
+
+.landing-hero {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  width: 100%;
+  max-width: 880px;
+  padding: clamp(40px, 12vh, 112px) 0 32px;
+}
+
+.landing-eyebrow {
+  margin: 0;
+  padding: 5px 14px;
+  border: 1px solid var(--landing-border);
+  border-radius: 100px;
+  background: var(--landing-glass);
+  color: var(--landing-muted);
+  font-size: 12px;
+  letter-spacing: .04em;
+}
+
+.landing-slogan {
+  margin: 0;
+  color: var(--landing-text);
+  font-size: clamp(28px, 5.4vw, 42px);
+  font-weight: 400;
+  line-height: 1.45;
+  letter-spacing: .02em;
+  opacity: .92;
+}
+
+.landing-sub {
+  max-width: 34em;
+  margin: 0;
+  color: var(--landing-muted);
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.landing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 10px;
+}
+
+/* 主行动：深色胶囊（对应 deepseek.com 的 primary 按钮观感） */
+.login-screen .btn-github {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 26px;
+  border: 1px solid transparent;
+  border-radius: 100px;
+  background: var(--landing-ink);
+  color: #fff;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color .2s ease, transform .2s ease;
+}
+
+.login-screen .btn-github:hover { background: #322b29; }
+.login-screen .btn-github:active { transform: translateY(1px); }
+.login-screen .btn-github:disabled { opacity: .6; cursor: default; }
+.login-screen .btn-github:disabled:hover { background: var(--landing-ink); }
+
+/* 次行动：半透明毛玻璃胶囊（对应 deepseek.com 的 secondary / liquid 按钮） */
+.landing-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 48px;
+  padding: 0 24px;
+  border: 1px solid var(--landing-border);
+  border-radius: 100px;
+  background: var(--landing-glass);
+  color: var(--landing-text);
+  font-size: 15px;
+  text-decoration: none;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: background-color .2s ease, border-color .2s ease;
+}
+
+.landing-secondary:hover {
+  background: rgba(255, 255, 255, .78);
+  border-color: rgba(9, 45, 78, .2);
+}
+
+.login-screen .login-error {
+  max-width: 560px;
+  margin: 2px 0 0;
+  padding: 10px 14px;
+  border: 1px solid rgba(180, 35, 24, .18);
+  border-radius: 12px;
+  background: rgba(180, 35, 24, .06);
+  color: #b42318;
+  font-size: 13px;
+  line-height: 1.6;
+  /* 错误信息可能较长，左对齐比居中更好读 */
+  text-align: left;
+}
+
+.landing-foot {
+  width: 100%;
+  max-width: 880px;
+}
+
+.login-screen .login-about {
+  margin: 0;
+  color: var(--landing-muted);
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.login-screen .login-about a {
+  color: var(--landing-link);
+  text-decoration: none;
+}
+
+.login-screen .login-about a:hover { text-decoration: underline; }
+
+/* 启动占位页与落地页同色，避免首屏闪一下另一种灰 */
+.app-boot { background: #f9f8f8; }
+
+@media (max-width: 560px) {
+  .login-screen { padding-left: 16px; padding-right: 16px; }
+  .landing-nav-links a { min-height: 44px; padding: 0 10px; font-size: 13px; }
+  .landing-nav-links a[data-hide-sm] { display: none; }
+  .landing-hero { padding-top: clamp(28px, 8vh, 56px); gap: 16px; }
+  .landing-actions { width: 100%; flex-direction: column; }
+  .login-screen .btn-github,
+  .landing-secondary { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-nav-links a,
+  .login-screen .btn-github,
+  .landing-secondary { transition: none; }
+}
+
